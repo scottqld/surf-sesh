@@ -13,7 +13,7 @@
     --surface2: #181c22;
     --border: #1e242c;
     --text: #c8d0db;
-    --muted: #4a5568;
+    --muted: #e8a83a;
     --accent: #00d4ff;
     --accent2: #ff6b35;
     --high: #00e5a0;
@@ -647,6 +647,36 @@ function renderAll(data) {
   }, 100);
 }
 
+function formatTideTime(time) {
+  const [h, m] = time.split(':').map(Number);
+  const ampm = h < 12 ? 'am' : 'pm';
+  const hour = h % 12 || 12;
+  return `${hour}:${m.toString().padStart(2, '0')}${ampm}`;
+}
+
+function shortDir(text) {
+  const dirs = {
+    'north-northeasterly': 'NNE', 'north-northwesterly': 'NNW',
+    'south-southeasterly': 'SSE', 'south-southwesterly': 'SSW',
+    'east-northeasterly': 'ENE', 'east-southeasterly': 'ESE',
+    'west-northwesterly': 'WNW', 'west-southwesterly': 'WSW',
+    'northeasterly': 'NE', 'northwesterly': 'NW',
+    'southeasterly': 'SE', 'southwesterly': 'SW',
+    'northerly': 'N', 'southerly': 'S',
+    'easterly': 'E', 'westerly': 'W',
+    'north-northeast': 'NNE', 'north-northwest': 'NNW',
+    'south-southeast': 'SSE', 'south-southwest': 'SSW',
+    'northeast': 'NE', 'northwest': 'NW',
+    'southeast': 'SE', 'southwest': 'SW',
+    'north': 'N', 'south': 'S', 'east': 'E', 'west': 'W',
+  };
+  text = text.replace(/\bmetres\b/gi, 'm');
+  text = text.replace(/\bknots\b/gi, 'kts');
+
+  return text.replace(/\b(north-northeasterly|north-northwesterly|south-southeasterly|south-southwesterly|east-northeasterly|east-southeasterly|west-northwesterly|west-southwesterly|northeasterly|northwesterly|southeasterly|southwesterly|northerly|southerly|easterly|westerly|north-northeast|north-northwest|south-southeast|south-southwest|northeast|northwest|southeast|southwest|north|south|east|west)\b/gi,
+    m => dirs[m.toLowerCase()] || m);
+}
+
 function renderForecast(forecast) {
   // Warning
   const warnEl = document.getElementById('warningBanner');
@@ -672,15 +702,15 @@ function renderForecast(forecast) {
       <div class="conditions-grid">
         <div class="condition-item">
           <div class="condition-label">Winds</div>
-          <div class="condition-value">${current.winds}</div>
+          <div class="condition-value">${shortDir(current.winds)}</div>
         </div>
         <div class="condition-item">
           <div class="condition-label">Seas</div>
-          <div class="condition-value highlight">${current.seas}</div>
+          <div class="condition-value highlight">${shortDir(current.seas)}</div>
         </div>
         <div class="condition-item">
           <div class="condition-label">Swell</div>
-          <div class="condition-value">${current.swell}</div>
+          <div class="condition-value">${shortDir(current.swell)}</div>
         </div>
         <div class="condition-item">
           <div class="condition-label">Weather</div>
@@ -701,15 +731,15 @@ function renderForecast(forecast) {
       <div class="forecast-card-body">
         <div class="fc-row">
           <div class="fc-label">Wind</div>
-          <div class="fc-val">${day.winds}</div>
+          <div class="fc-val">${shortDir(day.winds)}</div>
         </div>
         <div class="fc-row">
           <div class="fc-label">Seas</div>
-          <div class="fc-val">${day.seas}</div>
+          <div class="fc-val">${shortDir(day.seas)}</div>
         </div>
         <div class="fc-row">
           <div class="fc-label">Swell</div>
-          <div class="fc-val">${day.swell}</div>
+          <div class="fc-val">${shortDir(day.swell)}</div>
         </div>
         <div class="fc-row">
           <div class="fc-label">Sky</div>
@@ -747,7 +777,7 @@ function renderTides(tideData) {
     const entriesHtml = entries.map(e => `
       <div class="tide-entry">
         <div class="tide-type ${e.type.toLowerCase()}">${e.type}</div>
-        <div class="tide-time">${e.time}</div>
+        <div class="tide-time">${formatTideTime(e.time)}</div>
         <div class="tide-height">${e.height}m</div>
       </div>
     `).join('');
