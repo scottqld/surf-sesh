@@ -73,6 +73,19 @@
     color: var(--accent);
   }
 
+.logo small {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--accent);
+  letter-spacing: 1px;
+  display: inline-block;
+  vertical-align: bottom;
+  margin-left: -6px;
+  padding-bottom: 7px;
+  text-transform: uppercase;
+}
+
   .last-updated {
     font-family: 'DM Mono', monospace;
     font-size: 10px;
@@ -516,7 +529,7 @@
 
 <div class="app">
   <header class="header">
-    <div class="logo">SURF<span>SC</span></div>
+    <div class="logo">SURF<span>SC</span> <small id="logoSubtitle">Noosa</small></div>
     <div class="last-updated" id="lastUpdated">—</div>
   </header>
 
@@ -589,6 +602,7 @@ let currentStation = 'noosa';
 let cachedData = null;
 
 function setStation(station) {
+  document.getElementById('logoSubtitle').textContent = station === 'noosa' ? 'Noosa' : 'Mooloolaba';  
   currentStation = station;
   document.getElementById('btnNoosa').classList.toggle('active', station === 'noosa');
   document.getElementById('btnMooloolaba').classList.toggle('active', station === 'mooloolaba');
