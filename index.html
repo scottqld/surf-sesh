@@ -18,7 +18,7 @@
     --accent2: #ff6b35;
     --high: #00e5a0;
     --low: #4a9eff;
-    --warn: #ffc83a;
+    --warn: #ffe94a;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -690,10 +690,10 @@ const score = cachedData ? scoreBreak(b, cachedData.forecast) : null;
   const note = cachedData ? conditionNote(b, cachedData.forecast) : '';
   document.getElementById('breakNotes').innerHTML =
     `<span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About</span><br>
-    <span style="color:var(--warn);">${b.notes}</span>
+    <span style="color:#fff;font-style:normal;">${note}</span>
     ${note ? `<br><br><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">Conditions</span>
     <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;margin-left:8px;">${score !== null ? score + '/10' : ''}</span><br>
-    <span style="color:var(--warn);font-style:normal;">${note}</span>` : ''}`;}
+    <span style="color:#fff;font-style:normal;">${note}</span>` : ''}`;}
 
 function scoreBreak(breakData, forecast) {
   if (!forecast || !forecast.forecasts || forecast.forecasts.length === 0) return 0;
@@ -1186,6 +1186,20 @@ function renderSwellChart(swellData) {
   labelsEl.innerHTML = uniqueDays.slice(0, 7).map(d =>
     `<span class="chart-label">${d}</span>`
   ).join('');
+
+// Swell size labels
+  ctx.font = `${10 * dpr}px DM Mono, monospace`;
+  ctx.fillStyle = 'rgba(0,212,255,0.8)';
+  ctx.textAlign = 'center';
+
+  // Label every other point to avoid crowding
+  sampledWave.forEach((v, i) => {
+    if (i % 2 === 0) {
+      const x = xPos(i);
+      const y = yPos(v) - 5;
+      ctx.fillText(v.toFixed(1) + 'm', x, y);
+    }
+  });  
 }
 
 // Auto-refresh every 30 minutes
