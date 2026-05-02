@@ -718,70 +718,38 @@ function conditionNoteTomorrow(breakData, forecast) {
 ///////////////////////////////////////////////////
 function setBreak(index) {
   currentBreak = index;
-  
-  // 1. Update button active states
   BREAKS.forEach((_, i) => {
     document.getElementById(`btn${i}`).classList.toggle('active', i === index);
   });
-
   const b = BREAKS[index];
   document.getElementById('logoSubtitle').textContent = b.subtitle;
-  
   const imgEl = document.getElementById('breakImg');
   if (imgEl) imgEl.src = b.img || '';
 
-  // 2. Calculate the Surfability Score
   const score = cachedData ? scoreBreak(b, cachedData.forecast) : null;
-  const ratingColor = score >= 8 ? 'var(--high)' : (score >= 5 ? 'var(--warn)' : 'var(--text)');
-  
-  // 3. Move Rating to the Current Conditions Heading
-  // We target the section-label specifically for Current Conditions
-  const labels = document.querySelectorAll('.section-label');
-  if (labels[0]) {
-    labels[0].innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-        <span>Current Conditions</span>
-        <span style="color:${ratingColor}; font-family:'DM Mono',monospace; font-size:11px; font-weight:bold;">
-          RATING: ${score !== null ? score + '/10' : '—'}
-        </span>
-      </div>
-    `;
-  }
-
-  // 4. Update the breakNotes (About section) without the top rating bar
   const note = cachedData ? conditionNote(b, cachedData.forecast) : '';
   const noteTomorrow = cachedData ? conditionNoteTomorrow(b, cachedData.forecast) : '';
+  const tomorrowDay = cachedData && cachedData.forecast.forecasts[1] ? cachedData.forecast.forecasts[1].day : 'Tomorrow';
+
   let aboutOpen = document.getElementById('breakNotes').__aboutOpen || false;
 
-  document.getElementById('breakNotes').innerHTML = `
-    <!-- ABOUT SECTION TOGGLE -->
-    <div onclick="toggleAbout(this)" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-      <span style="color:var(--accent); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:1.5px; text-transform:uppercase;">About the Break</span>
-      <span id="aboutChevron" style="color:var(--accent); font-size:11px;">${aboutOpen ? '▲' : '▼'}</span>
+  document.getElementById('breakNotes').innerHTML =
+    `<div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+      <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About</span>
+      <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
     </div>
-    <div id="aboutBody" style="display:${aboutOpen ? 'block' : 'none'}; margin-top:6px; margin-bottom:12px;">
+    <div id="aboutBody" style="display:${aboutOpen ? 'block' : 'none'};margin-top:6px;">
       <span style="color:#fff;">${b.notes}</span>
     </div>
-
-    <!-- CURRENT CONDITIONS NOTE -->
-    ${note ? `
-    <div style="margin-top:8px;">
-      <span style="color:var(--accent); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:1.5px; text-transform:uppercase;">Live Analysis</span><br>
-      <span style="color:#fff; font-style:normal;">${note}</span>
-    </div>` : ''}
-
-    <!-- TOMORROW FORECAST NOTE -->
-    ${noteTomorrow ? `
-    <div style="margin-top:12px; padding-top:8px; border-top:1px solid var(--border);">
-      <span style="color:var(--accent); font-family:'DM Mono',monospace; font-size:9px; letter-spacing:1.5px; text-transform:uppercase;">Forecast Outlook</span><br>
-      <span style="color:#fff; font-style:normal;">${noteTomorrow}</span>
-    </div>` : ''}
-  `;
+    ${note ? `<br><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">Conditions</span>
+    <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;margin-left:8px;">${score !== null ? score + '/10' : ''}</span><br>
+    <span style="color:#fff;font-style:normal;">${note}</span>` : ''}
+    ${noteTomorrow ? `<br><br><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">${tomorrowDay.toUpperCase()}</span><br>
+    <span style="color:#fff;font-style:normal;">${noteTomorrow}</span>` : ''}`;
 
   document.getElementById('breakNotes').__aboutOpen = aboutOpen;
 }
 
-///////////////////////////////
 function toggleAbout(headerEl) {
   const card = document.getElementById('breakNotes');
   const body = document.getElementById('aboutBody');
@@ -815,60 +783,42 @@ function toggleAbout(headerEl) {
 ///////////////////////////////////////////////////
 function scoreBreak(breakData, forecast) {
   if (!forecast || !forecast.forecasts || forecast.forecasts.length === 0) return 0;
-  
   const current = forecast.forecasts[0];
-  const ideal = breakData.ideal;
-  
-  // Clean up and extract directions/heights
-  const swellText = shortDir(current.swell || '');
-  const windText = shortDir(current.winds || '');
-  const swellDir = extractDir(swellText);
-  const windDir = extractDir(windText);
-  const swellHeight = extractHeight(swellText);
-
   let score = 0;
 
-  // 1. Wind (4 Points) - Priority for Sunshine Coast points
-  if (windDir && ideal.windDirs.includes(windDir)) {
-    score += 4;
-  } else if (windDir) {
-    score += 1; // Partial credit for non-onshore winds
-  }
+  // Extract swell direction from swell text
+  const swellText = current.swell || '';
+  const windText = current.winds || '';
 
-  // 2. Swell Direction (3 Points)
-  if (swellDir && ideal.swellDirs.includes(swellDir)) {
-    score += 3;
-  }
+  const dirMap = {
+    'NNE': 'NNE', 'NNW': 'NNW', 'SSE': 'SSE', 'SSW': 'SSW',
+    'ENE': 'ENE', 'ESE': 'ESE', 'WNW': 'WNW', 'WSW': 'WSW',
+    'NE': 'NE', 'NW': 'NW', 'SE': 'SE', 'SW': 'SW',
+    'N': 'N', 'S': 'S', 'E': 'E', 'W': 'W',
+  };
 
-  // 3. Swell Height (3 Points)
+
+  const swellDir = extractDir(swellText);
+  const windDir = extractDir(windText);
+  const swellHeight = extractHeight(shortDir(swellText));
+
+  const ideal = breakData.ideal;
+
+  // Score swell direction (0-3)
+  if (swellDir && ideal.swellDirs.includes(swellDir)) score += 3;
+
+  // Score wind direction (0-3)
+  if (windDir && ideal.windDirs.includes(windDir)) score += 4;
+
+  // Score swell height (0-4)
   if (swellHeight !== null) {
-    if (swellHeight >= ideal.swellMin && swellHeight <= ideal.swellMax) {
-      score += 3;
-    } else if (swellHeight >= (ideal.swellMin * 0.7)) {
-      score += 1.5; // Rideable but small
-    }
+    if (swellHeight >= ideal.swellMin && swellHeight <= ideal.swellMax) score += 2;
+    else if (swellHeight >= ideal.swellMin * 0.7 && swellHeight <= ideal.swellMax * 1.3) score += 1;
   }
 
-  return Math.round(score);
+  return score; // max 10
 }
 
-///////////////////////////////////////////////////
-function extractDir(text) {
-  const dirs = ['NNE','NNW','SSE','SSW','ENE','ESE','WNW','WSW','NE','NW','SE','SW','N','S','E','W'];
-  for (const dir of dirs) {
-    if (text.startsWith(dir + ' ') || text.includes(' ' + dir + ' ') || text.startsWith(dir + '\n')) return dir;
-  }
-  return null;
-}
-
-/////////////////////////////////////////////////////
-function extractHeight(text) {
-  const match = text.match(/(\d+\.?\d*)\s*(to\s*(\d+\.?\d*))?\s*m/);
-  if (!match) return null;
-  const low = parseFloat(match[1]);
-  const high = match[3] ? parseFloat(match[3]) : low;
-  return (low + high) / 2;
-}
 ///////////////////////////////////////////////////
   function extractDir(text) {
     const dirs = ['NNE','NNW','SSE','SSW','ENE','ESE','WNW','WSW','NE','NW','SE','SW','N','S','E','W'];
@@ -943,10 +893,10 @@ function updateBreakIndicators(forecast) {
     //btn.childNodes[0].textContent = `${b.subtitle} ${score}/10`;
     btn.childNodes[0].textContent = `${b.subtitle}`;
     if (score >= 7) {
-      //btn.style.color = 'var(--high)';
+      btn.style.color = 'var(--high)';
       btn.title = 'Firing!';
     } else {
-      //btn.style.color = '';
+      btn.style.color = '';
       btn.title = score >= 5 ? 'Decent conditions' : 'Not ideal';
     }
   });
@@ -1010,7 +960,6 @@ async function loadData(forceRefresh = false) {
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');
 
-  // Show loading and hide content/errors at the start
   document.getElementById('loadingEl').style.display = 'flex';
   document.getElementById('content').classList.remove('visible');
   document.getElementById('errorEl').style.display = 'none';
@@ -1032,38 +981,32 @@ async function loadData(forceRefresh = false) {
       `UPDATED<br>${now.toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'})}`;
 
   } catch (e) {
-    console.error("Load Error:", e);
+    document.getElementById('loadingEl').style.display = 'none';
     const errEl = document.getElementById('errorEl');
-    errEl.innerHTML = `<div class="error-msg">FAILED TO LOAD DATA<br>${e.message}</div>`;
+    errEl.innerHTML = `<div class="error-msg">Failed to load data.<br>${e.message}</div>`;
     errEl.style.display = 'block';
   } finally {
-    // 1. Stop the refresh button spinning
     btn.classList.remove('spinning');
-    
-    // 2. CRITICAL: Hide the loading element now that the process is complete
-    document.getElementById('loadingEl').style.display = 'none';
   }
+  setBreak(0);
 }
+
 ///////////////////////////////////////////////////
 function renderAll(data) {
-  try {
-    renderForecast(data.forecast, data.tides.noosa, data.swell);
-    updateBreakIndicators(data.forecast);  
-    renderTides(data.tides[currentStation]);
-    
-    if (document.getElementById('swellChart')) {
-      renderSwellChart(data.swell);
-    }
+  renderForecast(data.forecast, data.tides.noosa, data.swell);
+  updateBreakIndicators(data.forecast);  
+  renderTides(data.tides[currentStation]);
+  requestAnimationFrame(() => renderSwellChart(data.swell));
 
-    document.getElementById('content').classList.add('visible');
-    
-    // This call now handles moving the rating to the heading
-    setBreak(currentBreak); 
+  document.getElementById('loadingEl').style.display = 'none';
+  document.getElementById('content').classList.add('visible');
 
-  } catch (renderError) {
-    console.error("Rendering Error:", renderError);
-    document.getElementById('loadingEl').style.display = 'none';
-  }
+  // Animate forecast cards in
+  setTimeout(() => {
+    document.querySelectorAll('.forecast-card').forEach((card, i) => {
+      setTimeout(() => card.classList.add('visible'), i * 80);
+    });
+  }, 100);
 }
 
 ///////////////////////////////////////////////////
@@ -1098,21 +1041,9 @@ function shortDir(text) {
     m => dirs[m.toLowerCase()] || m);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Extract wind speed from BOM text
-function extractWindSpeed(text) {
-  const s = shortDir(text);
-  const match = s.match(/(\d+)\s*to\s*(\d+)\s*kts/);
-  if (match) return `${match[1]}–${match[2]} kts`;
-  const single = s.match(/(\d+)\s*kts/);
-  if (single) return `${single[1]} kts`;
-  return null;
-}
-
-
 ///////////////////////////////////////////////////
 function renderForecast(forecast, tideData, swellData) {
-  // 1. Warning Banner handling
+  // Warning
   const warnEl = document.getElementById('warningBanner');
   if (forecast.warning && forecast.warning.length > 5) {
     warnEl.textContent = '⚠ ' + forecast.warning;
@@ -1121,66 +1052,48 @@ function renderForecast(forecast, tideData, swellData) {
     warnEl.classList.remove('visible');
   }
 
-  // 2. Weather Synopsis
+  // Synopsis
   document.getElementById('synopsisCard').textContent = forecast.synopsis || '—';
 
-  // 3. Current Conditions (Day 0)
+
+  // Current conditions (first forecast day)
   const current = forecast.forecasts[0];
 
-  // Extract current swell period from Open-Meteo swellData
+  // Get current hour swell period from Open-Meteo
+  // Open-Meteo times are in Brisbane local time (UTC+10)
   let currentPeriod = null;
   if (swellData && swellData.hourly) {
     const now = new Date();
-    // Offset for Brisbane/QLD time (UTC+10)
     const brisbaneHour = new Date(now.getTime() + 10 * 60 * 60 * 1000);
     const hourStr = brisbaneHour.toISOString().slice(0, 13);
     const idx = swellData.hourly.time.findIndex(t => t.startsWith(hourStr));
     const useIdx = idx > -1 ? idx : 0;
     const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
-    currentPeriod = periodArr ? periodArr[useIdx] : null;
+      currentPeriod = periodArr ? periodArr[useIdx] : null;
   }
 
-  // Calculate Power (Energy) Rating
-  let energyRating = null;
-  const swellHeight = current ? extractHeight(shortDir(current.swell)) : null;
-  if (swellHeight !== null && currentPeriod !== null) {
-    // Simplified energy formula: (Height^2) * Period * Constant
-    energyRating = Math.round(Math.pow(swellHeight, 2) * currentPeriod * 10); 
+  // Extract wind speed from BOM text
+  function extractWindSpeed(text) {
+    const s = shortDir(text);
+    const match = s.match(/(\d+)\s*to\s*(\d+)\s*kts/);
+    if (match) return `${match[1]}–${match[2]} kts`;
+    const single = s.match(/(\d+)\s*kts/);
+    if (single) return `${single[1]} kts`;
+    return null;
   }
-
   const windSpeed = current ? extractWindSpeed(current.winds) : null;
-  const windDir = current ? extractDir(shortDir(current.winds)) : null;
-  const tide = getCurrentTide(tideData); 
 
-  // Wind Cleanliness Indicator (Point 4)
-  const b = BREAKS[currentBreak];
-  let windColor = 'var(--text)';
-  if (windDir && b.ideal.windDirs.includes(windDir)) {
-    windColor = 'var(--high)'; // Offshore/Ideal
-  } else if (windDir) {
-    windColor = 'var(--accent2)'; // Onshore/Sub-optimal
-  }
-
-  // Generate Tide HTML with Progress Bar (Point 3)
+  const tide = getCurrentTide(tideData);
   const tideHtml = tide ? `
   <div class="condition-item" style="grid-column: 1 / -1; border-right: none;">
     <div class="condition-label">Tide</div>
     <div class="condition-value">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: ${tide.rising ? 'var(--high)' : 'var(--low)'}">
-          ${tide.rising ? '▲ Rising' : '▼ Falling'} · ${tide.current.toFixed(2)}m
-        </span>
-        <span style="color: var(--muted); font-size:10px;">
-          ${tide.next.type} ${tide.next.height}m at ${formatTideTime(tide.next.time)}
-        </span>
-      </div>
-      <!-- Tide Progress Bar -->
-      <div style="width: 100%; height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 8px; position: relative;">
-        <div style="width: ${tide.pct}%; height: 100%; background: var(--accent); border-radius: 2px;"></div>
-      </div>
-      <div style="color: var(--muted); font-size:9px; margin-top: 4px; text-align: right;">
-        Next in ${tide.timeToNext}
-      </div>
+      <span style="color: ${tide.rising ? 'var(--high)' : 'var(--low)'}">
+        ${tide.rising ? '▲ Rising' : '▼ Falling'} · ${tide.current.toFixed(2)}m
+      </span>
+      <span style="color: var(--muted); font-size:11px; margin-left: 8px;">
+        ${tide.next.type} ${tide.next.height}m at ${formatTideTime(tide.next.time)} (${tide.timeToNext})
+      </span>
     </div>
   </div>` : '';
 
@@ -1194,48 +1107,30 @@ function renderForecast(forecast, tideData, swellData) {
       <div class="conditions-grid">
         <div class="condition-item">
           <div class="condition-label">Wind</div>
-          <div class="condition-value" style="color: ${windColor}">
-            ${windDir || shortDir(current.winds)}${windSpeed ? ' · ' + windSpeed : ''}
-          </div>
-        </div>
-        <div class="condition-item">
-          <div class="condition-label">Power</div>
-          <div class="condition-value" style="color: var(--accent2)">
-            ${energyRating ? energyRating + ' <small style="font-size:9px;">kJ</small>' : '—'}
-          </div>
-        </div>
-        <div class="condition-item">
-          <div class="condition-label">Swell</div>
-          <div class="condition-value">
-            ${extractDir(shortDir(current.swell)) || shortDir(current.swell)}
-            ${currentPeriod !== null ? ' · ' + Number(currentPeriod).toFixed(1) + 's' : ''}
-          </div>
+          <div class="condition-value">${extractDir(shortDir(current.winds)) || shortDir(current.winds)}${windSpeed ? ' · ' + windSpeed : ''}</div>
         </div>
         <div class="condition-item">
           <div class="condition-label">Seas</div>
           <div class="condition-value highlight">${shortDir(current.seas)}</div>
         </div>
+        <div class="condition-item">
+          <div class="condition-label">Swell</div>
+          <div class="condition-value">${extractDir(shortDir(current.swell)) || shortDir(current.swell)}${currentPeriod !== null && currentPeriod !== undefined ? ' · ' + Number(currentPeriod).toFixed(1) + 's' : ''}</div>
+        </div>
+        <div class="condition-item">
+          <div class="condition-label">Weather</div>
+          <div class="condition-value">${current.weather}</div>
+        </div>
+
       </div>
       ${tideHtml}
     `;
   }
 
-  // 4. Extended Forecast (Days 1+) including Swell Period
+  // Remaining forecast days
   const forecastRow = document.getElementById('forecastRow');
   forecastRow.innerHTML = '';
-  
-  forecast.forecasts.slice(1).forEach((day, index) => {
-    let dayPeriod = '—';
-    if (swellData && swellData.hourly) {
-      const startIdx = (index + 1) * 24; 
-      const endIdx = startIdx + 24;
-      const periods = (swellData.hourly.swell_wave_period || swellData.hourly.wave_period || []).slice(startIdx, endIdx);
-      
-      if (periods.length > 0) {
-        dayPeriod = Math.max(...periods).toFixed(0) + 's';
-      }
-    }
-
+  forecast.forecasts.slice(1).forEach(day => {
     const card = document.createElement('div');
     card.className = 'forecast-card';
     card.innerHTML = `
@@ -1251,7 +1146,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
         <div class="fc-row">
           <div class="fc-label">Swell</div>
-          <div class="fc-val">${shortDir(day.swell)} · ${dayPeriod}</div>
+          <div class="fc-val">${shortDir(day.swell)}</div>
         </div>
         <div class="fc-row">
           <div class="fc-label">Sky</div>
@@ -1262,7 +1157,6 @@ function renderForecast(forecast, tideData, swellData) {
     forecastRow.appendChild(card);
   });
 }
-
 
 ///////////////////////////////////////////////////
 function renderTides(tideData) {
