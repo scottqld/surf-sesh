@@ -1390,7 +1390,7 @@ function renderAll(data) {
     const brisbaneHour = new Date(now.getTime() + 10 * 60 * 60 * 1000);
     const hourStr = brisbaneHour.toISOString().slice(0, 13);
     const tomorrowStr = new Date(now.getTime() + (10 + 24) * 60 * 60 * 1000).toISOString().slice(0, 13);
-    const periodArr = data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
+    const periodArr = data.swell.hourly.dominant_wave_period || data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
     const times = data.swell.hourly.time;
     const idxNow  = times.findIndex(t => t.startsWith(hourStr));
     const idxTmrw = times.findIndex(t => t.startsWith(tomorrowStr));
@@ -1563,7 +1563,7 @@ function renderForecast(forecast, tideData, swellData) {
     const hourStr = brisbaneHour.toISOString().slice(0, 13);
     const idx = swellData.hourly.time.findIndex(t => t.startsWith(hourStr));
     const useIdx = idx > -1 ? idx : 0;
-    const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
+    const periodArr = swellData.hourly.dominant_wave_period || swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
     currentPeriod = periodArr ? periodArr[useIdx] : null;
     const heightArr = swellData.hourly.swell_wave_height || swellData.hourly.wave_height || null;
     currentWaveHeight = heightArr ? heightArr[useIdx] : null;
@@ -1613,7 +1613,7 @@ function renderForecast(forecast, tideData, swellData) {
     currentCard.innerHTML = `
       <div class="current-header">
         <div class="current-day">${current.day.toUpperCase()}</div>
-        <div class="current-issued">${forecast.issuedAt.replace('Forecast issued at ', '')}</div>
+        <div class="current-issued">${(forecast.issuedAt || '').replace('Forecast issued at ', '')}</div>
       </div>
       <div class="conditions-grid">
         <div class="condition-item">
@@ -1734,7 +1734,7 @@ function renderSwellChart(swellData) {
   const times = swellData.hourly.time;
   const waveH = swellData.hourly.wave_height;
   const swellH = swellData.hourly.swell_wave_height;
-  const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
+  const periodArr = swellData.hourly.dominant_wave_period || swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
 
   // Sample every 6 hours
   const step = 6;
@@ -1924,7 +1924,7 @@ async function loadNightMode() {
       const eveningStr = eveningDate.toISOString().slice(0, 13);
       const tomorrowStr = new Date(Date.now() + (10 + 24) * 60 * 60 * 1000).toISOString().slice(0, 13);
       const times = data.swell.hourly.time;
-      const periodArr  = data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
+      const periodArr  = data.swell.hourly.dominant_wave_period || data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
       const heightArr  = data.swell.hourly.swell_wave_height || data.swell.hourly.wave_height || null;
       const windHArr   = data.swell.hourly.wind_wave_height || null;
       const windTArr   = data.swell.hourly.wind_wave_period || null;
