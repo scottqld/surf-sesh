@@ -525,6 +525,31 @@
 
   .content { display: none; }
   .content.visible { display: block; }
+
+  @keyframes marquee {
+    0%   { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+  }
+
+  .night-banner {
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 8px 0;
+    margin-top: 20px;
+    margin-bottom: 8px;
+    border-top: 1px solid rgba(0,229,160,0.15);
+    border-bottom: 1px solid rgba(0,229,160,0.15);
+  }
+
+  .night-banner-inner {
+    display: inline-block;
+    animation: marquee 18s linear infinite;
+    color: var(--high);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
 </style>
 </head>
 <body>
@@ -567,7 +592,11 @@
 
     <div id="warningBanner" class="warning-banner"></div>
 
-    <div class="section-label">CURRENT CONDITIONS</div>
+    <div id="nightBanner" class="night-banner" style="display:none;">
+      <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
+    </div>
+
+    <div class="section-label" id="currentConditionsLabel">CURRENT CONDITIONS</div>
     <div class="current-card" id="currentCard"></div>
     <div class="synopsis-card" id="synopsisCard"></div>
 
@@ -645,7 +674,7 @@ const BREAKS = [
     img: null,
     ideal:      { swellDirs: ['NE', 'ENE', 'E'],         windDirs: ['S', 'SSW', 'SW', 'WSW'],              swellMin: 0.8, swellMax: 2.0, periodMin: 8  },
     acceptable: { swellDirs: ['NNE', 'ESE', 'SE'],      windDirs: ['W', 'SSE', 'SE'],                     swellMin: 0.5, swellMax: 2.5, periodMin: 6  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0  },
+    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
   },
   {
     name: 'First Point',
@@ -654,7 +683,7 @@ const BREAKS = [
     img: null,
     ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['S', 'SSW', 'SW'],                     swellMin: 1.0, swellMax: 2.5, periodMin: 10 },
     acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSE', 'SE', 'WSW', 'W'],              swellMin: 0.8, swellMax: 3.0, periodMin: 8  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0  },
+    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3  },
   },
   {
     name: 'Nationals',
@@ -663,7 +692,7 @@ const BREAKS = [
     img: null,
     ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 1.2, swellMax: 3.0, periodMin: 10 },
     acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.8, swellMax: 3.5, periodMin: 8  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0  },
+    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
   },
   {
     name: 'Tea Tree',
@@ -672,7 +701,7 @@ const BREAKS = [
     img: null,
     ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 1.0, swellMax: 2.5, periodMin: 10 },
     acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.8, swellMax: 3.0, periodMin: 8  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0  },
+    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
   },
   {
     name: 'Granite Bay',
@@ -681,7 +710,7 @@ const BREAKS = [
     img: null,
     ideal:      { swellDirs: ['ENE', 'E', 'NE', 'NNE'], windDirs: ['S', 'SSE', 'SE', 'SSW'],              swellMin: 0.8, swellMax: 2.5, periodMin: 9  },
     acceptable: { swellDirs: ['ESE', 'N', 'NNW', 'SE'], windDirs: ['SW', 'W', 'ESE'],                    swellMin: 0.5, swellMax: 3.0, periodMin: 7  },
-    avoid:      { swellDirs: ['S', 'NW'],               windDirs: ['N', 'NE', 'ENE', 'E'],                swellMin: 0,   swellMax: 9,   periodMin: 0  },
+    avoid:      { swellDirs: ['S', 'NW'],               windDirs: ['N', 'NE', 'ENE', 'E'],                swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 1  },
   },
   {
     name: 'Sunshine Beach',
@@ -795,6 +824,16 @@ function toggleAbout(headerEl) {
       }
     }
     return null;
+  }
+
+function extractPeriod(text) {
+    if (!text || typeof text !== 'string') return null;
+    // BOM formats: "at 12 seconds", "at 12s", "12 second period", "12s period"
+    const match = text.match(/at\s+(\d+)\s*s(?:ec(?:ond)?s?)?/i)
+                  || text.match(/(\d+)\s*s(?:ec(?:ond)?s?)?\s*period/i)
+                  || text.match(/(\d+)\s*seconds/i)
+                  || text.match(/(\d+)\s*second\b/i);
+    return match ? parseInt(match[1], 10) : null;
   }
 
 ///////////////////////////////////////////////////
@@ -1153,9 +1192,12 @@ function renderForecast(forecast, tideData, swellData) {
   // Current conditions (first forecast day)
   const current = forecast.forecasts[0];
 
-  // Get current hour swell period from Open-Meteo
+  // Get current hour swell period, height, and secondary (wind wave) from Open-Meteo
   // Open-Meteo times are in Brisbane local time (UTC+10)
   let currentPeriod = null;
+  let currentWaveHeight = null;
+  let currentWindWaveHeight = null;
+  let currentWindWavePeriod = null;
   if (swellData && swellData.hourly) {
     const now = new Date();
     const brisbaneHour = new Date(now.getTime() + 10 * 60 * 60 * 1000);
@@ -1163,7 +1205,32 @@ function renderForecast(forecast, tideData, swellData) {
     const idx = swellData.hourly.time.findIndex(t => t.startsWith(hourStr));
     const useIdx = idx > -1 ? idx : 0;
     const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
-      currentPeriod = periodArr ? periodArr[useIdx] : null;
+    currentPeriod = periodArr ? periodArr[useIdx] : null;
+    const heightArr = swellData.hourly.swell_wave_height || swellData.hourly.wave_height || null;
+    currentWaveHeight = heightArr ? heightArr[useIdx] : null;
+    // Secondary partition (wind sea) — present if worker fetches these fields
+    const windHArr = swellData.hourly.wind_wave_height || null;
+    const windTArr = swellData.hourly.wind_wave_period || null;
+    currentWindWaveHeight = windHArr ? windHArr[useIdx] : null;
+    currentWindWavePeriod = windTArr ? windTArr[useIdx] : null;
+  }
+
+  // Wave energy in kJ — calibrated to match Surfline's partition-summing model
+  // Coefficient 2.43 derived from 4 clean single-swell Surfline readings at Noosa (May 2026):
+  //   2.8m@10s=216, 2.5m@10s=132, 2.4m@10s=136, 2.5m@10s=155
+  // Confirmed by outlier: 1.7m@11s primary + 1.9m secondary = 198kJ total (each summed separately)
+  // Formula: Σ(H² × T × 2.43) across all available partitions
+  let waveEnergyHtml = '';
+  if (currentWaveHeight !== null && currentPeriod !== null) {
+    const C = 2.43;
+    let energy = currentWaveHeight * currentWaveHeight * currentPeriod * C;
+    if (currentWindWaveHeight !== null && currentWindWavePeriod !== null) {
+      energy += currentWindWaveHeight * currentWindWaveHeight * currentWindWavePeriod * C;
+    }
+    energy = Math.round(energy);
+    const energyLabel = energy >= 300 ? 'Powerful' : energy >= 100 ? 'Moderate' : energy >= 30 ? 'Weak' : 'Tiny';
+    const approx = currentWindWaveHeight === null ? '~' : ''; // exact if we have all partitions
+    waveEnergyHtml = ` · <span title="Wave energy (Surfline-calibrated, H²×T×2.43 per partition)" style="color:var(--muted);font-size:11px;">${approx}${energy} kJ (${energyLabel})</span>`;
   }
 
   const windSpeed = current ? extractWindSpeed(current.winds) : null;
@@ -1200,7 +1267,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
         <div class="condition-item">
           <div class="condition-label">Swell</div>
-          <div class="condition-value">${extractDir(shortDir(current.swell)) || shortDir(current.swell)}${currentPeriod !== null && currentPeriod !== undefined ? ' · ' + Number(currentPeriod).toFixed(1) + 's' : ''}</div>
+          <div class="condition-value">${extractDir(shortDir(current.swell)) || shortDir(current.swell)}${currentPeriod !== null && currentPeriod !== undefined ? ' · ' + Number(currentPeriod).toFixed(1) + 's' : ''}${waveEnergyHtml}</div>
         </div>
         <div class="condition-item">
           <div class="condition-label">Weather</div>
@@ -1218,6 +1285,7 @@ function renderForecast(forecast, tideData, swellData) {
   forecast.forecasts.slice(1).forEach(day => {
     const card = document.createElement('div');
     card.className = 'forecast-card';
+    const swellPeriod = extractPeriod(day.swell);
     card.innerHTML = `
       <div class="forecast-card-header">${day.day.toUpperCase()}</div>
       <div class="forecast-card-body">
@@ -1231,7 +1299,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
         <div class="fc-row">
           <div class="fc-label">Swell</div>
-          <div class="fc-val">${shortDir(day.swell)}</div>
+          <div class="fc-val">${shortDir(day.swell)}${swellPeriod ? ' · ' + swellPeriod + 's' : ''}</div>
         </div>
         <div class="fc-row">
           <div class="fc-label">Sky</div>
@@ -1390,11 +1458,186 @@ function renderSwellChart(swellData) {
   });
 }
 
-// Auto-refresh every 30 minutes
-setInterval(() => loadData(false), 30 * 60 * 1000);
+async function loadNightMode() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  document.getElementById('loadingEl').style.display = 'flex';
+  document.getElementById('content').classList.remove('visible');
+  document.getElementById('errorEl').style.display = 'none';
 
-// Initial load
-loadData();
+  try {
+    const res = await fetch(`${WORKER_URL}/all`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    cachedData = data;
+
+    // Attach period data so setBreak scoring works
+    // At night, use 17:00 Brisbane time as the representative end-of-day reading
+    let nightPeriod = null;
+    let nightWaveHeight = null;
+    let nightWindWaveHeight = null;
+    let nightWindWavePeriod = null;
+    if (data.swell && data.swell.hourly) {
+      const brisbaneDate = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const eveningStr = `${brisbaneDate}T17`; // 17:00 Brisbane = last active hour
+      const tomorrowStr = new Date(Date.now() + (10 + 24) * 60 * 60 * 1000).toISOString().slice(0, 13);
+      const times = data.swell.hourly.time;
+      const periodArr  = data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
+      const heightArr  = data.swell.hourly.swell_wave_height || data.swell.hourly.wave_height || null;
+      const windHArr   = data.swell.hourly.wind_wave_height || null;
+      const windTArr   = data.swell.hourly.wind_wave_period || null;
+      const idxEvening = times.findIndex(t => t.startsWith(eveningStr));
+      const idxTmrw    = times.findIndex(t => t.startsWith(tomorrowStr));
+      const useIdx = idxEvening > -1 ? idxEvening : 0;
+      nightPeriod          = periodArr  ? periodArr[useIdx]  : null;
+      nightWaveHeight      = heightArr  ? heightArr[useIdx]  : null;
+      nightWindWaveHeight  = windHArr   ? windHArr[useIdx]   : null;
+      nightWindWavePeriod  = windTArr   ? windTArr[useIdx]   : null;
+      data.forecast._period          = nightPeriod;
+      data.forecast._periodTomorrow  = periodArr && idxTmrw > -1 ? periodArr[idxTmrw] : null;
+    }
+
+    // Build wave energy html for the evening reading
+    let nightEnergyHtml = '';
+    if (nightWaveHeight !== null && nightPeriod !== null) {
+      const C = 2.43;
+      let energy = nightWaveHeight * nightWaveHeight * nightPeriod * C;
+      if (nightWindWaveHeight !== null && nightWindWavePeriod !== null) {
+        energy += nightWindWaveHeight * nightWindWaveHeight * nightWindWavePeriod * C;
+      }
+      energy = Math.round(energy);
+      const label = energy >= 300 ? 'Powerful' : energy >= 100 ? 'Moderate' : energy >= 30 ? 'Weak' : 'Tiny';
+      const approx = nightWindWaveHeight === null ? '~' : '';
+      nightEnergyHtml = ` · <span title="Wave energy (Surfline-calibrated)" style="color:var(--muted);font-size:11px;">${approx}${energy} kJ (${label})</span>`;
+    }
+
+    // Render future day forecast cards (skip today at index 0)
+    const forecastRow = document.getElementById('forecastRow');
+    forecastRow.innerHTML = '';
+    (data.forecast.forecasts || []).slice(1).forEach(day => {
+      const card = document.createElement('div');
+      card.className = 'forecast-card visible';
+      const swellPeriod = extractPeriod(day.swell);
+      card.innerHTML = `
+        <div class="forecast-card-header">${day.day.toUpperCase()}</div>
+        <div class="forecast-card-body">
+          <div class="fc-row"><div class="fc-label">Wind</div><div class="fc-val">${shortDir(day.winds)}</div></div>
+          <div class="fc-row"><div class="fc-label">Seas</div><div class="fc-val">${shortDir(day.seas)}</div></div>
+          <div class="fc-row"><div class="fc-label">Swell</div><div class="fc-val">${shortDir(day.swell)}${swellPeriod ? ' · ' + swellPeriod + 's' : ''}</div></div>
+          <div class="fc-row"><div class="fc-label">Sky</div><div class="fc-val">${day.weather}</div></div>
+        </div>`;
+      forecastRow.appendChild(card);
+    });
+
+    // Show today's completed conditions in the current card with a night label
+    const today = data.forecast.forecasts[0];
+    const currentCard = document.getElementById('currentCard');
+    if (today && currentCard) {
+      const windSpeed = extractWindSpeed(today.winds);
+      currentCard.style.display = '';
+      currentCard.innerHTML = `
+        <div class="current-header">
+          <div class="current-day">${today.day.toUpperCase()}</div>
+          <div class="current-issued" style="color:var(--muted);">Today's conditions · Live resumes 4am</div>
+        </div>
+        <div class="conditions-grid">
+          <div class="condition-item">
+            <div class="condition-label">Wind</div>
+            <div class="condition-value">${extractDir(shortDir(today.winds)) || shortDir(today.winds)}${windSpeed ? ' · ' + windSpeed : ''}</div>
+          </div>
+          <div class="condition-item">
+            <div class="condition-label">Seas</div>
+            <div class="condition-value highlight">${shortDir(today.seas)}</div>
+          </div>
+          <div class="condition-item">
+            <div class="condition-label">Swell</div>
+            <div class="condition-value">${extractDir(shortDir(today.swell)) || shortDir(today.swell)}${nightPeriod !== null ? ' · ' + Number(nightPeriod).toFixed(1) + 's' : ''}${nightEnergyHtml}</div>
+          </div>
+          <div class="condition-item">
+            <div class="condition-label">Weather</div>
+            <div class="condition-value">${today.weather}</div>
+          </div>
+        </div>`;
+    }
+
+    // Populate synopsis card
+    document.getElementById('synopsisCard').textContent = data.forecast.synopsis || '—';
+    document.getElementById('loadingEl').style.display = 'none';
+    document.getElementById('content').classList.add('visible');
+    setBreak(currentBreak);
+    requestAnimationFrame(() => renderSwellChart(data.swell));
+    updateBreakIndicators(data.forecast);
+    renderTides(data.tides[currentStation]);
+
+    // Show night banner above current conditions
+    document.getElementById('nightBanner').style.display = '';
+    document.getElementById('currentConditionsLabel').textContent = 'TODAY\'S CONDITIONS';
+
+  } catch (e) {
+    document.getElementById('loadingEl').style.display = 'none';
+    const errEl = document.getElementById('errorEl');
+    errEl.innerHTML = `<div class="error-msg" style="opacity:0.5;">Surf check resumes at 4am.</div>`;
+    errEl.style.display = 'block';
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+// Smart scheduler — loads data hourly, but only between 4am and 6pm Brisbane time (UTC+10)
+function getBrisbaneHour() {
+  return new Date(Date.now() + 10 * 60 * 60 * 1000).getUTCHours();
+}
+
+function isActiveHours() {
+  const h = getBrisbaneHour();
+  return h >= 4 && h < 18;
+}
+
+function scheduleNextLoad() {
+  const now = new Date(Date.now() + 10 * 60 * 60 * 1000); // Brisbane time
+  const h = now.getUTCHours();
+  const m = now.getUTCMinutes();
+  const s = now.getUTCSeconds();
+
+  let msUntilNext;
+
+  if (h >= 4 && h < 18) {
+    // Active hours — schedule for the top of the next hour
+    msUntilNext = ((60 - m) * 60 - s) * 1000;
+  } else {
+    // Outside hours — schedule for 4am Brisbane time
+    let hoursUntil4am;
+    if (h >= 18) {
+      hoursUntil4am = (24 - h) + 4;
+    } else {
+      // h < 4 (overnight)
+      hoursUntil4am = 4 - h;
+    }
+    msUntilNext = (hoursUntil4am * 60 * 60 - m * 60 - s) * 1000;
+  }
+
+  setTimeout(() => {
+    if (isActiveHours()) {
+      // Clean up night mode UI before full load
+      const banner = document.getElementById('nightBanner');
+      if (banner) banner.style.display = 'none';
+      document.getElementById('currentConditionsLabel').textContent = 'CURRENT CONDITIONS';
+      const currentCard = document.getElementById('currentCard');
+      if (currentCard) currentCard.style.display = '';
+      loadData(false);
+    }
+    scheduleNextLoad();
+  }, msUntilNext);
+}
+
+// Initial load — always fetch, but night mode only renders future day forecasts
+if (isActiveHours()) {
+  loadData();
+} else {
+  loadNightMode();
+}
+
+scheduleNextLoad();
 </script>
 </body>
 </html>
