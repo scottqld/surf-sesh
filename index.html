@@ -704,6 +704,7 @@ const BREAKS = [
     subtitle: 'Groyne',
     notes: 'Beach break at the river mouth groyne. Best NE swell with S–SW offshore wind. Works at most tides but tends to be fast on low tide. Good learner wave on smaller days.',
     img: null,
+    maxScore: 7, // inconsistent sandbanks — rarely produces quality waves
     tide: { ideal: 'mid-high', avoid: 'low' },
     exposure: 0.50, // Groyne: sheltered beach break
     ideal:      { swellDirs: ['NE', 'ENE', 'E'],         windDirs: ['S', 'SSW', 'SW', 'WSW'],              swellMin: 0.8, swellMax: 1.2, periodMin: 8  },
@@ -941,21 +942,21 @@ function setBreak(index) {
   let aboutOpen = document.getElementById('breakNotes').__aboutOpen || false;
 
   document.getElementById('breakNotes').innerHTML =
-    `<div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
-      <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About</span>
-      <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
-    </div>
-    <div id="aboutBody" style="display:${aboutOpen ? 'block' : 'none'};margin-top:6px;">
-      <span style="color:#fff;">${b.notes}</span>
-    </div>
-    ${note ? `<br><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">Conditions</span>
+    `${note ? `<span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">Conditions</span>
     <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;margin-left:8px;">${score !== null ? score + '/10' : ''}${contextStr}</span><br>
     <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.5px;">swell dir · size · period · wind · tide · swell quality</span><br>
     <span style="color:#fff;font-style:normal;" id="conditionNoteText">${note}</span>` : ''}
     ${noteTomorrow ? `<br><br><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">${tomorrowDay.toUpperCase()}</span>
     <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;margin-left:8px;">${scoreTomorrow !== null ? scoreTomorrow + '/10' : ''}</span>
     ${score !== null && scoreTomorrow !== null ? '<span style="font-size:10px;margin-left:4px;' + (scoreTomorrow > score ? 'color:var(--high)' : scoreTomorrow < score ? 'color:#ff6464' : 'color:var(--muted)') + '">' + (scoreTomorrow > score ? '↑' : scoreTomorrow < score ? '↓' : '→') + '</span>' : ''}<br>
-    <span style="color:#fff;font-style:normal;">${noteTomorrow}</span>` : ''}`;
+    <span style="color:#fff;font-style:normal;">${noteTomorrow}</span>` : ''}
+    <br><div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+      <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About</span>
+      <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
+    </div>
+    <div id="aboutBody" style="display:${aboutOpen ? 'block' : 'none'};margin-top:6px;">
+      <span style="color:#fff;">${b.notes}</span>
+    </div>`;
 
   document.getElementById('breakNotes').__aboutOpen = aboutOpen;
   requestAnimationFrame(() => { breakNotesEl.style.opacity = '1'; });
@@ -1151,7 +1152,8 @@ function scoreBreak(breakData, forecast) {
     // 10 only when surf is 1.6m+ face (very rare at Noosa)
   }
 
-  return Math.max(0, Math.min(Math.round(raw), sizeCap));
+  const hardCap = breakData.maxScore ?? 10;
+  return Math.max(0, Math.min(Math.round(raw), sizeCap, hardCap));
 }
 
 ///////////////////////////////////////////////////
