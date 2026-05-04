@@ -706,8 +706,8 @@ const BREAKS = [
     img: null,
     tide: { ideal: 'mid-high', avoid: 'low' },
     exposure: 0.50, // Groyne: sheltered beach break
-    ideal:      { swellDirs: ['NE', 'ENE', 'E'],         windDirs: ['S', 'SSW', 'SW', 'WSW'],              swellMin: 0.8, swellMax: 2.0, periodMin: 8  },
-    acceptable: { swellDirs: ['NNE', 'ESE', 'SE'],      windDirs: ['W', 'SSE', 'SE'],                     swellMin: 0.5, swellMax: 2.5, periodMin: 6  },
+    ideal:      { swellDirs: ['NE', 'ENE', 'E'],         windDirs: ['S', 'SSW', 'SW', 'WSW'],              swellMin: 0.8, swellMax: 1.2, periodMin: 8  },
+    acceptable: { swellDirs: ['NNE', 'ESE', 'SE'],      windDirs: ['W', 'SSE', 'SE'],                     swellMin: 0.4, swellMax: 1.5, periodMin: 6  },
     avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
   },
   {
@@ -717,8 +717,8 @@ const BREAKS = [
     img: null,
     tide: { ideal: 'low-mid', avoid: 'high' },
     exposure: 0.32, // First Point: most sheltered, calibrated to Surfline (2.8m→0.9m)
-    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['S', 'SSW', 'SW'],                     swellMin: 1.0, swellMax: 2.5, periodMin: 10 },
-    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSE', 'SE', 'WSW', 'W'],              swellMin: 0.8, swellMax: 3.0, periodMin: 8  },
+    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['S', 'SSW', 'SW'],                     swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
+    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSE', 'SE', 'WSW', 'W'],              swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
     avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3  },
   },
   {
@@ -729,8 +729,8 @@ const BREAKS = [
     tide: { ideal: 'low-mid', avoid: 'high' },
     advanced: true, // Boiling Pot takeoff — expert surfers only
     exposure: 0.38, // Nationals: slightly more exposed than First Point
-    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 1.2, swellMax: 3.0, periodMin: 10 },
-    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.8, swellMax: 3.5, periodMin: 8  },
+    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 0.7, swellMax: 1.2, periodMin: 10 },
+    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.3, swellMax: 1.5, periodMin: 8  },
     avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
   },
   {
@@ -740,8 +740,8 @@ const BREAKS = [
     img: null,
     tide: { ideal: 'low-mid', avoid: 'high' },
     exposure: 0.37, // Tea Tree: similar exposure to Nationals
-    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 1.0, swellMax: 2.5, periodMin: 10 },
-    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.8, swellMax: 3.0, periodMin: 8  },
+    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
+    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
     avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
   },
   {
@@ -752,8 +752,8 @@ const BREAKS = [
     tide: { ideal: 'low-mid', avoid: 'high' },
     advanced: true, // Most exposed, powerful — intermediate to advanced
     exposure: 0.45, // Granite Bay: most exposed of the points
-    ideal:      { swellDirs: ['ENE', 'E', 'NE', 'NNE'], windDirs: ['S', 'SSE', 'SE', 'SSW'],              swellMin: 0.8, swellMax: 2.5, periodMin: 9  },
-    acceptable: { swellDirs: ['ESE', 'N', 'NNW', 'SE'], windDirs: ['SW', 'W', 'ESE'],                    swellMin: 0.5, swellMax: 3.0, periodMin: 7  },
+    ideal:      { swellDirs: ['ENE', 'E', 'NE', 'NNE'], windDirs: ['S', 'SSE', 'SE', 'SSW'],              swellMin: 0.7, swellMax: 1.2, periodMin: 9  },
+    acceptable: { swellDirs: ['ESE', 'N', 'NNW', 'SE'], windDirs: ['SW', 'W', 'ESE'],                    swellMin: 0.4, swellMax: 1.5, periodMin: 7  },
     avoid:      { swellDirs: ['S', 'NW'],               windDirs: ['N', 'NE', 'ENE', 'E'],                swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 1  },
   },
   {
@@ -763,9 +763,9 @@ const BREAKS = [
     img: null,
     tide: { ideal: 'mid-high', avoid: 'low' },
     exposure: 0.60, // Sunshine Beach: open east-facing beach
-    ideal:      { swellDirs: ['E', 'ESE', 'ENE'],        windDirs: ['W', 'WSW', 'WNW', 'SW'],             swellMin: 0.8, swellMax: 2.0, periodMin: 8  },
-    acceptable: { swellDirs: ['SE', 'NE'],               windDirs: ['NW', 'SSW', 'S'],                    swellMin: 0.5, swellMax: 2.5, periodMin: 6  },
-    avoid:      { swellDirs: ['N', 'NW', 'S', 'SW'],    windDirs: ['NE', 'ENE', 'E', 'ESE', 'SE', 'N'],  swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3  },
+    ideal:      { swellDirs: ['E', 'ESE', 'ENE'],        windDirs: ['W', 'WSW', 'WNW', 'SW'],             swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
+    acceptable: { swellDirs: ['SE', 'NE'],               windDirs: ['NW', 'SSW'],                         swellMin: 0.3, swellMax: 1.5, periodMin: 6  },
+    avoid:      { swellDirs: ['N', 'NW', 'S', 'SW'],    windDirs: ['NE', 'ENE', 'E', 'ESE', 'SE', 'N', 'S'],  swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3  },
   }
 ];
 
@@ -793,12 +793,15 @@ function conditionNoteTomorrow(breakData, forecast) {
     else                                              notes.push(`${swellDir} swell is close — best from ${ideal.swellDirs.join(' or ')}`);
   }
 
-  // Swell height
-  if (swellHeight !== null) {
-    if (swellHeight >= ideal.swellMin && swellHeight <= ideal.swellMax)                notes.push(`size is good at ${swellHeight.toFixed(1)}m`);
-    else if (swellHeight >= acceptable.swellMin && swellHeight <= acceptable.swellMax) notes.push(`size is workable at ${swellHeight.toFixed(1)}m`);
-    else if (swellHeight < acceptable.swellMin)                                        notes.push(`too small at ${swellHeight.toFixed(1)}m — needs ${ideal.swellMin}m+`);
-    else                                                                               notes.push(`too big at ${swellHeight.toFixed(1)}m — best under ${ideal.swellMax}m`);
+  // Wave height — use estimated surf height, not raw offshore swell
+  const surfHTmrw = estimateSurfHeight(swellHeight, breakData.exposure, swellDir, breakData);
+  if (surfHTmrw !== null) {
+    if (surfHTmrw >= 1.6)       notes.push(`waves should be pumping at ~${surfHTmrw.toFixed(1)}m`);
+    else if (surfHTmrw >= 1.2)  notes.push(`waves should be a good size at ~${surfHTmrw.toFixed(1)}m`);
+    else if (surfHTmrw >= 0.9)  notes.push(`waves should be decent at ~${surfHTmrw.toFixed(1)}m`);
+    else if (surfHTmrw >= 0.7)  notes.push(`waves will be on the small side at ~${surfHTmrw.toFixed(1)}m`);
+    else if (surfHTmrw >= 0.5)  notes.push(`waves will be small at ~${surfHTmrw.toFixed(1)}m`);
+    else                        notes.push(`waves will be too small at ~${surfHTmrw.toFixed(1)}m`);
   }
 
   // Period
@@ -1080,10 +1083,27 @@ function scoreBreak(breakData, forecast) {
   const tide        = forecast._tide   ?? null;
   const windSpeedKts = extractWindSpeedKts(current.winds || '');
 
+  // Convert offshore height to estimated surf height using exposure + direction multiplier
+  // This means swellMin/swellMax thresholds are in surf height terms, not offshore metres
+  let scoringHeight = swellHeight;
+  if (swellHeight !== null && breakData.exposure) {
+    let dirMultiplier = 1.0;
+    if (swellDir) {
+      const { ideal, acceptable } = breakData;
+      if (ideal.swellDirs.includes(swellDir)) dirMultiplier = 1.0;
+      else if (acceptable.swellDirs.includes(swellDir)) dirMultiplier = 0.8;
+      else {
+        const minDist = Math.min(...ideal.swellDirs.map(d => dirDistance(swellDir, d)));
+        dirMultiplier = minDist <= 2 ? 0.6 : 0.4;
+      }
+    }
+    scoringHeight = swellHeight * breakData.exposure * dirMultiplier;
+  }
+
   const { ideal, acceptable, avoid } = breakData;
 
-  // Swell direction — up to 4 pts
-  const swellPts = scoreFactor(swellDir, ideal.swellDirs, acceptable.swellDirs, avoid.swellDirs, 4);
+  // Swell direction — up to 3 pts
+  const swellPts = scoreFactor(swellDir, ideal.swellDirs, acceptable.swellDirs, avoid.swellDirs, 3);
 
   // Wind direction — up to 3 pts
   const windPts = scoreFactor(windDir, ideal.windDirs, acceptable.windDirs, avoid.windDirs, 3);
@@ -1091,7 +1111,6 @@ function scoreBreak(breakData, forecast) {
     ? avoid.windPenalty : 0;
 
   // Wind speed penalty — only applies when wind is not comfortably offshore
-  // Strong offshore wind is fine (groomed); strong onshore/cross-shore is bad
   const windIsIdeal = windDir && ideal.windDirs.includes(windDir);
   let windSpeedPenalty = 0;
   if (!windIsIdeal && windSpeedKts !== null) {
@@ -1099,13 +1118,12 @@ function scoreBreak(breakData, forecast) {
     else if (windSpeedKts > 20) windSpeedPenalty = 1;
   }
 
-  // Cross-swell penalty — confused seas reduce wave quality
-  const swellTextLower = (current.swell || '').toLowerCase();
-  const hasCrossSwell = /cross.?swell|moderate cross|secondary swell|confused/i.test(swellTextLower);
+  // Cross-swell penalty
+  const hasCrossSwell = /cross.?swell|moderate cross|secondary swell|confused/i.test(current.swell || '');
   const crossSwellPenalty = hasCrossSwell ? 1 : 0;
 
   // Swell height — up to 2 pts
-  const heightPts = scoreHeight(swellHeight, ideal, acceptable);
+  const heightPts = scoreHeight(scoringHeight, ideal, acceptable);
 
   // Period — up to 1 pt
   let periodPts = 0;
@@ -1114,10 +1132,26 @@ function scoreBreak(breakData, forecast) {
     else if (period >= acceptable.periodMin) periodPts = 0.5;
   }
 
-  // Tide — up to 1 pt bonus / -1 penalty
+  // Tide — up to 1 pt
   const tidePts = scoreTide(tide, breakData.tide);
 
-  return Math.max(0, Math.min(Math.round(swellPts + windPts + heightPts + periodPts + tidePts - windPenalty - windSpeedPenalty - crossSwellPenalty), 10));
+  // Raw score
+  const raw = swellPts + windPts + heightPts + periodPts + tidePts - windPenalty - windSpeedPenalty - crossSwellPenalty;
+
+  // Size cap: absolute surf height thresholds
+  // Ensures small days can't score high regardless of how perfect other conditions are
+  let sizeCap = 10;
+  if (scoringHeight !== null) {
+    if (scoringHeight < 0.3)       sizeCap = 2;  // barely surfable
+    else if (scoringHeight < 0.5)  sizeCap = 4;  // too small
+    else if (scoringHeight < 0.7)  sizeCap = 6;  // small
+    else if (scoringHeight < 0.9)  sizeCap = 7;  // smallish
+    else if (scoringHeight < 1.2)  sizeCap = 8;  // decent
+    else if (scoringHeight < 1.6)  sizeCap = 9;  // good
+    // 10 only when surf is 1.6m+ face (very rare at Noosa)
+  }
+
+  return Math.max(0, Math.min(Math.round(raw), sizeCap));
 }
 
 ///////////////////////////////////////////////////
@@ -1146,17 +1180,16 @@ function conditionNote(breakData, forecast) {
     else notes.push(`${swellDir} swell is close — best from ${ideal.swellDirs.join(' or ')}`);
   }
 
-  // Swell height
-  if (swellHeight !== null) {
-    if (swellHeight >= ideal.swellMin && swellHeight <= ideal.swellMax) {
-      notes.push(`size is good at ${swellHeight.toFixed(1)}m`);
-    } else if (swellHeight >= acceptable.swellMin && swellHeight <= acceptable.swellMax) {
-      notes.push(`size is workable at ${swellHeight.toFixed(1)}m`);
-    } else if (swellHeight < acceptable.swellMin) {
-      notes.push(`too small at ${swellHeight.toFixed(1)}m — needs ${ideal.swellMin}m+`);
-    } else {
-      notes.push(`too big at ${swellHeight.toFixed(1)}m — best under ${ideal.swellMax}m`);
-    }
+  // Wave height — use estimated surf height (exposure-adjusted), not raw offshore swell
+  const swellDirForHeight = swellDir;
+  const surfH = estimateSurfHeight(swellHeight, breakData.exposure, swellDirForHeight, breakData);
+  if (surfH !== null) {
+    if (surfH >= 1.6)       notes.push(`waves are pumping at ~${surfH.toFixed(1)}m`);
+    else if (surfH >= 1.2)  notes.push(`waves are a good size at ~${surfH.toFixed(1)}m`);
+    else if (surfH >= 0.9)  notes.push(`waves are decent at ~${surfH.toFixed(1)}m`);
+    else if (surfH >= 0.7)  notes.push(`waves are on the small side at ~${surfH.toFixed(1)}m`);
+    else if (surfH >= 0.5)  notes.push(`waves are small at ~${surfH.toFixed(1)}m`);
+    else                    notes.push(`waves are too small at ~${surfH.toFixed(1)}m`);
   }
 
   // Period
@@ -1372,8 +1405,20 @@ async function loadData(forceRefresh = false) {
       }
     }
 
+    // Stale worker cache indicator — warn if cached data is >55 minutes old
+    const fetchedAt = data.swell?.fetchedAt || data.forecast?.fetchedAt;
+    if (fetchedAt) {
+      const ageMs = Date.now() - new Date(fetchedAt).getTime();
+      const ageMins = Math.round(ageMs / 60000);
+      if (ageMins > 55) {
+        document.getElementById('lastUpdated').innerHTML +=
+          `<br><span style="color:rgba(255,200,60,0.9);font-size:8px;cursor:pointer;" onclick="loadData(true)" title="Tap to force refresh">⚠ cached ${ageMins}m ago</span>`;
+      }
+    }
+
   } catch (e) {
     document.getElementById('loadingEl').style.display = 'none';
+    document.getElementById('content').classList.add('visible');
     const errEl = document.getElementById('errorEl');
     errEl.innerHTML = `<div class="error-msg">Failed to load data.<br>${e.message}</div>`;
     errEl.style.display = 'block';
@@ -1387,14 +1432,20 @@ function renderAll(data) {
   // Attach current and tomorrow period from Open-Meteo to forecast for scoreBreak
   if (data.swell && data.swell.hourly) {
     const now = new Date();
-    const brisbaneHour = new Date(now.getTime() + 10 * 60 * 60 * 1000);
-    const hourStr = brisbaneHour.toISOString().slice(0, 13);
-    const tomorrowStr = new Date(now.getTime() + (10 + 24) * 60 * 60 * 1000).toISOString().slice(0, 13);
+    // Open-Meteo times are Brisbane local (timezone=Australia/Brisbane in worker URL)
+    const brisbane = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+    const yyyy = brisbane.getUTCFullYear();
+    const mm   = String(brisbane.getUTCMonth() + 1).padStart(2, '0');
+    const dd   = String(brisbane.getUTCDate()).padStart(2, '0');
+    const hh   = String(brisbane.getUTCHours()).padStart(2, '0');
+    const hourStr = `${yyyy}-${mm}-${dd}T${hh}`;
+    const tmrBrisbane = new Date(now.getTime() + (10 + 24) * 60 * 60 * 1000);
+    const tomorrowStr = `${tmrBrisbane.getUTCFullYear()}-${String(tmrBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(tmrBrisbane.getUTCDate()).padStart(2,'0')}T${String(tmrBrisbane.getUTCHours()).padStart(2,'0')}`;
     const periodArr = data.swell.hourly.dominant_wave_period || data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
     const times = data.swell.hourly.time;
     const idxNow  = times.findIndex(t => t.startsWith(hourStr));
     const idxTmrw = times.findIndex(t => t.startsWith(tomorrowStr));
-    data.forecast._period       = periodArr && idxNow  > -1 ? periodArr[idxNow]  : null;
+    data.forecast._period         = periodArr && idxNow  > -1 ? periodArr[idxNow]  : null;
     data.forecast._periodTomorrow = periodArr && idxTmrw > -1 ? periodArr[idxTmrw] : null;
   }
 
@@ -1440,14 +1491,13 @@ function renderAll(data) {
 
   // Defer chart and tides to next frame so content is painted first
   requestAnimationFrame(() => {
-    renderSwellChart(data.swell);
     renderTides(data.tides[currentStation]);
-    // Animate forecast cards in
+    // Use setTimeout for chart to ensure layout is fully complete
     setTimeout(() => {
-      document.querySelectorAll('.forecast-card').forEach((card, i) => {
-        setTimeout(() => card.classList.add('visible'), i * 80);
-      });
-    }, 100);
+      try {
+        renderSwellChart(data.swell);
+        } catch(e) { console.error('renderSwellChart error:', e); }
+    }, 50);
   });
 }
 
@@ -1559,8 +1609,14 @@ function renderForecast(forecast, tideData, swellData) {
   let currentWindWavePeriod = null;
   if (swellData && swellData.hourly) {
     const now = new Date();
-    const brisbaneHour = new Date(now.getTime() + 10 * 60 * 60 * 1000);
-    const hourStr = brisbaneHour.toISOString().slice(0, 13);
+    // Open-Meteo times are in Brisbane local time (timezone=Australia/Brisbane in URL)
+    // Format as "YYYY-MM-DDTHH" matching Open-Meteo's time strings
+    const brisbane = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+    const yyyy = brisbane.getUTCFullYear();
+    const mm = String(brisbane.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(brisbane.getUTCDate()).padStart(2, '0');
+    const hh = String(brisbane.getUTCHours()).padStart(2, '0');
+    const hourStr = `${yyyy}-${mm}-${dd}T${hh}`;
     const idx = swellData.hourly.time.findIndex(t => t.startsWith(hourStr));
     const useIdx = idx > -1 ? idx : 0;
     const periodArr = swellData.hourly.dominant_wave_period || swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
@@ -1647,7 +1703,7 @@ function renderForecast(forecast, tideData, swellData) {
   forecastRow.innerHTML = '';
   forecast.forecasts.slice(1).forEach(day => {
     const card = document.createElement('div');
-    card.className = 'forecast-card';
+    card.className = 'forecast-card visible'; // immediately visible — no animation delay
     const swellPeriod = extractPeriod(day.swell);
     card.innerHTML = `
       <div class="forecast-card-header">${day.day.toUpperCase()}</div>
@@ -1717,10 +1773,27 @@ function renderTides(tideData) {
 
 ///////////////////////////////////////////////////
 function renderSwellChart(swellData) {
+  if (!swellData || !swellData.hourly) {
+    const canvas = document.getElementById('swellChart');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = '11px DM Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Swell data unavailable — try refreshing', canvas.width / 2, canvas.height / 2);
+    }
+    return;
+  }
   const canvas = document.getElementById('swellChart');
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.parentElement.getBoundingClientRect();
-  const W = rect.width - 32;
+  const W = rect.width > 0 ? rect.width - 32 : canvas.parentElement.offsetWidth - 32;
+  if (W <= 0) {
+    // Layout not ready — retry after a short delay
+    setTimeout(() => renderSwellChart(swellData), 100);
+    return;
+  }
   const H = 120;
 
   canvas.width = W * dpr;
