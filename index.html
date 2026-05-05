@@ -124,10 +124,22 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: 32px;
-    background: linear-gradient(to right, transparent, var(--bg));
+    width: 40px;
+    background: linear-gradient(to right, transparent, var(--surface) 70%);
     border-radius: 0 8px 8px 0;
     pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 6px;
+    transition: opacity 0.2s;
+  }
+
+  .station-toggle-fade::after {
+    content: '›';
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
   }
 
   .station-btn {
@@ -588,6 +600,39 @@
     letter-spacing: 2px;
     text-transform: uppercase;
   }
+  /* TAB BAR */
+  .tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    gap: 3px;
+    transition: color 0.2s;
+  }
+  .tab-btn.active { color: var(--accent); }
+  .tab-section { display: none; }
+  .tab-section.active { display: block; }
+  .app { padding-bottom: 60px; }
 </style>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "973be145b9d84f478f21eb5a635fc5dc"}'></script><!-- End Cloudflare Web Analytics -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
@@ -631,6 +676,8 @@
   <div id="errorEl" style="display:none"></div>
 
   <div id="content" class="content">
+    <!-- TAB: CONDITIONS -->
+    <div class="tab-section active" id="tab-conditions">
     <div id="breakPhotoWrap" style="margin: 12px 20px 0; height: 160px; border-radius: 10px; overflow: hidden; position: relative;">
       <img id="breakImg" src="" alt="" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block; transition: opacity 0.3s, filter 0.4s;">
       <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,12,15,0.65) 0%, transparent 55%);pointer-events:none;"></div>
@@ -639,62 +686,60 @@
     </div>
     <div id="bestBreakBanner" style="display:none;margin:10px 20px 0;padding:10px 14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--high);letter-spacing:0.5px;"></div>
     <div class="synopsis-card" id="breakNotes"></div>
-
     <div id="warningBanner" class="warning-banner"></div>
-
     <div id="nightBanner" class="night-banner" style="display:none;">
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
     </div>
-
     <div id="synopsisCard" onclick="toggleSynopsis()" style="cursor:pointer;margin:8px 20px 0;font-size:12px;color:var(--accent);line-height:1.6;font-style:italic;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;"></div>
-    <div class="section-label" id="currentConditionsLabel">CURRENT CONDITIONS</div>
+    <div class="section-label" id="currentConditionsLabel">CONDITIONS</div>
     <div class="current-card" id="currentCard"></div>
-
+    <div class="synopsis-card" id="breakNotes" style="margin-top:0;border-top:none;border-radius:0 0 12px 12px;"></div>
     <div class="section-label">EXTENDED FORECAST <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
     <div class="forecast-scroll">
       <div class="forecast-row" id="forecastRow"></div>
     </div>
-
     <div class="section-label">SWELL TREND — 7 DAYS</div>
     <div class="chart-container">
       <div class="chart-title">
         <span>WAVE HEIGHT (M)</span>
         <div class="chart-legend">
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--accent)"></div>
-            <span>Total</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: var(--high)"></div>
-            <span>Swell</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: rgba(0,229,160,0.9)"></div>
-            <span>≥12s</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: rgba(255,200,60,0.9)"></div>
-            <span>8–11s</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-dot" style="background: rgba(255,80,80,0.9)"></div>
-            <span>&lt;8s</span>
-          </div>
+          <div class="legend-item"><div class="legend-dot" style="background: var(--accent)"></div><span>Total</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background: var(--high)"></div><span>Swell</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background: rgba(0,229,160,0.9)"></div><span>≥12s</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background: rgba(255,200,60,0.9)"></div><span>8–11s</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background: rgba(255,80,80,0.9)"></div><span>&lt;8s</span></div>
         </div>
       </div>
       <canvas id="swellChart"></canvas>
       <div class="chart-labels" id="chartLabels"></div>
     </div>
-
     <div class="section-label" id="tideLabel">TIDES — NOOSA HEAD</div>
     <div style="display:flex;gap:8px;padding:0 20px 8px;">
       <button id="btnNoosa" class="station-btn active" onclick="setStation('noosa')" style="font-size:10px;padding:4px 10px;">Noosa</button>
       <button id="btnMooloolaba" class="station-btn" onclick="setStation('mooloolaba')" style="font-size:10px;padding:4px 10px;">Mooloolaba</button>
     </div>
     <div class="tides-container" id="tidesContainer"></div>
+    </div>
+
+    <!-- TAB: PLANNER -->
+    <div class="tab-section" id="tab-planner">
+    <div class="section-label">BEST SESSIONS THIS WEEK</div>
+    <div id="sessionPlanner" style="padding:0 20px 20px;"></div>
+    </div>
 
   </div>
 </div>
+
+<nav class="tab-bar" style="height:56px;">
+  <button class="tab-btn active" id="tabBtn-conditions" onclick="switchTab('conditions')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    CONDITIONS
+  </button>
+  <button class="tab-btn" id="tabBtn-planner" onclick="switchTab('planner')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    PLANNER
+  </button>
+</nav>
 
 <button class="refresh-btn" id="refreshBtn" onclick="isActiveHours() ? loadData(true) : loadNightMode()" title="Refresh">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1021,21 +1066,9 @@ function setBreak(index) {
   let aboutOpen = _aboutOpen;
 
   document.getElementById('breakNotes').innerHTML =
-    `${note ? `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:1;color:${score >= 7 ? 'var(--high)' : score >= 5 ? 'var(--accent)' : 'var(--muted)'};">${score ?? '—'}</span>
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--muted);line-height:1;">/10</span>
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;line-height:1;color:${score >= 7 ? 'var(--high)' : score >= 5 ? 'var(--accent)' : 'var(--muted)'};">${score >= 9 ? 'Epic' : score >= 7 ? 'Good' : score >= 5 ? 'Fun' : score >= 3 ? 'Poor' : (cachedData?.forecast?._scoringHeight < 0.5 ? 'Flat' : 'Poor')}</span>
-      <span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--bg);background:var(--muted);border-radius:3px;padding:2px 5px;line-height:1.4;align-self:center;">TODAY</span>
-      <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-left:4px;">${contextStr}</span>
-    </div>
-    <span style="color:#fff;font-style:normal;" id="conditionNoteText">${note}</span>` : ''}
-    ${noteTomorrow ? `<div style="height:1px;background:var(--border);margin:12px 0;"></div>
-    <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">${tomorrowDay.toUpperCase()}</span>
-    <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;margin-left:8px;">${scoreTomorrow !== null ? scoreTomorrow + '/10' : ''}</span>
-    ${score !== null && scoreTomorrow !== null ? '<span style="font-size:10px;margin-left:4px;' + (scoreTomorrow > score ? 'color:var(--high)' : scoreTomorrow < score ? 'color:#ff6464' : 'color:var(--muted)') + '">' + (scoreTomorrow > score ? '↑' : scoreTomorrow < score ? '↓' : '→') + '</span>' : ''}<br>
-    <span style="color:#fff;font-style:normal;">${noteTomorrow}</span>` : ''}
+    `${note ? `<span style="color:#fff;font-style:normal;" id="conditionNoteText">${note}</span>` : ''}
     <br><div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-      <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About</span>
+      <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About this break</span>
       <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
     </div>
     <div id="aboutBody" style="display:${aboutOpen ? 'block' : 'none'};margin-top:6px;">
@@ -1575,6 +1608,74 @@ async function loadData(forceRefresh = false) {
 }
 
 ///////////////////////////////////////////////////
+// Session planner — find the top 3 sessions across all breaks and forecast days
+function getBestTimeHint(b, dayForecast) {
+  // Point breaks prefer morning before seabreeze; beach breaks more flexible
+  if (b.pointBreak) return 'Best early morning';
+  if (b.name === 'Sunshine Beach') return 'Morning or evening';
+  return 'Check conditions';
+}
+
+function renderSessionPlanner(forecast, swell) {
+  const el = document.getElementById('sessionPlanner');
+  if (!el) return;
+
+  const sessions = [];
+  const days = forecast.forecasts || [];
+
+  days.forEach((day, dayIdx) => {
+    BREAKS.forEach((b, bIdx) => {
+      const dayForecast = {
+        forecasts: [day],
+        _period: forecast._periodByDay ? (forecast._periodByDay[dayIdx] ?? null) : (dayIdx === 0 ? forecast._period : dayIdx === 1 ? forecast._periodTomorrow : null),
+        _tide: dayIdx === 0 ? forecast._tide : dayIdx === 1 ? forecast._tide?._tomorrow : null,
+      };
+      const score = scoreBreak(b, dayForecast);
+      sessions.push({ day: day.day, dayIdx, break: b, breakIdx: bIdx, score, dayForecast });
+    });
+  });
+
+  // Sort by score desc, dedupe to one entry per day (best break that day)
+  sessions.sort((a, b) => b.score - a.score);
+  const seenDays = new Set();
+  const top = [];
+  for (const s of sessions) {
+    if (top.length >= 3) break;
+    if (!seenDays.has(s.dayIdx)) { seenDays.add(s.dayIdx); top.push(s); }
+  }
+
+  // Flat week fallback — show best available with a muted note
+  const isFlat = top.every(s => s.score < 5);
+  const displaySessions = isFlat
+    ? sessions.filter((s, i, arr) => !arr.slice(0, i).some(x => x.dayIdx === s.dayIdx)).slice(0, 3)
+    : top.filter(s => s.score >= 5);
+
+  if (!displaySessions.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;padding:12px 0;">No forecast data available.</div>`;
+    return;
+  }
+
+  el.innerHTML = displaySessions.map((s, i) => {
+    const scoreColor = s.score >= 7 ? 'var(--high)' : s.score >= 5 ? 'var(--accent)' : 'var(--muted)';
+    const label = s.score >= 9 ? 'Epic' : s.score >= 7 ? 'Good' : s.score >= 5 ? 'Fun' : 'Poor';
+    const h = extractHeight(shortDir(s.dayForecast.forecasts[0].swell || ''));
+    const sH = estimateSurfHeight(h, s.break.exposure, extractDir(shortDir(s.dayForecast.forecasts[0].swell || '')), s.break, s.dayForecast._period);
+    const ftStr = sH !== null ? ` · ~${Math.round(sH * 3.281 * 2) / 2}ft` : '';
+    const adv = s.break.advanced ? ' · advanced' : s.break.intermediateAdvanced ? ' · intermediate+' : '';
+    const timeHint = getBestTimeHint(s.break, s.dayForecast);
+    const isLast = i === displaySessions.length - 1;
+    return `<div onclick="setBreak(${s.breakIdx});window.scrollTo({top:0,behavior:'smooth'})" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}cursor:pointer;">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">${s.day.toUpperCase()}${adv}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#fff;line-height:1.2;">${s.break.name}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${label}${ftStr}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;margin-top:2px;">🕐 ${timeHint}</div>
+      </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:${scoreColor};line-height:1;">${s.score}<span style="font-size:14px;color:var(--muted);">/10</span></div>
+    </div>`;
+  }).join('') + (isFlat ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;padding-top:8px;">Quiet week — showing best available options.</div>` : '');
+}
+
 function renderAll(data) {
   // Update BREAKS from worker if provided — allows calibration without app redeployment
   if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
@@ -1599,7 +1700,7 @@ function renderAll(data) {
     const hourStr = `${yyyy}-${mm}-${dd}T${hh}`;
     const tmrBrisbane = new Date(now.getTime() + (10 + 24) * 60 * 60 * 1000);
     const tomorrowStr = `${tmrBrisbane.getUTCFullYear()}-${String(tmrBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(tmrBrisbane.getUTCDate()).padStart(2,'0')}T${String(tmrBrisbane.getUTCHours()).padStart(2,'0')}`;
-    const periodArr = data.swell.hourly.dominant_wave_period || data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
+    const periodArr = data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
     const times = data.swell.hourly.time;
     const idxNow  = times.findIndex(t => t.startsWith(hourStr));
     const idxTmrw = times.findIndex(t => t.startsWith(tomorrowStr));
@@ -1666,6 +1767,7 @@ function renderAll(data) {
   // Defer chart and tides to next frame so content is painted first
   requestAnimationFrame(() => {
     renderTides(data.tides[currentStation]);
+    renderSessionPlanner(data.forecast, data.swell);
     // Use setTimeout for chart to ensure layout is fully complete
     setTimeout(() => {
       try {
@@ -1762,6 +1864,12 @@ function extractWindSpeed(text) {
 
 ///////////////////////////////////////////////////
 function renderForecast(forecast, tideData, swellData) {
+  // Compute score for current break to show in card header
+  const currentB = BREAKS[currentBreak];
+  const currentScore = currentB ? scoreBreak(currentB, forecast, true) : null;
+  const scoreColor = currentScore >= 7 ? 'var(--high)' : currentScore >= 5 ? 'var(--accent)' : 'var(--muted)';
+  const scoreLabel = currentScore >= 9 ? 'Epic' : currentScore >= 7 ? 'Good' : currentScore >= 5 ? 'Fun' : currentScore >= 3 ? 'Poor' : (forecast._scoringHeight < 0.5 ? 'Flat' : 'Poor');
+
   // Warning
   const warnEl = document.getElementById('warningBanner');
   if (forecast.warning && forecast.warning.length > 5) {
@@ -1800,7 +1908,7 @@ function renderForecast(forecast, tideData, swellData) {
     const hourStr = `${yyyy}-${mm}-${dd}T${hh}`;
     const idx = swellData.hourly.time.findIndex(t => t.startsWith(hourStr));
     const useIdx = idx > -1 ? idx : 0;
-    const periodArr = swellData.hourly.dominant_wave_period || swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
+    const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
     currentPeriod = periodArr ? periodArr[useIdx] : null;
     const heightArr = swellData.hourly.swell_wave_height || swellData.hourly.wave_height || null;
     currentWaveHeight = heightArr ? heightArr[useIdx] : null;
@@ -1811,11 +1919,17 @@ function renderForecast(forecast, tideData, swellData) {
     currentWindWavePeriod = windTArr ? windTArr[useIdx] : null;
   }
 
-  // Wave energy in kJ — calibrated to match Surfline's partition-summing model
-  // Coefficient 2.43 derived from 4 clean single-swell Surfline readings at Noosa (May 2026):
-  //   2.8m@10s=216, 2.5m@10s=132, 2.4m@10s=136, 2.5m@10s=155
-  // Confirmed by outlier: 1.7m@11s primary + 1.9m secondary = 198kJ total (each summed separately)
-  // Formula: Σ(H² × T × 2.43) across all available partitions
+  // Water temperature from Open-Meteo sea_surface_temperature
+  let waterTemp = null;
+  if (swellData?.hourly?.sea_surface_temperature) {
+    const tempArr = swellData.hourly.sea_surface_temperature;
+    const tempTimes = swellData.hourly.time;
+    const brisbaneNow = new Date(Date.now() + 10 * 60 * 60 * 1000);
+    const tempHourStr = `${brisbaneNow.getUTCFullYear()}-${String(brisbaneNow.getUTCMonth()+1).padStart(2,'0')}-${String(brisbaneNow.getUTCDate()).padStart(2,'0')}T${String(brisbaneNow.getUTCHours()).padStart(2,'0')}`;
+    const tempIdx = tempTimes.findIndex(t => t.startsWith(tempHourStr));
+    if (tempIdx > -1) waterTemp = tempArr[tempIdx] ?? null;
+  }
+
   const waveEnergyHtml = '';
 
   const windSpeed = current ? extractWindSpeed(current.winds) : null;
@@ -1851,11 +1965,17 @@ function renderForecast(forecast, tideData, swellData) {
   const currentCard = document.getElementById('currentCard');
   if (current) {
     currentCard.innerHTML = `
-      <div class="current-header">
-        <div class="current-day">${current.day.toUpperCase()}</div>
-        <div class="current-issued">${(forecast.issuedAt || '').replace('Forecast issued at ', '')}</div>
+      <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:${scoreColor};">${currentScore ?? '—'}<span style="font-size:18px;color:var(--muted);"> /10</span></div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${scoreColor};">${scoreLabel}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="current-day">${current.day.toUpperCase()}</div>
+          <div class="current-issued">${(forecast.issuedAt || '').replace('Forecast issued at ', '')}</div>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);">
         <div style="padding:14px 16px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);">
           <div class="condition-label">Surf Height</div>
           <div class="condition-value highlight" id="surfHeightValue">—</div>
@@ -2004,7 +2124,7 @@ function renderSwellChart(swellData) {
   const times = swellData.hourly.time;
   const waveH = swellData.hourly.wave_height;
   const swellH = swellData.hourly.swell_wave_height;
-  const periodArr = swellData.hourly.dominant_wave_period || swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
+  const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
 
   // Sample every 6 hours
   const step = 3; // sample every 3h for better peak resolution
@@ -2224,7 +2344,7 @@ async function loadNightMode() {
       const eveningStr = eveningDate.toISOString().slice(0, 13);
       const tomorrowStr = new Date(Date.now() + (10 + 24) * 60 * 60 * 1000).toISOString().slice(0, 13);
       const times = data.swell.hourly.time;
-      const periodArr  = data.swell.hourly.dominant_wave_period || data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
+      const periodArr  = data.swell.hourly.swell_wave_period || data.swell.hourly.wave_period || null;
       const heightArr  = data.swell.hourly.swell_wave_height || data.swell.hourly.wave_height || null;
       const windHArr   = data.swell.hourly.wind_wave_height || null;
       const windTArr   = data.swell.hourly.wind_wave_period || null;
@@ -2281,11 +2401,17 @@ async function loadNightMode() {
       const windSpeed = extractWindSpeed(today.winds);
       currentCard.style.display = '';
       currentCard.innerHTML = `
-        <div class="current-header">
-          <div class="current-day">${today.day.toUpperCase()}</div>
-          <div class="current-issued" style="color:var(--muted);">Live in ${cardTimeStr}</div>
+        <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:var(--muted);">—<span style="font-size:18px;"> /10</span></div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--muted);">Live in ${cardTimeStr}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="current-day">${today.day.toUpperCase()}</div>
+            <div class="current-issued" style="color:var(--muted);">Updates at 4am</div>
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);">
           <div style="padding:14px 16px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);">
             <div class="condition-label">Surf Height</div>
             <div class="condition-value highlight" id="surfHeightValue">—</div>
@@ -2350,6 +2476,7 @@ async function loadNightMode() {
     requestAnimationFrame(() => renderSwellChart(data.swell));
     updateBreakIndicators(data.forecast);
     renderTides(data.tides[currentStation]);
+    renderSessionPlanner(data.forecast, data.swell);
 
   } catch (e) {
     document.getElementById('loadingEl').style.display = 'none';
@@ -2414,6 +2541,18 @@ function showLiveCamButton(breakIndex) {
 function toggleLiveCam() {} // handled by showLiveCamButton's onclick
 
 // Hide break selector fade when scrolled to end
+let currentTab = 'conditions';
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
+  document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
+  const toggleWrap = document.querySelector('.station-toggle-wrap');
+  if (toggleWrap) toggleWrap.style.display = tab === 'conditions' ? '' : 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 const stToggle = document.querySelector('.station-toggle');
 const stFade = document.querySelector('.station-toggle-fade');
 if (stToggle && stFade) {
