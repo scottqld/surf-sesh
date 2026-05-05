@@ -96,28 +96,50 @@
 
   /* STATION TOGGLE */
   .station-toggle {
-    display: flex;
     margin: 16px 20px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow-x: auto;
     overflow-y: hidden;
+    white-space: nowrap;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    position: relative;
+    display: block;
   }
 
   .station-toggle::-webkit-scrollbar { display: none; }
 
   .station-toggle-wrap {
     position: relative;
-    margin: 16px 20px;
   }
 
   .station-toggle-wrap .station-toggle {
-    margin: 0;
+    margin: 16px 20px;
   }
+
+  .scroll-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    z-index: 10;
+    line-height: 1;
+    transition: opacity 0.2s;
+  }
+
+  .scroll-arrow-left { left: 22px; }
+  .scroll-arrow-right { right: 22px; }
 
   .station-toggle-fade {
     position: absolute;
@@ -143,7 +165,7 @@
   }
 
   .station-btn {
-    flex: 0 0 auto;
+    display: inline-block;
     padding: 10px 14px;
     background: none;
     border: none;
@@ -155,6 +177,7 @@
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
+    vertical-align: middle;
   }
 
   .station-btn.active {
@@ -651,14 +674,16 @@
 <div class="station-toggle-wrap">
   <div class="station-toggle">
     <button class="station-btn active" id="btn0" onclick="setBreak(0)">Groyne</button>
-    <button class="station-btn" id="btn1" onclick="setBreak(1)">First Pt</button>
-    <button class="station-btn" id="btn2" onclick="setBreak(2)">Nationals</button>
+    <button class="station-btn" id="btn1" onclick="setBreak(1)">First Pt.</button>
+    <button class="station-btn" id="btn2" onclick="setBreak(2)">The Pot</button>
     <button class="station-btn" id="btn3" onclick="setBreak(3)">Tea Tree</button>
     <button class="station-btn" id="btn4" onclick="setBreak(4)">Granite</button>
     <button class="station-btn" id="btn5" onclick="setBreak(5)">Sunshine</button>
-    <button class="station-btn" id="btn6" onclick="setBreak(6)">Double Is.</button>
+    <button class="station-btn" id="btn6" onclick="setBreak(6)">D.I.</button>
   </div>
   <div class="station-toggle-fade"></div>
+  <button class="scroll-arrow scroll-arrow-left" id="scrollLeft" onclick="scrollBreaks(-120)" style="display:none;">‹</button>
+  <button class="scroll-arrow scroll-arrow-right" id="scrollRight" onclick="scrollBreaks(120)">›</button>
 </div>
 
   <div id="loadingEl" class="loading">
@@ -690,7 +715,6 @@
     <div id="nightBanner" class="night-banner" style="display:none;">
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
     </div>
-    <div id="synopsisCard" onclick="toggleSynopsis()" style="cursor:pointer;margin:8px 20px 0;font-size:12px;color:var(--accent);line-height:1.6;font-style:italic;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;"></div>
     <div class="section-label" id="currentConditionsLabel">CONDITIONS</div>
     <div class="current-card" id="currentCard"></div>
     <div class="synopsis-card" id="breakNotes" style="margin-top:0;border-top:none;border-radius:0 0 12px 12px;"></div>
@@ -714,6 +738,7 @@
       <div class="chart-labels" id="chartLabels"></div>
     </div>
     <div class="section-label" id="tideLabel">TIDES — NOOSA HEAD</div>
+    <div id="synopsisCard" onclick="toggleSynopsis()" style="cursor:pointer;margin:0 20px 8px;font-size:12px;color:var(--accent);line-height:1.6;font-style:italic;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;"></div>
     <div style="display:flex;gap:8px;padding:0 20px 8px;">
       <button id="btnNoosa" class="station-btn active" onclick="setStation('noosa')" style="font-size:10px;padding:4px 10px;">Noosa</button>
       <button id="btnMooloolaba" class="station-btn" onclick="setStation('mooloolaba')" style="font-size:10px;padding:4px 10px;">Mooloolaba</button>
@@ -936,7 +961,20 @@ function setBreak(index) {
     const btn = document.getElementById(`btn${i}`);
     if (!btn) return;
     btn.classList.toggle('active', i === index);
-    if (i === index) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    if (i === index) {
+      const toggle = document.querySelector('.station-toggle');
+      if (toggle) {
+        const btnLeft = btn.offsetLeft;
+        const btnRight = btnLeft + btn.offsetWidth;
+        const toggleLeft = toggle.scrollLeft;
+        const toggleRight = toggleLeft + toggle.clientWidth;
+        if (btnRight > toggleRight - 44) {
+          toggle.scrollTo({ left: btnLeft - 20, behavior: 'smooth' });
+        } else if (btnLeft < toggleLeft) {
+          toggle.scrollTo({ left: btnLeft - 20, behavior: 'smooth' });
+        }
+      }
+    }
   });
   const b = BREAKS[index];
   const imgEl = document.getElementById('breakImg');
@@ -994,7 +1032,10 @@ function setBreak(index) {
   const score = cachedData ? scoreBreak(b, cachedData.forecast, true) : null;
   // Update browser tab title with current score
   if (score !== null) document.title = `${score}/10 ${b.name} · SurfCall`;
-  const note = cachedData ? conditionNote(b, cachedData.forecast) : '';
+  const noteResult = cachedData ? conditionNote(b, cachedData.forecast) : { notes: '', morning: '', afternoon: '' };
+  const note = noteResult.notes;
+  const morningNote = noteResult.morning;
+  const afternoonNote = noteResult.afternoon;
 
   // Score-based photo overlay: desaturate + darken on poor conditions
   const overlayEl = document.getElementById('scoreOverlay');
@@ -1067,7 +1108,18 @@ function setBreak(index) {
 
   document.getElementById('breakNotes').innerHTML =
     `${note ? `<span style="color:#fff;font-style:normal;" id="conditionNoteText">${note}</span>` : ''}
-    <br><div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+    ${morningNote || afternoonNote ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      ${morningNote ? `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--muted);margin-bottom:4px;">MORNING</div>
+        <div style="font-size:11px;color:#fff;">${morningNote}</div>
+      </div>` : ''}
+      ${afternoonNote ? `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--muted);margin-bottom:4px;">AFTERNOON</div>
+        <div style="font-size:11px;color:#fff;">${afternoonNote}</div>
+      </div>` : ''}
+    </div>` : ''}
+    <div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
       <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About this break</span>
       <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
     </div>
@@ -1395,22 +1447,29 @@ function conditionNote(breakData, forecast) {
     }
   }
 
-  // Surf window — recommend best time if not already in it
-  if (brisbaneHour >= 7 && brisbaneHour < 18 && windDir) {
-    const windIsOffshore = ideal.windDirs.includes(windDir) || acceptable.windDirs.includes(windDir);
-    const speedKtsNow = extractWindSpeedKts(current.winds || '');
-    // If onshore now, suggest early morning tomorrow
-    if (!windIsOffshore && speedKtsNow !== null && speedKtsNow > 10) {
-      notes.push(`🕐 best window likely early morning before seabreeze fills in`);
-    }
-  }
+  // Morning vs afternoon assessment based on Noosa's typical seabreeze pattern
+  const windIsOffshore = windDir && (ideal.windDirs.includes(windDir) || acceptable.windDirs.includes(windDir));
+  const windIsOnshore  = windDir && avoid.windDirs.includes(windDir);
+  const speedKts2 = extractWindSpeedKts(current.winds || '');
+  const windIsLight = speedKts2 === null || speedKts2 < 12;
 
-  // Dawn window passed — show grayed note until noon
-  if (brisbaneHour >= 7 && brisbaneHour < 12) {
-    notes.push(`🌅 dawn patrol window has passed for today`);
-  }
+  let morningNote = '';
+  if (windIsOffshore && windIsLight) morningNote = '🌅 Glassy and clean — get in early before the seabreeze';
+  else if (windIsOffshore) morningNote = '🌅 Offshore — worth an early session';
+  else if (windIsLight) morningNote = '🌅 Light winds — may be clean early before seabreeze';
+  else if (windIsOnshore) morningNote = '🌅 Already onshore — unlikely to improve through the day';
+  else morningNote = '🌅 Cross-shore — check at dawn for best chance';
 
-  return notes.length > 0 ? notes.join(', ') + '.' : '';
+  let afternoonNote = '';
+  if (windIsOffshore && windIsLight) afternoonNote = '☀️ NE seabreeze may develop mid-morning — check before heading out';
+  else if (windIsOnshore) afternoonNote = '☀️ Onshore expected — surface likely choppy and bumpy';
+  else afternoonNote = '☀️ Seabreeze likely to build through the afternoon';
+
+  return {
+    notes: notes.length > 0 ? notes.join(', ') + '.' : '',
+    morning: morningNote,
+    afternoon: afternoonNote,
+  };
 }
 
 ///////////////////////////////////////////////////
@@ -1427,7 +1486,7 @@ function updateBreakIndicators(forecast) {
     const score = scoreBreak(b, forecast);
     if (score > bestScore) { bestScore = score; bestBreak = b; }
     const btn = document.getElementById(`btn${i}`);
-    btn.childNodes[0].textContent = `${b.subtitle}`;
+    btn.childNodes[0].textContent = breakBtnLabel(b);
     if (score >= 7) {
       btn.title = 'Firing!';
       const icon = document.createElement('span');
@@ -1475,7 +1534,13 @@ function updateBreakIndicators(forecast) {
 }
 ///////////////////////////////////////////////////
 
-// Direction arrow — returns an SVG arrow rotated to the compass direction
+// Short labels for break selector buttons — overrides subtitle for display only
+const BREAK_BTN_LABELS = {
+  'First Point': 'First Pt.',
+  'Nationals':   'The Pot',
+  'Double Island': 'D.I.',
+};
+function breakBtnLabel(b) { return BREAK_BTN_LABELS[b.name] || b.subtitle; }
 const DIR_DEG = { N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5 };
 function dirArrow(dir, size=24, color='currentColor') {
   const deg = DIR_DEG[dir];
@@ -1684,7 +1749,7 @@ function renderAll(data) {
     const toggle = document.querySelector('.station-toggle');
     if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn').length) {
       toggle.innerHTML = BREAKS.map((b, i) =>
-        `<button class="station-btn${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i})">${b.subtitle}</button>`
+        `<button class="station-btn${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i})">${breakBtnLabel(b)}</button>`
       ).join('');
     }
   }
@@ -2553,13 +2618,30 @@ function switchTab(tab) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function scrollBreaks(delta) {
+  const toggle = document.querySelector('.station-toggle');
+  if (!toggle) return;
+  toggle.scrollBy({ left: delta, behavior: 'smooth' });
+}
+
 const stToggle = document.querySelector('.station-toggle');
 const stFade = document.querySelector('.station-toggle-fade');
 if (stToggle && stFade) {
-  stToggle.addEventListener('scroll', () => {
+  const updateArrows = () => {
     const atEnd = stToggle.scrollLeft + stToggle.clientWidth >= stToggle.scrollWidth - 4;
+    const atStart = stToggle.scrollLeft <= 4;
     stFade.style.opacity = atEnd ? '0' : '1';
-  });
+    const leftArrow = document.getElementById('scrollLeft');
+    const rightArrow = document.getElementById('scrollRight');
+    if (leftArrow) leftArrow.style.display = atStart ? 'none' : 'flex';
+    if (rightArrow) rightArrow.style.display = atEnd ? 'none' : 'flex';
+  };
+  stToggle.addEventListener('scroll', updateArrows);
+  // Convert vertical wheel to horizontal scroll
+  stToggle.addEventListener('wheel', (e) => {
+    if (e.deltaY !== 0) { e.preventDefault(); stToggle.scrollBy({ left: e.deltaY, behavior: 'auto' }); }
+  }, { passive: false });
+  updateArrows();
 }
 
 // Smart scheduler — loads data hourly, but only between 4am and 6pm Brisbane time (UTC+10)
