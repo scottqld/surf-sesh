@@ -101,12 +101,38 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    position: relative;
+  }
+
+  .station-toggle::-webkit-scrollbar { display: none; }
+
+  .station-toggle-wrap {
+    position: relative;
+    margin: 16px 20px;
+  }
+
+  .station-toggle-wrap .station-toggle {
+    margin: 0;
+  }
+
+  .station-toggle-fade {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 32px;
+    background: linear-gradient(to right, transparent, var(--bg));
+    border-radius: 0 8px 8px 0;
+    pointer-events: none;
   }
 
   .station-btn {
-    flex: 1;
-    padding: 10px;
+    flex: 0 0 auto;
+    padding: 10px 14px;
     background: none;
     border: none;
     color: var(--muted);
@@ -116,6 +142,7 @@
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.2s;
+    white-space: nowrap;
   }
 
   .station-btn.active {
@@ -571,13 +598,17 @@
     <div class="last-updated" id="lastUpdated">—</div>
   </header>
 
-<div class="station-toggle">
-  <button class="station-btn active" id="btn0" onclick="setBreak(0)">Groyne</button>
-  <button class="station-btn" id="btn1" onclick="setBreak(1)">First Pt</button>
-  <button class="station-btn" id="btn2" onclick="setBreak(2)">Nationals</button>
-  <button class="station-btn" id="btn3" onclick="setBreak(3)">Tea Tree</button>
-  <button class="station-btn" id="btn4" onclick="setBreak(4)">Granite</button>
-  <button class="station-btn" id="btn5" onclick="setBreak(5)">Sunshine</button>
+<div class="station-toggle-wrap">
+  <div class="station-toggle">
+    <button class="station-btn active" id="btn0" onclick="setBreak(0)">Groyne</button>
+    <button class="station-btn" id="btn1" onclick="setBreak(1)">First Pt</button>
+    <button class="station-btn" id="btn2" onclick="setBreak(2)">Nationals</button>
+    <button class="station-btn" id="btn3" onclick="setBreak(3)">Tea Tree</button>
+    <button class="station-btn" id="btn4" onclick="setBreak(4)">Granite</button>
+    <button class="station-btn" id="btn5" onclick="setBreak(5)">Sunshine</button>
+    <button class="station-btn" id="btn6" onclick="setBreak(6)">Double Is.</button>
+  </div>
+  <div class="station-toggle-fade"></div>
 </div>
 
   <div id="loadingEl" class="loading">
@@ -709,82 +740,65 @@ function getBreakImg(index) {
   }
   return _blobCache[index];
 }
-const BREAKS = [
+// BREAKS is populated from the worker /all response (data.breaks)
+// Fallback hardcoded array used if worker doesn't return breaks yet
+let BREAKS = [
   {
-    name: 'The Groyne',
-    subtitle: 'Groyne',
+    name: 'The Groyne', subtitle: 'Groyne',
     notes: 'Beach break at the river mouth groyne. Best NE swell with S–SW offshore wind. Works at most tides but tends to be fast on low tide. Good learner wave on smaller days.',
-    img: null,
-    maxScore: 7, // inconsistent sandbanks — rarely produces quality waves
-    sizeCap: 8,   // closes out in bigger surf
-    tide: { ideal: 'mid-high', avoid: 'low' },
-    exposure: 0.50, // Groyne: sheltered beach break
-    ideal:      { swellDirs: ['NE', 'ENE', 'E'],         windDirs: ['S', 'SSW', 'SW', 'WSW'],              swellMin: 0.8, swellMax: 1.2, periodMin: 8  },
-    acceptable: { swellDirs: ['NNE', 'ESE', 'SE'],      windDirs: ['W', 'SSE', 'SE'],                     swellMin: 0.4, swellMax: 1.5, periodMin: 6  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
+    maxScore: 7, sizeCap: 8, tide: { ideal: 'mid-high', avoid: 'low' }, exposure: 0.50,
+    ideal:      { swellDirs: ['NE','ENE','E'],        windDirs: ['S','SSW','SW','WSW'],            swellMin: 0.8, swellMax: 1.2, periodMin: 8 },
+    acceptable: { swellDirs: ['NNE','ESE','SE'],      windDirs: ['W','SSE','SE'],                  swellMin: 0.4, swellMax: 1.5, periodMin: 6 },
+    avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E'],        swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
   },
   {
-    name: 'First Point',
-    subtitle: 'First Point',
-    notes: 'Classic longboard right-hander at the end of Hastings St. Ideal ENE–E swell with S–SSW offshore wind. Needs size to wrap around the point. Sensitive to NE wind — anything from north quarters will ruin it.',
-    img: null,
-    tide: { ideal: 'low-mid', avoid: 'high' },
-    pointBreak: true, // benefits from long-period refraction around headland
-    exposure: 0.32, // First Point: most sheltered, calibrated to Surfline (2.8m→0.9m)
-    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['S', 'SSW', 'SW'],                     swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
-    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSE', 'SE', 'WSW', 'W'],              swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E'],         swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3  },
+    name: 'First Point', subtitle: 'First Point',
+    notes: 'Classic longboard right-hander at the end of Hastings St.',
+    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.32,
+    ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['S','SSW','SW'],                  swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['SSE','SE','WSW','W'],            swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E'],        swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3 },
   },
   {
-    name: 'Nationals',
-    subtitle: 'Nationals',
-    notes: 'Powerful right-hand point — Boiling Pot takeoff is advanced only. Best ENE swell, SE–S offshore wind. More exposed than First Point, picks up more size. Low to mid tide best.',
-    img: null,
-    tide: { ideal: 'low-mid', avoid: 'high' },
-    advanced: true, // Boiling Pot takeoff — expert surfers only
-    pointBreak: true,
-    exposure: 0.38, // Nationals: slightly more exposed than First Point
-    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 0.8, swellMax: 1.4, periodMin: 9  },
-    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.5, swellMax: 1.8, periodMin: 7  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
+    name: 'Nationals', subtitle: 'Nationals',
+    notes: 'Powerful right-hand point — Boiling Pot takeoff is advanced only.',
+    tide: { ideal: 'low-mid', avoid: 'high' }, advanced: true, pointBreak: true, exposure: 0.38,
+    ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['SE','SSE','S'],                  swellMin: 0.8, swellMax: 1.4, periodMin: 9  },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['SSW','SW','ESE'],                swellMin: 0.5, swellMax: 1.8, periodMin: 7  },
+    avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E','W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
   },
   {
-    name: 'Tea Tree',
-    subtitle: 'Tea Tree',
-    notes: 'The jewel of the Noosa points. Long, fast rights off a bouldery headland — can barrel on lower tides. Best ENE–E swell with SE–S offshore wind. Low to mid tide. NE seabreezes kill it.',
-    img: null,
-    tide: { ideal: 'low-mid', avoid: 'high' },
-    pointBreak: true,
-    exposure: 0.37, // Tea Tree: similar exposure to Nationals
-    ideal:      { swellDirs: ['ENE', 'E', 'NE'],         windDirs: ['SE', 'SSE', 'S'],                     swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
-    acceptable: { swellDirs: ['ESE', 'NNE', 'SE'],      windDirs: ['SSW', 'SW', 'ESE'],                   swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
-    avoid:      { swellDirs: ['N', 'NW', 'S'],          windDirs: ['N', 'NNE', 'NE', 'ENE', 'E', 'W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2  },
+    name: 'Tea Tree', subtitle: 'Tea Tree',
+    notes: 'The jewel of the Noosa points.',
+    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.37,
+    ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['SE','SSE','S'],                  swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['SSW','SW','ESE'],                swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E','W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
   },
   {
-    name: 'Granite Bay',
-    subtitle: 'Granite',
-    notes: 'Most exposed of the Noosa points — picks up the most swell and the most wind. Works with most swell directions and S winds. Good option when everywhere else is too small. Punchier but less perfect than Tea Tree.',
-    img: null,
-    tide: { ideal: 'low-mid', avoid: 'high' },
-    intermediateAdvanced: true, // More exposed/powerful but not expert-only like Nationals
-    pointBreak: true,
-    exposure: 0.45, // Granite Bay: most exposed of the points
-    ideal:      { swellDirs: ['ENE', 'E', 'NE', 'NNE'], windDirs: ['S', 'SSE', 'SE', 'SSW'],              swellMin: 0.7, swellMax: 1.2, periodMin: 9  },
-    acceptable: { swellDirs: ['ESE', 'N', 'NNW', 'SE'], windDirs: ['SW', 'W', 'ESE'],                    swellMin: 0.4, swellMax: 1.5, periodMin: 7  },
-    avoid:      { swellDirs: ['S', 'NW'],               windDirs: ['N', 'NE', 'ENE', 'E'],                swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 1  },
+    name: 'Granite Bay', subtitle: 'Granite',
+    notes: 'Most exposed of the Noosa points.',
+    tide: { ideal: 'low-mid', avoid: 'high' }, intermediateAdvanced: true, pointBreak: true, exposure: 0.45,
+    ideal:      { swellDirs: ['ENE','E','NE','NNE'],  windDirs: ['S','SSE','SE','SSW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 9  },
+    acceptable: { swellDirs: ['ESE','N','NNW','SE'],  windDirs: ['SW','W','ESE'],                  swellMin: 0.4, swellMax: 1.5, periodMin: 7  },
+    avoid:      { swellDirs: ['S','NW'],              windDirs: ['N','NE','ENE','E'],              swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 1 },
   },
   {
-    name: 'Sunshine Beach',
-    subtitle: 'Sunshine',
-    notes: 'Open beach break facing east. Best E swell with W offshore wind. Works across most sizes and tides. Good alternative when the points are too small or too crowded.',
-    img: null,
-    tide: { ideal: 'mid-high', avoid: 'low' },
-    sizeCap: 9,   // closes out in bigger surf
-    exposure: 0.60, // Sunshine Beach: open east-facing beach
-    ideal:      { swellDirs: ['E', 'ESE', 'ENE'],        windDirs: ['W', 'WSW', 'WNW', 'SW'],             swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
-    acceptable: { swellDirs: ['SE', 'NE'],               windDirs: ['NW', 'SSW'],                         swellMin: 0.3, swellMax: 1.5, periodMin: 6  },
-    avoid:      { swellDirs: ['N', 'NW', 'S', 'SW'],    windDirs: ['NE', 'ENE', 'E', 'ESE', 'SE', 'N', 'S'],  swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3  },
-  }
+    name: 'Sunshine Beach', subtitle: 'Sunshine',
+    notes: 'Open beach break facing east.',
+    tide: { ideal: 'mid-high', avoid: 'low' }, sizeCap: 9, exposure: 0.60,
+    ideal:      { swellDirs: ['E','ESE','ENE'],       windDirs: ['W','WSW','WNW','SW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
+    acceptable: { swellDirs: ['SE','NE'],             windDirs: ['NW','SSW'],                      swellMin: 0.3, swellMax: 1.5, periodMin: 6  },
+    avoid:      { swellDirs: ['N','NW','S','SW'],     windDirs: ['NE','ENE','E','ESE','SE','N','S'], swellMin: 0, swellMax: 9,   periodMin: 0, windPenalty: 3 },
+  },
+  {
+    name: 'Double Island', subtitle: 'Double Is.',
+    notes: 'Long right-hand point — 4WD access required.',
+    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.42,
+    ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['W','WSW','SW','SSW'],            swellMin: 0.8, swellMax: 1.5, periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['NW','WNW','S'],                  swellMin: 0.5, swellMax: 2.0, periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['NE','ENE','E','ESE','SE','N'],  swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
+  },
 ];
 
 let currentBreak = 0;
@@ -814,12 +828,12 @@ function conditionNoteTomorrow(breakData, forecast) {
   // Wave height — use estimated surf height, not raw offshore swell
   const surfHTmrw = estimateSurfHeight(swellHeight, breakData.exposure, swellDir, breakData);
   if (surfHTmrw !== null) {
-    if (surfHTmrw >= 1.6)       notes.push(`waves should be pumping at ~${surfHTmrw.toFixed(1)}m`);
-    else if (surfHTmrw >= 1.2)  notes.push(`waves should be a good size at ~${surfHTmrw.toFixed(1)}m`);
-    else if (surfHTmrw >= 0.9)  notes.push(`waves should be decent at ~${surfHTmrw.toFixed(1)}m`);
-    else if (surfHTmrw >= 0.7)  notes.push(`waves will be on the small side at ~${surfHTmrw.toFixed(1)}m`);
-    else if (surfHTmrw >= 0.5)  notes.push(`waves will be small at ~${surfHTmrw.toFixed(1)}m`);
-    else                        notes.push(`waves will be too small at ~${surfHTmrw.toFixed(1)}m`);
+    if (surfHTmrw >= 1.6)       notes.push(`waves should be pumping at ${fmtHeight(surfHTmrw)}`);
+    else if (surfHTmrw >= 1.2)  notes.push(`waves should be a good size at ${fmtHeight(surfHTmrw)}`);
+    else if (surfHTmrw >= 0.9)  notes.push(`waves should be decent at ${fmtHeight(surfHTmrw)}`);
+    else if (surfHTmrw >= 0.7)  notes.push(`waves will be on the small side at ${fmtHeight(surfHTmrw)}`);
+    else if (surfHTmrw >= 0.5)  notes.push(`waves will be small at ${fmtHeight(surfHTmrw)}`);
+    else                        notes.push(`waves will be too small at ${fmtHeight(surfHTmrw)}`);
   }
 
   // Period
@@ -920,7 +934,10 @@ function setBreak(index) {
     }
   }
 
-  const score = cachedData ? scoreBreak(b, cachedData.forecast) : null;
+  const score = cachedData ? (b._isCurrent = true, scoreBreak(b, cachedData.forecast)) : null;
+  b._isCurrent = false;
+  // Update browser tab title with current score
+  if (score !== null) document.title = `${score}/10 ${b.name} · SurfCall`;
   const note = cachedData ? conditionNote(b, cachedData.forecast) : '';
 
   // Score-based photo overlay: desaturate + darken on poor conditions
@@ -997,10 +1014,12 @@ function setBreak(index) {
       <span style="font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:1;color:${score >= 7 ? 'var(--high)' : score >= 5 ? 'var(--accent)' : 'var(--muted)'};">${score ?? '—'}</span>
       <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--muted);line-height:1;">/10</span>
       <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;line-height:1;color:${score >= 7 ? 'var(--high)' : score >= 5 ? 'var(--accent)' : 'var(--muted)'};">${score >= 9 ? 'Epic' : score >= 7 ? 'Good' : score >= 5 ? 'Fun' : score >= 3 ? 'Poor' : (cachedData?.forecast?._scoringHeight < 0.5 ? 'Flat' : 'Poor')}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--bg);background:var(--muted);border-radius:3px;padding:2px 5px;line-height:1.4;align-self:center;">TODAY</span>
       <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-left:4px;">${contextStr}</span>
     </div>
     <span style="color:#fff;font-style:normal;" id="conditionNoteText">${note}</span>` : ''}
-    ${noteTomorrow ? `<br><br><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">${tomorrowDay.toUpperCase()}</span>
+    ${noteTomorrow ? `<div style="height:1px;background:var(--border);margin:12px 0;"></div>
+    <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">${tomorrowDay.toUpperCase()}</span>
     <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;margin-left:8px;">${scoreTomorrow !== null ? scoreTomorrow + '/10' : ''}</span>
     ${score !== null && scoreTomorrow !== null ? '<span style="font-size:10px;margin-left:4px;' + (scoreTomorrow > score ? 'color:var(--high)' : scoreTomorrow < score ? 'color:#ff6464' : 'color:var(--muted)') + '">' + (scoreTomorrow > score ? '↑' : scoreTomorrow < score ? '↓' : '→') + '</span>' : ''}<br>
     <span style="color:#fff;font-style:normal;">${noteTomorrow}</span>` : ''}
@@ -1217,7 +1236,8 @@ function scoreBreak(breakData, forecast) {
   const raw = swellPts + windPts + periodPts + tidePts - windPenalty - windSpeedPenalty - crossSwellPenalty;
 
   // Attach scoringHeight to forecast so conditionNote can use the same value
-  forecast._scoringHeight = scoringHeight;
+  // Only set when called for the currently displayed break (not during banner scanning)
+  if (breakData._isCurrent) forecast._scoringHeight = scoringHeight;
 
   // Size cap: absolute surf height thresholds
   // Ensures small days can't score high regardless of how perfect other conditions are
@@ -1268,12 +1288,12 @@ function conditionNote(breakData, forecast) {
   // Falls back to re-computing from BOM text if not set
   const surfH = forecast._scoringHeight ?? estimateSurfHeight(swellHeight, breakData.exposure, swellDir, breakData);
   if (surfH !== null) {
-    if (surfH >= 1.6)       notes.push(`waves are pumping at ~${surfH.toFixed(1)}m`);
-    else if (surfH >= 1.2)  notes.push(`waves are a good size at ~${surfH.toFixed(1)}m`);
-    else if (surfH >= 0.9)  notes.push(`waves are decent at ~${surfH.toFixed(1)}m`);
-    else if (surfH >= 0.7)  notes.push(`waves are on the small side at ~${surfH.toFixed(1)}m`);
-    else if (surfH >= 0.5)  notes.push(`waves are small at ~${surfH.toFixed(1)}m`);
-    else                    notes.push(`waves are too small at ~${surfH.toFixed(1)}m`);
+    if (surfH >= 1.6)       notes.push(`waves are pumping at ${fmtHeight(surfH)}`);
+    else if (surfH >= 1.2)  notes.push(`waves are a good size at ${fmtHeight(surfH)}`);
+    else if (surfH >= 0.9)  notes.push(`waves are decent at ${fmtHeight(surfH)}`);
+    else if (surfH >= 0.7)  notes.push(`waves are on the small side at ${fmtHeight(surfH)}`);
+    else if (surfH >= 0.5)  notes.push(`waves are small at ${fmtHeight(surfH)}`);
+    else                    notes.push(`waves are too small at ${fmtHeight(surfH)}`);
   }
 
   // Period
@@ -1398,7 +1418,7 @@ function updateBreakIndicators(forecast) {
     banner.style.cursor = 'pointer';
     banner.onclick = () => {
       setBreak(pick.idx);
-      // Also highlight the break button briefly
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       const btn = document.getElementById(`btn${pick.idx}`);
       if (btn) { btn.style.outline = '2px solid var(--high)'; setTimeout(() => btn.style.outline = '', 800); }
     };
@@ -1418,6 +1438,14 @@ function dirArrow(dir, size=24, color='currentColor') {
   // Arrow points TOWARD the source (where wind/swell is coming from)
   // So rotate the upward arrow by deg + 180° to flip it to point at origin
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;transform:rotate(${deg + 180}deg);flex-shrink:0;" fill="none"><path d="M12 3L12 18M7 8L12 3L17 8" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+
+// Format surf height in metres with feet equivalent
+function fmtHeight(m) {
+  const ft = Math.round(m * 3.281 * 2) / 2; // round to nearest 0.5ft
+  const ftStr = ft % 1 === 0 ? ft + 'ft' : ft + 'ft';
+  return `~${m.toFixed(1)}m (${ftStr})`;
 }
 
 function getCurrentTide(tides) {
@@ -1537,6 +1565,17 @@ async function loadData(forceRefresh = false) {
 
 ///////////////////////////////////////////////////
 function renderAll(data) {
+  // Update BREAKS from worker if provided — allows calibration without app redeployment
+  if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
+    BREAKS = data.breaks;
+    // Rebuild break selector buttons if count changed
+    const toggle = document.querySelector('.station-toggle');
+    if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn').length) {
+      toggle.innerHTML = BREAKS.map((b, i) =>
+        `<button class="station-btn${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i})">${b.subtitle}</button>`
+      ).join('');
+    }
+  }
   // Attach current and tomorrow period from Open-Meteo to forecast for scoreBreak
   if (data.swell && data.swell.hourly) {
     const now = new Date();
@@ -1967,7 +2006,7 @@ function renderSwellChart(swellData) {
   const periodArr = swellData.hourly.dominant_wave_period || swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
 
   // Sample every 6 hours
-  const step = 6;
+  const step = 3; // sample every 3h for better peak resolution
   const sampledTimes = [], sampledWave = [], sampledSwell = [], sampledPeriod = [];
   for (let i = 0; i < times.length; i += step) {
     sampledTimes.push(times[i]);
@@ -2100,9 +2139,9 @@ function renderSwellChart(swellData) {
       }
     }
 
-    // Trend: compare next 12h vs next 12–24h wave heights
-    const next12 = sampledWave.slice(nowIdx, nowIdx + 2);
-    const next24 = sampledWave.slice(nowIdx + 2, nowIdx + 4);
+    // Trend: compare next 12h vs next 12–24h wave heights (4 samples = 12h at 3h step)
+    const next12 = sampledWave.slice(nowIdx, nowIdx + 4);
+    const next24 = sampledWave.slice(nowIdx + 4, nowIdx + 8);
     if (next12.length && next24.length) {
       const avg12 = next12.reduce((a, b) => a + b, 0) / next12.length;
       const avg24 = next24.reduce((a, b) => a + b, 0) / next24.length;
@@ -2229,6 +2268,13 @@ async function loadNightMode() {
       forecastRow.appendChild(card);
     });
 
+    // Compute timeStr early so it's available in the card header
+    const nowBrisbaneEarly = new Date(Date.now() + 10 * 60 * 60 * 1000);
+    const hEarly = nowBrisbaneEarly.getUTCHours();
+    const mEarly = nowBrisbaneEarly.getUTCMinutes();
+    const minsEarly = hEarly >= 18 || hEarly < 4 ? ((hEarly >= 18 ? (24*60+4*60) : 4*60) - (hEarly*60+mEarly)) : 0;
+    const cardTimeStr = minsEarly > 60 ? `${Math.floor(minsEarly/60)}h ${minsEarly%60}m` : minsEarly > 0 ? `${minsEarly}m` : 'soon';
+
     // Show today's completed conditions in the current card with a night label
     const today = data.forecast.forecasts[0];
     const currentCard = document.getElementById('currentCard');
@@ -2238,7 +2284,7 @@ async function loadNightMode() {
       currentCard.innerHTML = `
         <div class="current-header">
           <div class="current-day">${today.day.toUpperCase()}</div>
-          <div class="current-issued" style="color:var(--muted);">Today's conditions · Live resumes 4am</div>
+          <div class="current-issued" style="color:var(--muted);">Live in ${cardTimeStr}</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;">
           <div style="padding:14px 16px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);">
@@ -2285,24 +2331,23 @@ async function loadNightMode() {
     updateBreakIndicators(data.forecast);
     renderTides(data.tides[currentStation]);
 
+    // Compute time until 4am for banner and card header
+    const nowBrisbane = new Date(Date.now() + 10 * 60 * 60 * 1000);
+    const hN4 = nowBrisbane.getUTCHours();
+    const mN4 = nowBrisbane.getUTCMinutes();
+    let minsUntil4am = 0;
+    if (hN4 >= 18 || hN4 < 4) {
+      const mins = hN4 * 60 + mN4;
+      const target = hN4 >= 18 ? (24 * 60 + 4 * 60) : 4 * 60;
+      minsUntil4am = target - mins;
+    }
+    const timeStr = minsUntil4am > 60
+      ? `${Math.floor(minsUntil4am / 60)}h ${minsUntil4am % 60}m`
+      : minsUntil4am > 0 ? `${minsUntil4am}m` : 'soon';
+
     // Show night banner with time remaining until 4am
     const nightBannerEl = document.getElementById('nightBanner');
     if (nightBannerEl) {
-      const nowBrisbane = new Date(Date.now() + 10 * 60 * 60 * 1000);
-      const h = nowBrisbane.getUTCHours();
-      const m = nowBrisbane.getUTCMinutes();
-      let minsUntil4am;
-      if (h >= 18 || h < 4) {
-        // Calculate minutes until 4:00am
-        const mins = h * 60 + m;
-        const target = h >= 18 ? (24 * 60 + 4 * 60) : 4 * 60;
-        minsUntil4am = target - mins;
-      } else {
-        minsUntil4am = 0;
-      }
-      const timeStr = minsUntil4am > 60
-        ? `${Math.floor(minsUntil4am / 60)}h ${minsUntil4am % 60}m`
-        : minsUntil4am > 0 ? `${minsUntil4am}m` : 'soon';
       const bannerText = `Live conditions resume in ${timeStr} &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume in ${timeStr} &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume in ${timeStr}`;
       const inner = nightBannerEl.querySelector('.night-banner-inner');
       if (inner) inner.innerHTML = bannerText;
@@ -2372,6 +2417,16 @@ function showLiveCamButton(breakIndex) {
 }
 
 function toggleLiveCam() {} // handled by showLiveCamButton's onclick
+
+// Hide break selector fade when scrolled to end
+const stToggle = document.querySelector('.station-toggle');
+const stFade = document.querySelector('.station-toggle-fade');
+if (stToggle && stFade) {
+  stToggle.addEventListener('scroll', () => {
+    const atEnd = stToggle.scrollLeft + stToggle.clientWidth >= stToggle.scrollWidth - 4;
+    stFade.style.opacity = atEnd ? '0' : '1';
+  });
+}
 
 // Smart scheduler — loads data hourly, but only between 4am and 6pm Brisbane time (UTC+10)
 function getBrisbaneHour() {
