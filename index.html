@@ -3071,6 +3071,13 @@ async function loadNightMode() {
     }
     data.forecast._tide = getCurrentTide(data.tides.noosa);
 
+    // Night mode shows TOMORROW — shift scoring context so setBreak scores tomorrow not today
+    // Use tomorrow's period and swell direction so score matches what the card displays
+    data.forecast._period   = data.forecast._periodTomorrow;
+    data.forecast._swellDir = data.forecast._swellDirByDay?.[1] ?? null;
+    // Replace forecasts[0] with tomorrow's BOM text so scoreBreak reads tomorrow's winds/swell
+    data.forecast.forecasts = data.forecast.forecasts.slice(1);
+
     // Update BREAKS from worker data
     if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
       BREAKS = applyBreakPatches(data.breaks);
@@ -3166,10 +3173,10 @@ async function loadNightMode() {
     document.getElementById('content').classList.add('visible');
     document.getElementById('currentConditionsLabel').textContent = 'TOMORROW\'S CONDITIONS';
 
-    // Forecast cards for upcoming days — skip today AND tomorrow (shown in main card)
+    // Forecast cards — skip tomorrow (now in main card), show day after onwards
     const forecastRow = document.getElementById('forecastRow');
     forecastRow.innerHTML = '';
-    (data.forecast.forecasts || []).slice(2).forEach((day, dayIdx) => {
+    (data.forecast.forecasts || []).slice(1).forEach((day, dayIdx) => {
       const card = document.createElement('div');
       card.className = 'forecast-card visible';
       const swellPeriod = extractPeriod(day.swell);
@@ -3177,7 +3184,6 @@ async function loadNightMode() {
       const dayForecast = {
         forecasts: [day],
         _period: data.forecast._periodByDay ? (data.forecast._periodByDay[dayIdx + 2] ?? null) : null,
-        _tide:   null,
       };
       const dayScore = b ? scoreBreak(b, dayForecast) : null;
       const scoreColor = dayScore !== null ? (dayScore >= 7 ? 'var(--high)' : dayScore >= 5 ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)';
