@@ -833,7 +833,14 @@
     PLANNER
   </button>
   <button class="tab-btn" id="tabBtn-log" onclick="switchTab('log')">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <!-- board outline: pointed nose top, rounded tail bottom -->
+      <path d="M12 1.5 Q15.5 2.5 16.5 9 Q17.5 16 14 21.5 Q12 23 10 21.5 Q6.5 17 7.5 9 Q8.5 2.5 12 1.5Z"/>
+      <!-- stringer -->
+      <line x1="12" y1="3" x2="11.8" y2="20.5" stroke-width="0.7" opacity="0.45"/>
+      <!-- single fin -->
+      <path d="M11.5 20 Q10.5 22.5 10 24" stroke-width="1.4"/>
+    </svg>
     SESSION
   </button>
 </nav>
@@ -849,6 +856,7 @@
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
 let currentStation = 'noosa';
 let cachedData = null;
+let _hasLoaded = false; // tracks whether initial data load has completed
 
 // Base64 images stored separately — decoded lazily on first break selection
 const BREAK_IMGS = {
@@ -913,7 +921,7 @@ let BREAKS = [
   {
     name: 'Boiling Pot', subtitle: 'Boiling Pot',
     notes: 'Heavy right-hand point at the very tip of the Noosa headland. The takeoff zone is named for the churning, converging water — swell refracts around the point and stands up fast over a shallow rocky ledge. More exposed than Tea Tree and picks up more size. Needs solid ENE–E groundswell with 10s+ period to wrap the point properly; short-period windswell won\'t do much. SE–S wind is offshore. Low to mid tide critical — very low can be dangerously shallow on the ledge, high tide kills the shape. Advanced surfers only.',
-    tide: { ideal: 'low-mid', avoid: 'high' }, advanced: true, pointBreak: true, exposure: 0.41,
+    tide: { ideal: 'low-mid', avoid: 'high' }, advanced: true, pointBreak: true, exposure: 0.58,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['SE','SSE','S'],                  swellMin: 0.8, swellMax: 1.3, periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['SSW','SW','ESE'],                swellMin: 0.5, swellMax: 1.8, periodMin: 8  },
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E','W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
@@ -921,7 +929,7 @@ let BREAKS = [
   {
     name: 'Tea Tree', subtitle: 'Tea Tree',
     notes: 'The jewel of the Noosa points. Long, fast rights off a bouldery headland — can barrel on lower tides. Best ENE–E swell with SE–S offshore wind. Low to mid tide. NE seabreezes kill it.',
-    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.37,
+    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.55,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['SE','SSE','S'],                  swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['SSW','SW','ESE'],                swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E','W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
@@ -929,7 +937,7 @@ let BREAKS = [
   {
     name: 'Granite Bay', subtitle: 'Granite',
     notes: 'Most exposed of the Noosa points — picks up the most swell and the most wind. Works with most swell directions and S winds. Good option when everywhere else is too small. Punchier but less perfect than Tea Tree.',
-    tide: { ideal: 'low-mid', avoid: 'high' }, intermediateAdvanced: true, pointBreak: true, exposure: 0.45,
+    tide: { ideal: 'low-mid', avoid: 'high' }, intermediateAdvanced: true, pointBreak: true, exposure: 0.65,
     ideal:      { swellDirs: ['ENE','E','NE','NNE'],  windDirs: ['S','SSE','SE','SSW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 9  },
     acceptable: { swellDirs: ['ESE','N','NNW','SE'],  windDirs: ['SW','W','ESE'],                  swellMin: 0.4, swellMax: 1.5, periodMin: 7  },
     avoid:      { swellDirs: ['S','NW'],              windDirs: ['N','NE','ENE','E'],              swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 1 },
@@ -1101,7 +1109,16 @@ function setBreak(index) {
     }
   }
 
+  // _swellDir is already set in renderAll from Open-Meteo; no override needed here
   const score = cachedData ? scoreBreak(b, cachedData.forecast, true) : null;
+  if (score !== null) {
+    const c = score >= 7 ? 'var(--high)' : score >= 5 ? 'var(--accent)' : 'var(--muted)';
+    const lbl = score >= 9 ? 'Epic' : score >= 7 ? 'Good' : score >= 5 ? 'Fun' : 'Poor';
+    const sv = document.getElementById('cardScoreValue');
+    const sl = document.getElementById('cardScoreLabel');
+    if (sv) { sv.style.color = c; sv.innerHTML = `${score}<span style="font-size:18px;color:var(--muted);"> /10</span>`; }
+    if (sl) { sl.style.color = c; sl.textContent = lbl; }
+  }
   // Update conditions section label with the selected break name
   const condLabel = document.getElementById('currentConditionsLabel');
   if (condLabel && condLabel.textContent) {
@@ -1178,6 +1195,39 @@ function setBreak(index) {
   // Tomorrow tide comes from renderAll via cachedData.forecast._tide._tomorrow
   const tomorrowTideFromCache = cachedData?.forecast?._tide?._tomorrow ?? null;
   let aboutOpen = _aboutOpen;
+
+  // Offshore window panel — show when conditions are expected to turn
+  const owPanel = document.getElementById('offshoreWindowPanel');
+  if (owPanel && cachedData) {
+    const todayWinds = cachedData.forecast.forecasts[0]?.winds || '';
+    const { ideal, acceptable, avoid } = b;
+    const curWindDir = extractDir(shortDir(todayWinds));
+    const curIsOffshore = curWindDir && (ideal.windDirs.includes(curWindDir) || acceptable.windDirs.includes(curWindDir));
+    const curIsOnshore  = curWindDir && avoid.windDirs.includes(curWindDir);
+
+    const changeMatch = todayWinds.match(
+      /(?:tending|turning|becoming)\s+([\w\s-]+?)\s*(?:\d+[^,]*?)?\s*(?:during|in)\s+the\s+(morning|afternoon|evening)/i
+    );
+    let owHtml = '';
+    if (changeMatch) {
+      const changeDir  = extractDir(shortDir(changeMatch[1].trim()));
+      const changePeriod = changeMatch[2].toLowerCase();
+      const changeIsOffshore = changeDir && (ideal.windDirs.includes(changeDir) || acceptable.windDirs.includes(changeDir));
+      const changeIsOnshore  = changeDir && avoid.windDirs.includes(changeDir);
+      if (curIsOffshore && changeIsOnshore) {
+        owHtml = `<div style="padding:9px 12px;border-top:1px solid var(--border);font-family:'DM Mono',monospace;font-size:10px;">
+          <span style="color:var(--warn);">⚠ Offshore → onshore in the ${changePeriod}</span>
+          <span style="color:var(--muted);"> — go early</span>
+        </div>`;
+      } else if (curIsOnshore && changeIsOffshore) {
+        owHtml = `<div style="padding:9px 12px;border-top:1px solid var(--border);font-family:'DM Mono',monospace;font-size:10px;">
+          <span style="color:var(--high);">↗ May clean up in the ${changePeriod}</span>
+          <span style="color:var(--muted);"> as wind turns ${changeDir}</span>
+        </div>`;
+      }
+    }
+    owPanel.innerHTML = owHtml;
+  }
 
   // Populate morning/afternoon inside the FORECAST card
   const mapEl = document.getElementById('morningAfternoonPanel');
@@ -1382,9 +1432,11 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
   const swellText = shortDir(current.swell || '');
   const windText  = shortDir(current.winds  || '');
 
-  const swellDir    = extractDir(swellText);
-  const windDir     = extractDir(windText);
+  // Prefer Open-Meteo swell direction (more accurate than BOM text parsing)
+  // Keep BOM text for height — Open-Meteo swell_wave_height is swell-component only and can be tiny
+  const swellDir    = forecast._swellDir ?? extractDir(swellText);
   const swellHeight = extractHeight(swellText);
+  const windDir     = extractDir(windText);
   const period      = forecast._period ?? null;
   const tide        = forecast._tide   ?? null;
   const windSpeedKts = extractWindSpeedKts(current.winds || '');
@@ -1450,8 +1502,9 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
   // Raw score — height scoring removed; size cap handles it absolutely below
   const raw = swellPts + windPts + periodPts + tidePts - windPenalty - windSpeedPenalty - crossSwellPenalty - (breakData.bankPenalty || 0);
 
-  // Only attach scoringHeight when called for the currently displayed break
-  if (isCurrent) forecast._scoringHeight = scoringHeight;
+  if (isCurrent) {
+    forecast._scoringHeight = scoringHeight;
+  }
 
   // Size cap: absolute surf height thresholds
   // Ensures small days can't score high regardless of how perfect other conditions are
@@ -1470,6 +1523,7 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
   if (breakData.sizeCap !== undefined) sizeCap = Math.min(sizeCap, breakData.sizeCap);
 
   const hardCap = breakData.maxScore ?? 10;
+
   return Math.min(Math.max(0, Math.round(raw)), sizeCap, hardCap);
 }
 
@@ -1717,6 +1771,7 @@ function updateBreakIndicators(forecast) {
     banner.style.display = 'none';
     banner.onclick = null;
   }
+  return pick.idx ?? 0;
 }
 ///////////////////////////////////////////////////
 
@@ -1727,6 +1782,18 @@ const BREAK_BTN_LABELS = {
   'Double Island': 'D.I.',
 };
 function breakBtnLabel(b) { return BREAK_BTN_LABELS[b.name] || b.subtitle; }
+
+// Local calibration overrides — applied on top of whatever the worker serves.
+// Edit here to tweak scoring without redeploying the worker.
+const BREAK_PATCHES = {
+  'The Groyne':  { maxScore: 6, bankPenalty: 3 },
+  'Boiling Pot': { exposure: 0.58 },
+  'Tea Tree':    { exposure: 0.55 },
+  'Granite Bay': { exposure: 0.65 },
+};
+function applyBreakPatches(breaks) {
+  return breaks.map(b => BREAK_PATCHES[b.name] ? { ...b, ...BREAK_PATCHES[b.name] } : b);
+}
 const DIR_DEG = { N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5 };
 function dirArrow(dir, size=24, color='currentColor') {
   const deg = DIR_DEG[dir];
@@ -1910,7 +1977,8 @@ function renderSessionPlanner(forecast, swell) {
     BREAKS.forEach((b, bIdx) => {
       const dayForecast = {
         forecasts: [day],
-        _period: forecast._periodByDay ? (forecast._periodByDay[dayIdx] ?? null) : (dayIdx === 0 ? forecast._period : dayIdx === 1 ? forecast._periodTomorrow : null),
+        _period:   forecast._periodByDay    ? (forecast._periodByDay[dayIdx]    ?? null) : (dayIdx === 0 ? forecast._period : dayIdx === 1 ? forecast._periodTomorrow : null),
+        _swellDir: forecast._swellDirByDay  ? (forecast._swellDirByDay[dayIdx]  ?? null) : (dayIdx === 0 ? forecast._swellDir : null),
         _tide: dayIdx === 0 ? forecast._tide : dayIdx === 1 ? forecast._tide?._tomorrow : null,
       };
       const score = scoreBreak(b, dayForecast);
@@ -1993,7 +2061,7 @@ function renderSessionPlanner(forecast, swell) {
 function renderAll(data) {
   // Update BREAKS from worker if provided — allows calibration without app redeployment
   if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
-    BREAKS = data.breaks;
+    BREAKS = applyBreakPatches(data.breaks);
     // Rebuild break selector buttons if count changed
     const toggle = document.querySelector('.station-toggle');
     if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn').length) {
@@ -2027,14 +2095,17 @@ function renderAll(data) {
     const swellDirArr = data.swell.hourly.swell_wave_direction  || null;
     data.forecast._currentWaveHeight = swellHArr   && idxNow > -1 ? swellHArr[idxNow]   : null;
     data.forecast._currentSwellDir   = swellDirArr && idxNow > -1 ? degToCompass(swellDirArr[idxNow]) : null;
+    // Set _swellDir directly so all scoreBreak calls (banner + conditions) use Open-Meteo direction
+    // Do NOT set _swellHeight here — Open-Meteo swell_wave_height is just the swell component
+    // and can be tiny; BOM text height is more aligned with what surfers see
+    data.forecast._swellDir = data.forecast._currentSwellDir ?? null;
 
-    // Pre-compute daily average periods for days 2+ from Open-Meteo hourly data
+    // Pre-compute daily average periods, swell direction and height from Open-Meteo
     // This gives fairer forecast scores beyond tomorrow
     if (periodArr) {
       data.forecast._periodByDay = data.forecast.forecasts.map((day, i) => {
         if (i === 0) return data.forecast._period;
         if (i === 1) return data.forecast._periodTomorrow;
-        // Find hours for this day using Brisbane date offset
         const dayBrisbane = new Date(now.getTime() + (10 + 24 * i) * 60 * 60 * 1000);
         const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
         const dayIndices = times.reduce((acc, t, idx) => { if (t.startsWith(dayStr)) acc.push(idx); return acc; }, []);
@@ -2043,6 +2114,31 @@ function renderAll(data) {
         return vals.length ? Math.round(vals.reduce((a,v) => a+v, 0) / vals.length) : null;
       });
     }
+
+    // Daily swell dir + height from Open-Meteo — more accurate than BOM text for scoring
+    const swellHArr2   = data.swell.hourly.swell_wave_height   || data.swell.hourly.wave_height || null;
+    const swellDirArr2 = data.swell.hourly.swell_wave_direction || null;
+    data.forecast._swellDirByDay = data.forecast.forecasts.map((day, i) => {
+      const dayBrisbane = new Date(now.getTime() + (10 + 24 * i) * 60 * 60 * 1000);
+      const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
+      const dayIdxs = times.reduce((acc, t, idx) => { if (t.startsWith(dayStr)) acc.push(idx); return acc; }, []);
+      if (!dayIdxs.length || !swellDirArr2) return null;
+      // Use modal (most common) direction to avoid averaging across compass discontinuities
+      const dirs = dayIdxs.map(idx => swellDirArr2[idx]).filter(v => v != null);
+      if (!dirs.length) return null;
+      const freq = {};
+      dirs.forEach(d => { const c = degToCompass(d); freq[c] = (freq[c] || 0) + 1; });
+      return Object.entries(freq).sort((a,b) => b[1]-a[1])[0][0];
+    });
+    data.forecast._swellHeightByDay = data.forecast.forecasts.map((day, i) => {
+      if (i === 0) return data.forecast._currentWaveHeight;
+      const dayBrisbane = new Date(now.getTime() + (10 + 24 * i) * 60 * 60 * 1000);
+      const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
+      const dayIdxs = times.reduce((acc, t, idx) => { if (t.startsWith(dayStr)) acc.push(idx); return acc; }, []);
+      if (!dayIdxs.length || !swellHArr2) return null;
+      const vals = dayIdxs.map(idx => swellHArr2[idx]).filter(v => v != null);
+      return vals.length ? Math.round((vals.reduce((a,v) => a+v, 0) / vals.length) * 10) / 10 : null;
+    });
   }
 
   renderForecast(data.forecast, data.tides[currentStation], data.swell);
@@ -2077,13 +2173,16 @@ function renderAll(data) {
     }
   }
 
-  updateBreakIndicators(data.forecast);
+  // On first load, jump to the recommended break automatically.
+  // On subsequent refreshes, keep whatever break the user has selected.
+  const bestIdx = updateBreakIndicators(data.forecast);
+  const initialBreak = _hasLoaded ? currentBreak : bestIdx;
+  _hasLoaded = true;
 
   document.getElementById('loadingEl').style.display = 'none';
   document.getElementById('content').classList.add('visible');
 
-  // setBreak must run before rAF so currentBreak is set for surf height calc
-  setBreak(currentBreak || 0);
+  setBreak(initialBreak || 0);
 
   // Defer chart and tides to next frame so content is painted first
   requestAnimationFrame(() => {
@@ -2220,6 +2319,8 @@ function renderForecast(forecast, tideData, swellData) {
   let currentPeriod = null;
   let currentWaveHeight = null;
   let currentSwellDirDeg = null;
+  let currentSwellTrend = null;
+  let currentSwellTrendLabel = null;
   let currentWindWaveHeight = null;
   let currentWindWavePeriod = null;
   if (swellData && swellData.hourly) {
@@ -2245,6 +2346,18 @@ function renderForecast(forecast, tideData, swellData) {
     const windTArr = swellData.hourly.wind_wave_period || null;
     currentWindWaveHeight = windHArr ? windHArr[useIdx] : null;
     currentWindWavePeriod = windTArr ? windTArr[useIdx] : null;
+
+    // Swell trend — compare current hour to 3 hours ahead
+    const heightArr2 = swellData.hourly.swell_wave_height || swellData.hourly.wave_height || null;
+    if (heightArr2 && currentWaveHeight !== null) {
+      const futureIdx = Math.min(useIdx + 3, heightArr2.length - 1);
+      const futureH   = heightArr2[futureIdx];
+      if (futureH != null) {
+        const diff = futureH - currentWaveHeight;
+        currentSwellTrend = diff > 0.08 ? '▲' : diff < -0.08 ? '▼' : '→';
+        currentSwellTrendLabel = diff > 0.08 ? 'building' : diff < -0.08 ? 'fading' : 'steady';
+      }
+    }
   }
 
   // Water temperature from Open-Meteo sea_surface_temperature
@@ -2305,6 +2418,16 @@ function renderForecast(forecast, tideData, swellData) {
     const hStr   = rtH !== null ? rtH.toFixed(1) + 'm' : '';
     const pStr   = rtP !== null ? Math.round(rtP) + 's' : '';
     const swellDetails = [hStr, pStr].filter(Boolean).join(' · ');
+    const trendColor = currentSwellTrend === '▲' ? 'var(--high)' : currentSwellTrend === '▼' ? 'var(--accent2)' : 'var(--muted)';
+    const trendHtml = currentSwellTrend
+      ? `<span style="font-family:'DM Mono',monospace;font-size:9px;color:${trendColor};margin-left:4px;">${currentSwellTrend} ${currentSwellTrendLabel}</span>`
+      : '';
+    const waterTempHtml = waterTemp !== null
+      ? `<div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
+          <div class="condition-label">Water</div>
+          <div class="condition-value">${Math.round(waterTemp)}°C</div>
+        </div>`
+      : '';
 
     // Wind (BOM structured)
     const wp     = current.windParsed;
@@ -2314,8 +2437,8 @@ function renderForecast(forecast, tideData, swellData) {
     currentCard.innerHTML = `
       <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:${scoreColor};">${currentScore ?? '—'}<span style="font-size:18px;color:var(--muted);"> /10</span></div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${scoreColor};">${scoreLabel}</div>
+          <div id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:${scoreColor};">${currentScore ?? '—'}<span style="font-size:18px;color:var(--muted);"> /10</span></div>
+          <div id="cardScoreLabel" style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${scoreColor};">${scoreLabel}</div>
         </div>
         <div style="text-align:right;">
           <div class="current-day">${current.day.toUpperCase()}</div>
@@ -2331,14 +2454,26 @@ function renderForecast(forecast, tideData, swellData) {
         <div style="display:grid;grid-template-columns:1fr 1fr;">
           <div style="padding:11px 12px;border-right:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Swell</div>
-            <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
+            <div class="condition-value" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
               ${dirArrow(rtDir, 18, 'var(--accent)')}
               <span>${rtDir || '—'}${swellDetails ? ' · ' + swellDetails : ''}</span>
             </div>
+            ${trendHtml}
           </div>
           <div style="padding:11px 12px;">
+            <div class="condition-label">Wind</div>
+            <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
+              ${dirArrow(windDir, 18, 'var(--text)')}
+              <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}</span>
+            </div>
+          </div>
+          <div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Surf</div>
             <div class="condition-value highlight" id="surfHeightValue">—</div>
+          </div>
+          <div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);">
+            <div class="condition-label">Water</div>
+            <div class="condition-value">${waterTemp !== null ? Math.round(waterTemp) + '°C' : '—'}</div>
           </div>
           <div style="padding:11px 12px;grid-column:1/-1;border-top:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Tide</div>
@@ -2352,18 +2487,13 @@ function renderForecast(forecast, tideData, swellData) {
           <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TODAY'S FORECAST</span>
           <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;">
-          <div style="padding:11px 12px;border-right:1px solid var(--border);">
-            <div class="condition-label">Wind</div>
-            <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
-              ${dirArrow(windDir, 18, 'var(--text)')}
-              <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}</span>
-            </div>
-          </div>
+        <div style="display:grid;grid-template-columns:1fr;">
           <div style="padding:11px 12px;">
             <div class="condition-label">Weather</div>
             <div class="condition-value">${current.weather}</div>
           </div>
+        </div>
+        <div id="offshoreWindowPanel"></div>
         </div>
         <div id="morningAfternoonPanel"></div>
       </div>
@@ -2727,7 +2857,7 @@ async function loadNightMode() {
 
     // Update BREAKS from worker data
     if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
-      BREAKS = data.breaks;
+      BREAKS = applyBreakPatches(data.breaks);
     }
 
     // Compute time until 4am for banner and card header
