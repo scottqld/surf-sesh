@@ -1116,6 +1116,8 @@ function setBreak(index) {
         <div style="font-size:11px;color:#fff;">${afternoonNote}</div>
       </div>` : ''}
     </div>` : ''}
+    ${(() => { const crowd = crowdForecast(b, score); return crowd ? `<div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">CROWD ${crowd.icons} <span style="color:#fff;">${crowd.label}</span></div>` : ''; })()}
+    <div id="aiSummary" style="margin-top:10px;font-size:12px;color:var(--accent);font-style:italic;min-height:0;"></div>
     <div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
       <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About this break</span>
       <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
@@ -1124,7 +1126,88 @@ function setBreak(index) {
       <span style="color:#fff;">${b.notes}</span>
     </div>`;
 
-  requestAnimationFrame(() => { breakNotesEl.style.opacity = '1'; });
+  requestAnimationFrame(() => {
+    breakNotesEl.style.opacity = '1';
+    if (cachedData) generateAiSummary(b, cachedData.forecast, score);
+  });
+}
+
+///////////////////////////////////////////////////
+// AI surf summary — calls Claude API to generate a local surf report in plain English
+let _aiSummaryCache = {}; // cache by break+score to avoid repeat calls
+
+async function generateAiSummary(breakData, forecast, score) {
+  const el = document.getElementById('aiSummary');
+  if (!el) return;
+
+  // Cache key — break + score + day prevents re-fetching same conditions
+  const day = forecast.forecasts?.[0]?.day || '';
+  const cacheKey = `${breakData.name}-${score}-${day}`;
+  if (_aiSummaryCache[cacheKey]) { el.textContent = _aiSummaryCache[cacheKey]; return; }
+
+  el.textContent = '...';
+  el.style.opacity = '0.5';
+
+  const current = forecast.forecasts?.[0] || {};
+  const swell = shortDir(current.swell || '');
+  const wind = shortDir(current.winds || '');
+  const weather = current.weather || '';
+  const period = forecast._period ? Math.round(forecast._period) + 's' : '';
+  const surfH = forecast._scoringHeight;
+  const ftStr = surfH ? fmtHeight(surfH) : '';
+
+  const prompt = `You are a local Noosa surfer giving a quick honest surf report. Write ONE sentence (max 20 words) describing conditions at ${breakData.name} today. Be specific and use surfer language. No fluff.
+
+Data: score ${score}/10, swell ${swell}${period ? ' @ ' + period : ''}, wind ${wind}, ${ftStr ? 'face height ' + ftStr + ', ' : ''}${weather}. ${score >= 7 ? 'Good conditions.' : score >= 5 ? 'Average conditions.' : 'Poor conditions.'}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 80,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text?.trim() || '';
+    if (text) {
+      _aiSummaryCache[cacheKey] = text;
+      el.textContent = text;
+      el.style.opacity = '1';
+    } else {
+      el.textContent = '';
+    }
+  } catch (e) {
+    el.textContent = '';
+  }
+}
+
+///////////////////////////////////////////////////
+// Crowd forecast — estimates crowd level based on score, day of week, and break character
+function crowdForecast(breakData, score) {
+  if (score < 4) return null; // not worth surfing, crowd irrelevant
+  const now = new Date(Date.now() + 10 * 60 * 60 * 1000); // Brisbane time
+  const dow = now.getUTCDay(); // 0=Sun, 6=Sat
+  const isWeekend = dow === 0 || dow === 6;
+  const isFriday = dow === 5;
+
+  // Base crowd level from score (better waves = more people)
+  let level = score >= 8 ? 3 : score >= 6 ? 2 : 1;
+
+  // Weekends and Fridays amplify crowds significantly at Noosa
+  if (isWeekend) level = Math.min(4, level + 1);
+  if (isFriday) level = Math.min(4, level + 1);
+
+  // First Point and Tea Tree are always the most crowded
+  if (breakData.name === 'First Point' || breakData.name === 'Tea Tree') level = Math.min(4, level + 1);
+  // Nationals is advanced so crowds thinner; DI is remote
+  if (breakData.advanced || breakData.name === 'Double Island') level = Math.max(1, level - 1);
+
+  const icons = ['🤙', '🤙🤙', '🤙🤙🤙', '🤙🤙🤙🤙'];
+  const labels = ['quiet', 'moderate', 'busy', 'very crowded'];
+  return { icons: icons[level - 1], label: labels[level - 1], level };
 }
 
 function toggleSynopsis() {
@@ -1463,17 +1546,36 @@ function conditionNote(breakData, forecast) {
   else if (windIsOnshore) morningNote = '🌅 Already onshore — conditions unlikely to improve through the day';
   else morningNote = '🌅 Cross-shore — check at dawn for the cleanest window';
 
+  // Parse afternoon wind change directly from BOM text
+  // e.g. "Southerly 15 knots tending NE in the afternoon"
+  const afternoonWindMatch = (current.winds || '').match(
+    /(?:tending|turning|becoming)\s+([\w\s]+?)\s+(?:\d+\s*to\s*\d+\s*knots?\s*)?(?:during|in)\s+the\s+afternoon/i
+  );
+  const afternoonWindDir = afternoonWindMatch ? extractDir(shortDir(afternoonWindMatch[1].trim())) : null;
+  const afternoonIsOnshore  = afternoonWindDir && avoid.windDirs.includes(afternoonWindDir);
+  const afternoonIsOffshore = afternoonWindDir && (ideal.windDirs.includes(afternoonWindDir) || acceptable.windDirs.includes(afternoonWindDir));
+
+  // Determine afternoon wind — either explicit BOM change or continuation of current forecast
+  const effAfternoonDir = afternoonWindDir || windDir;
+  const effAfternoonIsOnshore  = effAfternoonDir && avoid.windDirs.includes(effAfternoonDir);
+  const effAfternoonIsOffshore = effAfternoonDir && (ideal.windDirs.includes(effAfternoonDir) || acceptable.windDirs.includes(effAfternoonDir));
+  const speedStr = speedKts2 ? ` (${Math.round(speedKts2 * 1.852)} km/h)` : '';
+  console.log('[SurfCall afternoon]', { windDir, afternoonWindDir, effAfternoonDir, effAfternoonIsOffshore, effAfternoonIsOnshore, avoid: avoid.windDirs, ideal: ideal.windDirs, acceptable: acceptable.windDirs });
+
   let afternoonNote = '';
-  if (neIsOnshore) {
-    // NE seabreeze is onshore for this break (e.g. First Point, Tea Tree, Nationals)
-    if (windIsOffshore) afternoonNote = '☀️ NE seabreeze will likely turn it onshore by mid-morning — go early';
-    else afternoonNote = '☀️ NE seabreeze expected — choppy and onshore this afternoon';
-  } else if (neIsOffshore) {
-    // NE seabreeze is cross-offshore for this break — less damaging than fully onshore
-    afternoonNote = '☀️ NE seabreeze cross-offshore — less impactful than fully onshore breaks';
+  if (afternoonWindDir) {
+    // BOM explicitly forecasts an afternoon wind change
+    if (afternoonIsOnshore)       afternoonNote = `☀️ Wind tending ${afternoonWindDir} this afternoon — expect choppy conditions`;
+    else if (afternoonIsOffshore) afternoonNote = `☀️ Wind tending ${afternoonWindDir} this afternoon — could improve`;
+    else                          afternoonNote = `☀️ Wind tending ${afternoonWindDir} this afternoon`;
+  } else if (effAfternoonIsOffshore) {
+    afternoonNote = `☀️ ${effAfternoonDir} offshore${speedStr} expected to continue`;
+  } else if (effAfternoonIsOnshore) {
+    afternoonNote = `☀️ ${effAfternoonDir} onshore${speedStr} — choppy conditions expected`;
+  } else if (effAfternoonDir) {
+    afternoonNote = `☀️ ${effAfternoonDir} cross-shore${speedStr} through the afternoon`;
   } else {
-    if (windIsOnshore) afternoonNote = '☀️ Onshore conditions expected to continue — surface choppy';
-    else afternoonNote = '☀️ Seabreeze may develop mid-morning — check conditions before heading out';
+    afternoonNote = '☀️ Check forecast before heading out';
   }
 
   return {
