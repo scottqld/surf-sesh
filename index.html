@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>SurfCall — Noosa</title>
+<title>SurfSesh — Noosa</title>
+<meta name="theme-color" content="#0A0C0F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SurfSesh">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
 <style>
@@ -749,6 +756,8 @@
 
   <div id="errorEl" style="display:none"></div>
 
+  <!-- Stale data banner (shown by SW when offline) -->
+  <div id="staleBanner" style="display:none;background:rgba(255,180,0,0.12);border-bottom:1px solid rgba(255,180,0,0.25);padding:7px 20px;font-family:'DM Mono',monospace;font-size:10px;color:rgba(255,200,60,0.9);letter-spacing:0.5px;">📵 Offline — showing last cached data</div>
   <div id="content" class="content">
     <!-- TAB: CONDITIONS -->
     <div class="tab-section active" id="tab-conditions">
@@ -757,6 +766,10 @@
       <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,12,15,0.65) 0%, transparent 55%);pointer-events:none;"></div>
       <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
       <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;position:absolute;top:8px;right:8px;background:rgba(10,12,15,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
+      <div id="photoScoreBadge" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;">
+        <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
+        <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
+      </div>
     </div>
     <div id="bestBreakBanner" style="display:none;margin:10px 20px 0;padding:10px 14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--high);letter-spacing:0.5px;"></div>
     <div id="warningBanner" class="warning-banner"></div>
@@ -884,6 +897,7 @@
     </svg>
     SESSION
   </button>
+  <button id="installBtn" onclick="installPWA()" style="display:none;position:fixed;bottom:80px;right:16px;z-index:999;background:var(--accent);color:#000;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;font-weight:700;border:none;border-radius:20px;padding:10px 16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,218,216,0.4);">⊕ ADD TO HOME</button>
 </nav>
 
 <button class="refresh-btn" id="refreshBtn" onclick="isActiveHours() ? loadData(true) : loadNightMode()" title="Refresh">
@@ -1159,6 +1173,17 @@ function setBreak(index) {
     const sl = document.getElementById('cardScoreLabel');
     if (sv) { sv.style.color = c; sv.innerHTML = `${score}<span style="font-size:18px;color:var(--muted);"> /10</span>`; }
     if (sl) { sl.style.color = c; sl.textContent = lbl; }
+
+    // Photo score badge
+    const badge    = document.getElementById('photoScoreBadge');
+    const badgeNum = document.getElementById('photoScoreNum');
+    const badgeLbl = document.getElementById('photoScoreLabel');
+    if (badge && badgeNum && badgeLbl) {
+      badgeNum.textContent = score;
+      badgeNum.style.color = c;
+      badgeLbl.textContent = lbl.toUpperCase();
+      badge.style.display  = 'flex';
+    }
   }
   // Update conditions section label with the selected break name
   const condLabel = document.getElementById('currentConditionsLabel');
@@ -1166,7 +1191,7 @@ function setBreak(index) {
     condLabel.textContent = condLabel.textContent.replace(/\s*—.*$/, '') + ` — ${breakBtnLabel(b).toUpperCase()}`;
   }
   // Update browser tab title with current score
-  if (score !== null) document.title = `${score}/10 ${b.name} · SurfCall`;
+  if (score !== null) document.title = `${score}/10 ${b.name} · SurfSesh`;
   // Attach the first morning tide (before noon today) so conditionNote can show it
   if (cachedData?.forecast) {
     const todayTides = getTidesForDay(0);
@@ -1841,10 +1866,11 @@ function breakBtnLabel(b) { return BREAK_BTN_LABELS[b.name] || b.subtitle; }
 // Local calibration overrides — applied on top of whatever the worker serves.
 // Edit here to tweak scoring without redeploying the worker.
 const BREAK_PATCHES = {
-  'The Groyne':  { maxScore: 6, bankPenalty: 3 },
-  'Nationals': { exposure: 0.58 },
-  'Tea Tree':    { exposure: 0.55 },
-  'Granite Bay': { exposure: 0.65 },
+  'The Groyne':     { maxScore: 6, bankPenalty: 3 },
+  'Nationals':      { exposure: 0.58 },
+  'Tea Tree':       { exposure: 0.55 },
+  'Granite Bay':    { exposure: 0.65 },
+  'Sunshine Beach': { exposure: 0.85 },
 };
 function applyBreakPatches(breaks) {
   return breaks.map(b => BREAK_PATCHES[b.name] ? { ...b, ...BREAK_PATCHES[b.name] } : b);
@@ -2166,8 +2192,9 @@ function renderSessionPlanner(forecast, swell) {
     BREAKS.forEach((b, bIdx) => {
       const dayForecast = {
         forecasts: [day],
-        _period:   forecast._periodByDay    ? (forecast._periodByDay[dayIdx]    ?? null) : (dayIdx === 0 ? forecast._period : dayIdx === 1 ? forecast._periodTomorrow : null),
-        _swellDir: forecast._swellDirByDay  ? (forecast._swellDirByDay[dayIdx]  ?? null) : (dayIdx === 0 ? forecast._swellDir : null),
+        _period:      forecast._periodByDay     ? (forecast._periodByDay[dayIdx]     ?? null) : (dayIdx === 0 ? forecast._period : dayIdx === 1 ? forecast._periodTomorrow : null),
+        _swellDir:    forecast._swellDirByDay   ? (forecast._swellDirByDay[dayIdx]   ?? null) : (dayIdx === 0 ? forecast._swellDir : null),
+        _swellHeight: forecast._swellHeightByDay? (forecast._swellHeightByDay[dayIdx]?? null) : null,
         _tide: dayIdx === 0 ? forecast._tide : dayIdx === 1 ? forecast._tide?._tomorrow : null,
       };
       const score = scoreBreak(b, dayForecast);
@@ -2210,8 +2237,8 @@ function renderSessionPlanner(forecast, swell) {
     const scoreColor = s.score >= 7 ? 'var(--high)' : s.score >= 5 ? 'var(--accent)' : 'var(--muted)';
     const label = s.score >= 9 ? 'Epic' : s.score >= 7 ? 'Good' : s.score >= 5 ? 'Fun' : 'Poor';
     const day0 = s.dayForecast.forecasts[0];
-    const h = extractHeight(shortDir(day0.swell || ''));
-    const sH = estimateSurfHeight(h, s.break.exposure, extractDir(shortDir(day0.swell || '')), s.break, s.dayForecast._period);
+    const h = s.dayForecast._swellHeight ?? extractHeight(shortDir(day0.swell || ''));
+    const sH = estimateSurfHeight(h, s.break.exposure, s.dayForecast._swellDir ?? extractDir(shortDir(day0.swell || '')), s.break, s.dayForecast._period);
     const ftStr = sH !== null ? `~${Math.round(sH * 3.281 * 2) / 2}ft` : '';
     const adv = s.break.advanced ? ' · advanced' : s.break.intermediateAdvanced ? ' · intermediate+' : '';
     const timeHint = getBestTimeHint(s.break, s.dayForecast);
@@ -2325,14 +2352,15 @@ function renderAll(data) {
     }
 
     // Daily swell dir + height from Open-Meteo — more accurate than BOM text for scoring
-    const swellHArr2   = data.swell.hourly.swell_wave_height   || data.swell.hourly.wave_height || null;
+    // Use wave_height (total: swell + wind waves) for display — closer to what surfers see
+    // Use swell_wave_direction for direction (groundswell only, more stable)
+    const swellHArr2   = data.swell.hourly.wave_height || data.swell.hourly.swell_wave_height || null;
     const swellDirArr2 = data.swell.hourly.swell_wave_direction || null;
     data.forecast._swellDirByDay = data.forecast.forecasts.map((day, i) => {
       const dayBrisbane = new Date(now.getTime() + (10 + 24 * i) * 60 * 60 * 1000);
       const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
       const dayIdxs = times.reduce((acc, t, idx) => { if (t.startsWith(dayStr)) acc.push(idx); return acc; }, []);
       if (!dayIdxs.length || !swellDirArr2) return null;
-      // Use modal (most common) direction to avoid averaging across compass discontinuities
       const dirs = dayIdxs.map(idx => swellDirArr2[idx]).filter(v => v != null);
       if (!dirs.length) return null;
       const freq = {};
@@ -2345,8 +2373,14 @@ function renderAll(data) {
       const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
       const dayIdxs = times.reduce((acc, t, idx) => { if (t.startsWith(dayStr)) acc.push(idx); return acc; }, []);
       if (!dayIdxs.length || !swellHArr2) return null;
-      const vals = dayIdxs.map(idx => swellHArr2[idx]).filter(v => v != null);
-      return vals.length ? Math.round((vals.reduce((a,v) => a+v, 0) / vals.length) * 10) / 10 : null;
+      // Use peak of 6am–noon window to represent best morning session conditions
+      const morningIdxs = dayIdxs.filter(idx => {
+        const t = times[idx]; const h = parseInt(t.split('T')[1]?.split(':')[0] ?? '12');
+        return h >= 6 && h <= 12;
+      });
+      const useIdxs = morningIdxs.length ? morningIdxs : dayIdxs;
+      const vals = useIdxs.map(idx => swellHArr2[idx]).filter(v => v != null);
+      return vals.length ? Math.round(Math.max(...vals) * 10) / 10 : null;
     });
   }
 
@@ -2639,6 +2673,14 @@ function renderForecast(forecast, tideData, swellData) {
     const trendHtml = currentSwellTrend
       ? `<span style="font-family:'DM Mono',monospace;font-size:9px;color:${trendColor};margin-left:4px;">${currentSwellTrend} ${currentSwellTrendLabel}</span>`
       : '';
+
+    // Seas — BOM total sea height (swell + wind chop). Higher than swell = choppy surface.
+    const seasH   = extractHeight(current.seas || '');
+    const choppy  = seasH !== null && rtH !== null && seasH > rtH + 0.3;
+    const seasStr = seasH !== null
+      ? `${seasH.toFixed(1)}m${choppy ? ' · <span style="color:rgba(255,200,60,0.9);">choppy</span>' : ''}`
+      : null;
+
     const waterTempHtml = waterTemp !== null
       ? `<div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
           <div class="condition-label">Water</div>
@@ -2692,6 +2734,10 @@ function renderForecast(forecast, tideData, swellData) {
             <div class="condition-label">Water</div>
             <div class="condition-value">${waterTemp !== null ? Math.round(waterTemp) + '°C' : '—'}</div>
           </div>
+          ${seasStr ? `<div style="padding:11px 12px;grid-column:1/-1;border-top:1px solid rgba(0,229,160,0.15);">
+            <div class="condition-label">Seas <span style="opacity:0.5;font-size:8px;">total incl. chop · BOM</span></div>
+            <div class="condition-value">${seasStr}</div>
+          </div>` : ''}
           <div style="padding:11px 12px;grid-column:1/-1;border-top:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Tide</div>
             <div class="condition-value">${tideStr}</div>
@@ -3714,6 +3760,46 @@ if (isActiveHours()) {
 }
 
 scheduleNextLoad();
+
+// ─── PWA: SERVICE WORKER ──────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW registration failed:', err));
+  });
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'STALE_DATA') {
+      const banner = document.getElementById('staleBanner');
+      if (banner) banner.style.display = '';
+    }
+  });
+}
+
+// ─── PWA: INSTALL PROMPT ─────────────────────────────────────────────────
+let _installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _installPrompt = e;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = '';
+});
+function installPWA() {
+  if (!_installPrompt) return;
+  _installPrompt.prompt();
+  _installPrompt.userChoice.then(result => {
+    if (result.outcome === 'accepted') {
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.style.display = 'none';
+    }
+    _installPrompt = null;
+  });
+}
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = 'none';
+  _installPrompt = null;
+});
 </script>
 </body>
 </html>
