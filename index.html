@@ -532,6 +532,18 @@
     border-radius: 8px; color: var(--text); font-family: 'DM Mono', monospace;
     font-size: 12px; padding: 9px 10px; box-sizing: border-box; appearance: none;
   }
+  .alert-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text);
+  }
+  .alert-toggle:last-child { border-bottom: none; }
+  .alert-check {
+    width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0;
+  }
+  .calibration-bar-wrap {
+    height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 4px; overflow: hidden;
+  }
 
   /* LOADING */
   .loading {
@@ -764,6 +776,8 @@
     <div class="tab-section" id="tab-planner">
     <div class="section-label">BEST SESSIONS THIS WEEK</div>
     <div id="sessionPlanner" style="padding:0 20px 12px;"></div>
+    <div class="section-label">🚗 DOUBLE ISLAND TRIP</div>
+    <div id="diTripCard" style="margin:0 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;"></div>
     <div id="synopsisCard" onclick="toggleSynopsis()" style="cursor:pointer;margin:0 20px 0;font-size:12px;color:var(--accent);line-height:1.6;font-style:italic;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;"></div>
     <div class="section-label">SWELL TREND — 7 DAYS</div>
     <div class="chart-container">
@@ -818,6 +832,33 @@
         PAST SESSIONS <span id="logAccuracy" style="font-size:8px;letter-spacing:1px;opacity:0.55;"></span>
       </div>
       <div id="sessionLog" style="padding:0 20px 20px;"></div>
+
+      <div class="section-label">CALIBRATION</div>
+      <div id="calibrationPanel" style="padding:0 20px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log 3+ sessions per break to see accuracy stats.</div>
+
+      <div class="section-label">SWELL ALERTS</div>
+      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);">Alert when score reaches</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">Notifies once per 2 hours while app is open</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="alertThresholdLabel" style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--accent);">7</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">/10</span>
+          </div>
+        </div>
+        <input type="range" id="alertThreshold" min="5" max="10" value="7" step="1"
+          oninput="document.getElementById('alertThresholdLabel').textContent=this.value;saveAlertSettings()"
+          style="width:100%;accent-color:var(--accent);margin-bottom:14px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE BREAKS</div>
+        <div id="alertBreakList"></div>
+        <button onclick="requestAlertPermission()" id="alertPermBtn"
+          style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;cursor:pointer;display:none;">
+          ENABLE NOTIFICATIONS
+        </button>
+        <div id="alertPermStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:8px;text-align:center;"></div>
+      </div>
     </div>
 
   </div>
@@ -1126,6 +1167,14 @@ function setBreak(index) {
   }
   // Update browser tab title with current score
   if (score !== null) document.title = `${score}/10 ${b.name} · SurfCall`;
+  // Attach the first morning tide (before noon today) so conditionNote can show it
+  if (cachedData?.forecast) {
+    const todayTides = getTidesForDay(0);
+    cachedData.forecast._morningTide = todayTides.find(t => {
+      const [hh] = t.time.split(':').map(Number);
+      return hh < 12;
+    }) || null;
+  }
   const noteResult = cachedData ? conditionNote(b, cachedData.forecast) : { notes: '', morning: '', afternoon: '' };
   const note = noteResult.notes;
   const morningNote = noteResult.morning;
@@ -1237,11 +1286,11 @@ function setBreak(index) {
         ${morningNote ? `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
           <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--muted);margin-bottom:4px;">MORNING</div>
           ${morningNote.split('\n').map((l,i) => `<div style="font-size:11px;color:${i===0?'#fff':'var(--accent)'};">${l}</div>`).join('')}
-        </div>` : ''}
+        </div>` : '<div></div>'}
         ${afternoonNote ? `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
           <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--muted);margin-bottom:4px;">AFTERNOON</div>
           ${afternoonNote.split('\n').map((l,i) => `<div style="font-size:11px;color:${i===0?'#fff':'var(--accent)'};">${l}</div>`).join('')}
-        </div>` : ''}
+        </div>` : '<div></div>'}
       </div>` : '';
   }
 
@@ -1647,8 +1696,14 @@ function conditionNote(breakData, forecast) {
                        (ideal_tide === 'mid-high' && (isMid || isHigh)) ||
                        (ideal_tide === 'all');
     const tideDir = rising ? '↑' : '↓';
-    // Morning: current tide
-    tideMorningNote = `Tide ${h.toFixed(1)}m ${tideDir} (${tideStr})${tideIsGood ? ' ✓' : ' — not ideal'}`;
+    // Morning: current tide + first morning tide from today's schedule
+    const mt = forecast._morningTide;
+    const nextTimeStr = mt ? (() => {
+      const [hh, mm] = mt.time.split(':').map(Number);
+      return `${(hh % 12) || 12}:${String(mm).padStart(2,'0')}${hh < 12 ? 'am' : 'pm'}`;
+    })() : null;
+    const nextStr = nextTimeStr ? ` · ${mt.type} ${nextTimeStr}` : '';
+    tideMorningNote = `Tide ${h.toFixed(1)}m ${tideDir} (${tideStr})${nextStr}${tideIsGood ? ' ✓' : ' — not ideal'}`;
     // Afternoon: project tide direction forward ~4hrs
     if (tide.next) {
       const nextType = tide.next.type?.toLowerCase() || '';
@@ -1884,6 +1939,7 @@ async function loadData(forceRefresh = false) {
     cachedData = data;
 
     renderAll(data);
+    checkSwellAlerts(data);
 
     const now = new Date();
     const brisbaneTime = new Date(now.getTime() + 10 * 60 * 60 * 1000);
@@ -1966,6 +2022,139 @@ function getTidesForDay(dayIdx) {
   return tides.filter(t => t.date === dateStr);
 }
 
+function renderDITripGate(forecast, swell) {
+  const el = document.getElementById('diTripCard');
+  if (!el) return;
+
+  const diBreak = BREAKS.find(b => b.name === 'Double Island');
+  if (!diBreak) { el.innerHTML = ''; return; }
+
+  const current = forecast.forecasts?.[0];
+  if (!current) { el.innerHTML = ''; return; }
+
+  // ── 1. SWELL ──────────────────────────────────────────────────────────────
+  const swellDir = forecast._currentSwellDir ?? extractDir(shortDir(current.swell || ''));
+  const swellH   = forecast._currentWaveHeight ?? extractHeight(shortDir(current.swell || ''));
+  const swellIdeal = ['ENE','E','NE'];
+  const swellOk    = ['ESE','NNE','SE'];
+  const swellBad   = ['S','SW','W','N','NW'];
+  const dirOk = swellDir ? (swellIdeal.includes(swellDir) ? 'good' : swellOk.includes(swellDir) ? 'ok' : 'bad') : 'ok';
+  const sizeOk = swellH === null ? 'ok' : swellH >= 1.0 ? 'good' : swellH >= 0.6 ? 'ok' : 'bad';
+  const swellStatus = dirOk === 'bad' || sizeOk === 'bad' ? 'bad' : dirOk === 'ok' || sizeOk === 'ok' ? 'ok' : 'good';
+  const swellLabel  = `${swellDir || '?'} ${swellH ? swellH.toFixed(1) + 'm' : '?'}`;
+  const swellNote   = swellStatus === 'bad' ? 'wrong direction or too small'
+                    : swellStatus === 'ok'  ? 'marginal — may be worth it'
+                    : 'looking good';
+
+  // ── 2. WIND ───────────────────────────────────────────────────────────────
+  const wp = current.windParsed;
+  const windDir = wp?.dir ?? extractDir(shortDir(current.winds || ''));
+  const windIdeal = ['W','WSW','SW','SSW'];
+  const windOk    = ['NW','WNW','S'];
+  const windStatus = !windDir ? 'ok'
+                   : windIdeal.includes(windDir) ? 'good'
+                   : windOk.includes(windDir)    ? 'ok' : 'bad';
+  const windLabel = windDir ? `${windDir}${wp?.kmh ? ' ' + wp.kmh + 'km/h' : ''}` : '?';
+  const windNote  = windStatus === 'bad' ? 'onshore — will be messy'
+                  : windStatus === 'ok'  ? 'cross-shore — may be ok early'
+                  : 'offshore — ideal';
+
+  // ── 3. BEACH ACCESS (LOW TIDE MORNING) ────────────────────────────────────
+  // Need tide < 0.7m during the drive window (before noon) to access the beach
+  const todayTides = getTidesForDay(0);
+  const morningLow = todayTides.find(t => {
+    const [hh] = t.time.split(':').map(Number);
+    return t.type === 'Low' && hh < 12;
+  });
+  const currentTide = forecast._tide;
+  let tideStatus, tideLabel, tideNote;
+  if (morningLow) {
+    const h = parseFloat(morningLow.height);
+    const [hh, mm] = morningLow.time.split(':').map(Number);
+    const timeStr = `${(hh % 12) || 12}:${String(mm).padStart(2,'0')}am`;
+    tideStatus = h < 0.5 ? 'good' : h < 0.8 ? 'ok' : 'bad';
+    tideLabel  = `Low ${h.toFixed(1)}m at ${timeStr}`;
+    tideNote   = tideStatus === 'bad' ? 'tide too high for beach drive'
+               : tideStatus === 'ok'  ? 'manageable — air down well'
+               : 'great beach access';
+  } else if (currentTide && currentTide.current < 0.7) {
+    tideStatus = 'ok';
+    tideLabel  = `Current ${currentTide.current.toFixed(1)}m`;
+    tideNote   = 'no morning low — check tide chart';
+  } else {
+    tideStatus = 'bad';
+    tideLabel  = 'No morning low tide';
+    tideNote   = 'high tide will cut off the beach';
+  }
+
+  // ── 4. WEATHER ────────────────────────────────────────────────────────────
+  const weather = (current.weather || '').toLowerCase();
+  const hasRain    = /shower|rain|drizzle/i.test(weather);
+  const hasStorm   = /thunder|storm|lightning/i.test(weather);
+  const weatherStatus = hasStorm ? 'bad' : hasRain ? 'ok' : 'good';
+  const weatherLabel  = current.weather || 'Fine';
+  const weatherNote   = hasStorm ? 'lightning risk — don\'t go'
+                      : hasRain  ? 'showers possible — check radar'
+                      : 'all clear';
+
+  // ── VERDICT ───────────────────────────────────────────────────────────────
+  const statuses = [swellStatus, windStatus, tideStatus, weatherStatus];
+  const verdict  = statuses.includes('bad')  ? { text: 'NOT TODAY', color: 'var(--muted)',  emoji: '✗' }
+                 : statuses.filter(s => s === 'ok').length > 1 ? { text: 'MARGINAL', color: 'rgba(255,200,60,0.9)', emoji: '⚠' }
+                 : { text: 'GO', color: 'var(--high)', emoji: '✓' };
+
+  // ── BEST DI DAY THIS WEEK ─────────────────────────────────────────────────
+  const diIdx = BREAKS.indexOf(diBreak);
+  let bestDayStr = '';
+  if (diIdx > -1 && forecast.forecasts?.length > 1) {
+    let bestScore = -1, bestDay = '';
+    forecast.forecasts.forEach((day, i) => {
+      if (i === 0) return; // skip today — DI is a trip, plan ahead
+      const df = {
+        forecasts: [day],
+        _period: forecast._periodByDay?.[i] ?? null,
+        _swellDir: forecast._swellDirByDay?.[i] ?? null,
+      };
+      const s = scoreBreak(diBreak, df);
+      if (s > bestScore) { bestScore = s; bestDay = day.day; }
+    });
+    if (bestScore >= 5) bestDayStr = `Best this week: ${bestDay} ${bestScore}/10`;
+  }
+
+  // ── RENDER ────────────────────────────────────────────────────────────────
+  const row = (icon, label, val, note, status) => {
+    const c = status === 'good' ? 'var(--high)' : status === 'ok' ? 'rgba(255,200,60,0.9)' : 'var(--muted)';
+    const dot = status === 'good' ? '●' : status === 'ok' ? '◐' : '○';
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+      <span style="color:${c};font-size:13px;margin-top:1px;flex-shrink:0;">${dot}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;">${icon} ${label}</span>
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:#fff;">${val}</span>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:${c};margin-top:1px;">${note}</div>
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:${verdict.color};line-height:1;">${verdict.emoji} ${verdict.text}</div>
+        ${bestDayStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">${bestDayStr}</div>` : ''}
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);text-align:right;line-height:1.6;">
+        4WD + permit required<br>Rainbow Beach → DI ~1.5hr<br>Air down to 18–20psi
+      </div>
+    </div>
+    <div style="padding:0 16px;">
+      ${row('🌊','SWELL', swellLabel, swellNote, swellStatus)}
+      ${row('💨','WIND',  windLabel,  windNote,  windStatus)}
+      ${row('🚗','BEACH ACCESS', tideLabel, tideNote, tideStatus)}
+      ${row('🌤','WEATHER', weatherLabel, weatherNote, weatherStatus)}
+    </div>`;
+}
+
 function renderSessionPlanner(forecast, swell) {
   const el = document.getElementById('sessionPlanner');
   if (!el) return;
@@ -2020,15 +2209,32 @@ function renderSessionPlanner(forecast, swell) {
   el.innerHTML = displaySessions.map((s, i) => {
     const scoreColor = s.score >= 7 ? 'var(--high)' : s.score >= 5 ? 'var(--accent)' : 'var(--muted)';
     const label = s.score >= 9 ? 'Epic' : s.score >= 7 ? 'Good' : s.score >= 5 ? 'Fun' : 'Poor';
-    const h = extractHeight(shortDir(s.dayForecast.forecasts[0].swell || ''));
-    const sH = estimateSurfHeight(h, s.break.exposure, extractDir(shortDir(s.dayForecast.forecasts[0].swell || '')), s.break, s.dayForecast._period);
-    const ftStr = sH !== null ? ` · ~${Math.round(sH * 3.281 * 2) / 2}ft` : '';
+    const day0 = s.dayForecast.forecasts[0];
+    const h = extractHeight(shortDir(day0.swell || ''));
+    const sH = estimateSurfHeight(h, s.break.exposure, extractDir(shortDir(day0.swell || '')), s.break, s.dayForecast._period);
+    const ftStr = sH !== null ? `~${Math.round(sH * 3.281 * 2) / 2}ft` : '';
     const adv = s.break.advanced ? ' · advanced' : s.break.intermediateAdvanced ? ' · intermediate+' : '';
     const timeHint = getBestTimeHint(s.break, s.dayForecast);
-    const sunriseStr = formatSunrise(s.dayForecast.forecasts[0]?.sunrise);
+    const sunriseStr = formatSunrise(day0?.sunrise);
     const tide = s.dayForecast._tide;
+
+    // Swell — prefer Open-Meteo dir, BOM height
+    const swellDir = s.dayForecast._swellDir ?? extractDir(shortDir(day0.swell || ''));
+    const swellH   = h;
+    const period   = s.dayForecast._period;
+    const swellStr = [
+      swellDir,
+      swellH !== null ? swellH.toFixed(1) + 'm' : null,
+      period  !== null ? Math.round(period) + 's' : null,
+    ].filter(Boolean).join(' ');
+
+    // Wind
+    const wp = day0.windParsed;
+    const windDir = wp?.dir ?? extractDir(shortDir(day0.winds || ''));
+    const windKmh = wp?.kmh ?? null;
+    const windStr = [windDir, windKmh ? windKmh + 'km/h' : null].filter(Boolean).join(' ');
+
     const tideStr = (() => {
-      // For today, use the live interpolated tide + next tide from cachedData
       if (s.dayIdx === 0 && tide) {
         const th = tide.current;
         const tideLabel = th < 0.5 ? 'Low' : th < 1.2 ? 'Mid' : 'High';
@@ -2036,7 +2242,6 @@ function renderSessionPlanner(forecast, swell) {
         const nextStr = tide.next ? ` · ${tide.next.type} ${formatTideTime(tide.next.time)}` : '';
         return `${tideLabel} ${th.toFixed(1)}m ${arrow}${nextStr}`;
       }
-      // For all other days, show the first two tides of that day from the schedule
       const dayTides = getTidesForDay(s.dayIdx);
       if (!dayTides.length) return null;
       return dayTides.slice(0, 2)
@@ -2045,15 +2250,19 @@ function renderSessionPlanner(forecast, swell) {
     })();
     const isLast = i === displaySessions.length - 1;
     return `<div onclick="setBreak(${s.breakIdx});switchTab('conditions');" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}cursor:pointer;">
-      <div>
+      <div style="min-width:0;flex:1;">
         <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">${s.day.toUpperCase()}${adv}</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#fff;line-height:1.2;">${s.break.name}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${label}${ftStr}</div>
-        ${tideStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.7;margin-top:2px;">🌊 ${tideStr}</div>` : ''}
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${label}${ftStr ? ' · ' + ftStr : ''}</div>
+        <div style="display:flex;gap:10px;margin-top:3px;flex-wrap:wrap;">
+          ${swellStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);">🌊 ${swellStr}</div>` : ''}
+          ${windStr  ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text);">💨 ${windStr}</div>`  : ''}
+        </div>
+        ${tideStr    ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.7;margin-top:2px;">🌊 ${tideStr}</div>` : ''}
         ${sunriseStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.7;margin-top:1px;">🌅 ${sunriseStr} sunrise</div>` : ''}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;margin-top:1px;">🕐 ${timeHint}</div>
       </div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:${scoreColor};line-height:1;">${s.score}<span style="font-size:14px;color:var(--muted);">/10</span></div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:${scoreColor};line-height:1;flex-shrink:0;margin-left:12px;">${s.score}<span style="font-size:14px;color:var(--muted);">/10</span></div>
     </div>`;
   }).join('') + (isFlat ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;padding-top:8px;">Quiet week — showing best available options.</div>` : '');
 }
@@ -2188,6 +2397,7 @@ function renderAll(data) {
   requestAnimationFrame(() => {
     renderTides(data.tides[currentStation]);
     renderSessionPlanner(data.forecast, data.swell);
+    renderDITripGate(data.forecast, data.swell);
     // Use setTimeout for chart to ensure layout is fully complete
     setTimeout(() => {
       try {
@@ -2223,7 +2433,8 @@ function shortDir(text) {
     'north': 'N', 'south': 'S', 'east': 'E', 'west': 'W',
   };
   text = text.replace(/\bmetres\b/gi, 'm');
-  text = text.replace(/\bknots\b/gi, 'kts');
+  text = text.replace(/(\d+)\s*to\s*(\d+)\s*knots?/gi, (_, a, b) => `${Math.round(a * 1.852)}-${Math.round(b * 1.852)} km/h`);
+  text = text.replace(/(\d+)\s*knots?/gi, (_, k) => `${Math.round(k * 1.852)} km/h`);
 
   return text.replace(/\b(north-northeasterly|north-northwesterly|south-southeasterly|south-southwesterly|east-northeasterly|east-southeasterly|west-northwesterly|west-southwesterly|northeasterly|northwesterly|southeasterly|southwesterly|northerly|southerly|easterly|westerly|north-northeast|north-northwest|south-southeast|south-southwest|northeast|northwest|southeast|southwest|north|south|east|west)\b/gi,
     m => dirs[m.toLowerCase()] || m);
@@ -2265,12 +2476,18 @@ function degToCompass(deg) {
 }
 
 ///////////////////////////////////////////////////
-// Extract wind speed from BOM text
+// Extract wind speed from BOM text — returns value in knots for internal scoring
+// shortDir now converts knots→km/h in display text, so we match km/h and convert back
 function extractWindSpeedKts(text) {
   const s = shortDir(text);
+  // Match km/h ranges (e.g. "28-37 km/h") — convert back to knots for scoring thresholds
+  const kmhRange = s.match(/(\d+)[–-](\d+)\s*km\/h/);
+  if (kmhRange) return ((parseInt(kmhRange[1]) + parseInt(kmhRange[2])) / 2) / 1.852;
+  const kmhSingle = s.match(/(\d+)\s*km\/h/);
+  if (kmhSingle) return parseInt(kmhSingle[1]) / 1.852;
+  // Fallback: match raw kts if shortDir didn't convert (shouldn't happen)
   const range = s.match(/(\d+)\s*to\s*(\d+)\s*kts/);
   if (range) return (parseInt(range[1]) + parseInt(range[2])) / 2;
-  // Handle "below 15 knots", "around 20 knots", "up to 25 knots"
   const qualified = s.match(/(?:below|around|up to|about)\s+(\d+)\s*kts/i);
   if (qualified) return parseInt(qualified[1]);
   const single = s.match(/(\d+)\s*kts/);
@@ -2280,10 +2497,10 @@ function extractWindSpeedKts(text) {
 
 function extractWindSpeed(text) {
   const s = shortDir(text);
-  const match = s.match(/(\d+)\s*to\s*(\d+)\s*kts/);
-  if (match) return `${match[1]}–${match[2]} kts`;
-  const single = s.match(/(\d+)\s*kts/);
-  if (single) return `${single[1]} kts`;
+  const range = s.match(/(\d+)[–-](\d+)\s*km\/h/);
+  if (range) return `${range[1]}–${range[2]} km/h`;
+  const single = s.match(/(\d+)\s*km\/h/);
+  if (single) return `${single[1]} km/h`;
   return null;
 }
 
@@ -2494,7 +2711,6 @@ function renderForecast(forecast, tideData, swellData) {
           </div>
         </div>
         <div id="offshoreWindowPanel"></div>
-        </div>
         <div id="morningAfternoonPanel"></div>
       </div>
     `;
@@ -2890,39 +3106,52 @@ async function loadNightMode() {
     const minsEarly = hEarly >= 18 || hEarly < 4 ? ((hEarly >= 18 ? (24*60+4*60) : 4*60) - (hEarly*60+mEarly)) : 0;
     const cardTimeStr = minsEarly > 60 ? `${Math.floor(minsEarly/60)}h ${minsEarly%60}m` : minsEarly > 0 ? `${minsEarly}m` : 'soon';
 
-    const today = data.forecast.forecasts[0];
+    const tomorrow = data.forecast.forecasts[1];
     const currentCard = document.getElementById('currentCard');
-    if (today && currentCard) {
-      const windSpeed = extractWindSpeed(today.winds);
+    if (tomorrow && currentCard) {
+      const windSpeed = extractWindSpeed(tomorrow.winds);
+      const tomorrowWind = tomorrow.windParsed ?? { dir: extractDir(shortDir(tomorrow.winds)), kmh: null };
+      const tmrwPeriod = data.forecast._periodTomorrow;
       currentCard.style.display = '';
       currentCard.innerHTML = `
         <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
           <div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:var(--muted);">—<span style="font-size:18px;"> /10</span></div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--muted);">Live in ${cardTimeStr}</div>
+            <div id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:var(--muted);">—<span style="font-size:18px;"> /10</span></div>
+            <div id="cardScoreLabel" style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--muted);">Live in ${cardTimeStr}</div>
           </div>
           <div style="text-align:right;">
-            <div class="current-day">${today.day.toUpperCase()}</div>
+            <div class="current-day">${tomorrow.day.toUpperCase()}</div>
             <div class="current-issued" style="color:var(--muted);">Updates at 4am</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);">
-          <div style="padding:14px 16px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);">
-            <div class="condition-label">Surf Height</div>
-            <div class="condition-value highlight" id="surfHeightValue">—</div>
+        <div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TOMORROW'S FORECAST</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
           </div>
-          <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
-            <div class="condition-label">Wind</div>
-            <div class="condition-value" style="display:flex;align-items:center;gap:6px;">${dirArrow(extractDir(shortDir(today.winds)), 20, 'var(--text)')}<span>${extractDir(shortDir(today.winds)) || shortDir(today.winds)}</span></div>
-            ${windSpeed ? `<div class="condition-sub">${windSpeed}</div>` : ''}
-          </div>
-          <div style="padding:14px 16px;border-right:1px solid var(--border);">
-            <div class="condition-label">Swell</div>
-            <div class="condition-value" style="display:flex;align-items:center;gap:6px;">${(() => { const dir = extractDir(shortDir(today.swell)); const h = extractHeight(today.swell); const hStr = h !== null ? h.toFixed(1) + 'm' : ''; const pStr = nightPeriod !== null ? Math.round(nightPeriod) + 's' : ''; const details = (hStr ? ' · ' + hStr : '') + (pStr ? ' · ' + pStr : ''); return dirArrow(dir, 20, 'var(--accent)') + '<span>' + (dir || '—') + details + '</span>'; })()}</div>
-          </div>
-          <div style="padding:14px 16px;">
-            <div class="condition-label">Weather</div>
-            <div class="condition-value">${today.weather}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;">
+            <div style="padding:11px 12px;border-right:1px solid var(--border);">
+              <div class="condition-label">Swell</div>
+              <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
+                ${dirArrow(extractDir(shortDir(tomorrow.swell)), 18, 'var(--accent)')}
+                <span>${(() => { const dir = extractDir(shortDir(tomorrow.swell)); const h = extractHeight(tomorrow.swell); const hStr = h !== null ? h.toFixed(1) + 'm' : ''; const pStr = tmrwPeriod !== null ? Math.round(tmrwPeriod) + 's' : ''; return (dir || '—') + [hStr, pStr].filter(Boolean).map(s => ' · ' + s).join(''); })()}</span>
+              </div>
+            </div>
+            <div style="padding:11px 12px;">
+              <div class="condition-label">Surf</div>
+              <div class="condition-value highlight" id="surfHeightValue">—</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+              <div class="condition-label">Wind</div>
+              <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
+                ${dirArrow(tomorrowWind.dir, 18, 'var(--text)')}
+                <span>${tomorrowWind.dir || '—'}${tomorrowWind.kmh ? ' · ' + tomorrowWind.kmh + ' km/h' : (windSpeed ? ' · ' + windSpeed : '')}</span>
+              </div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);">
+              <div class="condition-label">Weather</div>
+              <div class="condition-value">${tomorrow.weather}</div>
+            </div>
           </div>
         </div>`;
     }
@@ -2935,20 +3164,20 @@ async function loadNightMode() {
 
     document.getElementById('loadingEl').style.display = 'none';
     document.getElementById('content').classList.add('visible');
-    document.getElementById('currentConditionsLabel').textContent = 'TODAY\'S CONDITIONS';
+    document.getElementById('currentConditionsLabel').textContent = 'TOMORROW\'S CONDITIONS';
 
-    // Forecast cards for upcoming days
+    // Forecast cards for upcoming days — skip today AND tomorrow (shown in main card)
     const forecastRow = document.getElementById('forecastRow');
     forecastRow.innerHTML = '';
-    (data.forecast.forecasts || []).slice(1).forEach((day, dayIdx) => {
+    (data.forecast.forecasts || []).slice(2).forEach((day, dayIdx) => {
       const card = document.createElement('div');
       card.className = 'forecast-card visible';
       const swellPeriod = extractPeriod(day.swell);
       const b = BREAKS[currentBreak];
       const dayForecast = {
         forecasts: [day],
-        _period: data.forecast._periodByDay ? (data.forecast._periodByDay[dayIdx + 1] ?? null) : (dayIdx === 0 ? (data.forecast._periodTomorrow ?? null) : null),
-        _tide:   dayIdx === 0 ? (data.forecast._tide?._tomorrow ?? null) : null,
+        _period: data.forecast._periodByDay ? (data.forecast._periodByDay[dayIdx + 2] ?? null) : null,
+        _tide:   null,
       };
       const dayScore = b ? scoreBreak(b, dayForecast) : null;
       const scoreColor = dayScore !== null ? (dayScore >= 7 ? 'var(--high)' : dayScore >= 5 ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)';
@@ -2971,6 +3200,7 @@ async function loadNightMode() {
     updateBreakIndicators(data.forecast);
     renderTides(data.tides[currentStation]);
     renderSessionPlanner(data.forecast, data.swell);
+    renderDITripGate(data.forecast, data.swell);
 
   } catch (e) {
     document.getElementById('loadingEl').style.display = 'none';
@@ -3099,12 +3329,14 @@ function commitLogSession() {
   if (noteEl) noteEl.value = '';
 
   renderSessionLog();
+  renderCalibration();
 }
 
 function deleteSession(id) {
   const sessions = getSessions().filter(s => s.id !== id);
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(sessions));
   renderSessionLog();
+  renderCalibration();
 }
 
 function renderSessionLog() {
@@ -3158,7 +3390,145 @@ function renderSessionLog() {
   }).join('');
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ─── SWELL ALERTS ────────────────────────────────────────────────────────────
+
+const ALERT_STORE_KEY  = 'surfcall_alerts_v1';
+const ALERT_SENT_KEY   = 'surfcall_alert_sent_v1';
+const ALERT_COOLDOWN   = 2 * 60 * 60 * 1000;
+
+function getAlertSettings() {
+  try { return JSON.parse(localStorage.getItem(ALERT_STORE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function saveAlertSettings() {
+  const threshold = parseInt(document.getElementById('alertThreshold')?.value || '7');
+  const breaks = {};
+  BREAKS.forEach(b => {
+    const cb = document.getElementById(`alertCb_${b.name.replace(/\s+/g,'_')}`);
+    if (cb) breaks[b.name] = cb.checked;
+  });
+  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, breaks }));
+}
+
+function initAlertSettings() {
+  const settings = getAlertSettings();
+  const threshold = settings.threshold ?? 7;
+  const threshEl = document.getElementById('alertThreshold');
+  const threshLabel = document.getElementById('alertThresholdLabel');
+  if (threshEl) threshEl.value = threshold;
+  if (threshLabel) threshLabel.textContent = threshold;
+
+  const list = document.getElementById('alertBreakList');
+  if (!list) return;
+  list.innerHTML = BREAKS.map(b => {
+    const key = b.name.replace(/\s+/g,'_');
+    const checked = settings.breaks?.[b.name] !== false;
+    return `<label class="alert-toggle">
+      <span>${b.name}</span>
+      <input type="checkbox" class="alert-check" id="alertCb_${key}"
+        ${checked ? 'checked' : ''} onchange="saveAlertSettings()">
+    </label>`;
+  }).join('');
+
+  updateAlertPermStatus();
+}
+
+function updateAlertPermStatus() {
+  const btn  = document.getElementById('alertPermBtn');
+  const stat = document.getElementById('alertPermStatus');
+  if (!('Notification' in window)) {
+    if (stat) stat.textContent = 'Notifications not supported in this browser';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    if (btn)  btn.style.display = 'none';
+    if (stat) { stat.textContent = '✓ Notifications enabled'; stat.style.color = 'var(--high)'; }
+  } else if (Notification.permission === 'denied') {
+    if (btn)  btn.style.display = 'none';
+    if (stat) stat.textContent = 'Notifications blocked — enable in browser settings';
+  } else {
+    if (btn)  btn.style.display = '';
+    if (stat) stat.textContent = '';
+  }
+}
+
+async function requestAlertPermission() {
+  if (!('Notification' in window)) return;
+  await Notification.requestPermission();
+  updateAlertPermStatus();
+  saveAlertSettings();
+}
+
+function checkSwellAlerts(data) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!data?.forecast) return;
+  const settings = getAlertSettings();
+  const threshold = settings.threshold ?? 7;
+  const now = Date.now();
+  let sent;
+  try { sent = JSON.parse(localStorage.getItem(ALERT_SENT_KEY) || '{}'); }
+  catch { sent = {}; }
+  data.forecast._swellDir = data.forecast._currentSwellDir ?? null;
+  BREAKS.forEach(b => {
+    if (settings.breaks?.[b.name] === false) return;
+    const score = scoreBreak(b, data.forecast);
+    if (score < threshold) return;
+    const lastSent = sent[b.name] || 0;
+    if (now - lastSent < ALERT_COOLDOWN) return;
+    sent[b.name] = now;
+    const swellText = [data.forecast._currentSwellDir, data.forecast._currentWaveHeight?.toFixed(1) + 'm'].filter(Boolean).join(' ');
+    new Notification(`🏄 ${b.name} — ${score}/10`, {
+      body: `${score >= 9 ? 'Epic' : score >= 7 ? 'Firing' : 'Good'} conditions${swellText ? ' · ' + swellText : ''}`,
+      icon: '/favicon.ico',
+      tag: `surfcall_${b.name}`,
+    });
+  });
+  localStorage.setItem(ALERT_SENT_KEY, JSON.stringify(sent));
+}
+
+// ─── CALIBRATION INSIGHTS ────────────────────────────────────────────────────
+
+function renderCalibration() {
+  const panel = document.getElementById('calibrationPanel');
+  if (!panel) return;
+  const sessions = getSessions().filter(s => s.algoScore !== null);
+  const byBreak = {};
+  sessions.forEach(s => { if (!byBreak[s.break]) byBreak[s.break] = []; byBreak[s.break].push(s); });
+  const rows = Object.entries(byBreak)
+    .filter(([, arr]) => arr.length >= 3)
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([name, arr]) => {
+      const avgMine = arr.reduce((a, s) => a + s.myScore,   0) / arr.length;
+      const avgAlgo = arr.reduce((a, s) => a + s.algoScore, 0) / arr.length;
+      const bias    = avgMine - avgAlgo;
+      const biasLabel = Math.abs(bias) < 0.4 ? 'calibrated'
+                      : bias > 0 ? `+${bias.toFixed(1)} you rate higher`
+                      : `${bias.toFixed(1)} algo rates higher`;
+      const biasColor = Math.abs(bias) < 0.5 ? 'var(--high)' : Math.abs(bias) < 1.5 ? 'var(--accent)' : 'var(--muted)';
+      const barW = Math.min(Math.abs(bias) / 3 * 100, 100);
+      const barColor = bias > 0 ? 'var(--accent)' : 'var(--high)';
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:#fff;">${name}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">${arr.length} sessions</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:5px;">
+          <span>You <span style="color:#fff;">${avgMine.toFixed(1)}</span></span>
+          <span>Algo <span style="color:#fff;">${avgAlgo.toFixed(1)}</span></span>
+          <span style="color:${biasColor};">${biasLabel}</span>
+        </div>
+        <div class="calibration-bar-wrap">
+          <div style="height:100%;width:${barW}%;background:${barColor};border-radius:2px;transition:width 0.4s;"></div>
+        </div>
+      </div>`;
+    });
+  panel.innerHTML = rows.length
+    ? `<div style="padding:0 20px;">${rows.join('')}</div>`
+    : `<div style="padding:0 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Need 3+ sessions per break to calculate bias.</div>`;
+}
+
+// ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────
 if (typeof ResizeObserver !== 'undefined') {
   const chartContainer = document.getElementById('swellChart')?.parentElement;
   if (chartContainer) {
@@ -3222,10 +3592,13 @@ function switchTab(tab) {
   if (toggleWrap) toggleWrap.style.display = tab === 'conditions' ? '' : 'none';
   if (tab === 'planner' && cachedData?.swell) {
     setTimeout(() => renderSwellChart(cachedData.swell), 50);
+    renderDITripGate(cachedData.forecast, cachedData.swell);
   }
   if (tab === 'log') {
     initLogTab();
     renderSessionLog();
+    renderCalibration();
+    initAlertSettings();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
