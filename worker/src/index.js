@@ -1,4 +1,4 @@
-const CACHE_TTL = 3600; // 1 hour in seconds
+const CACHE_TTL = 1800; // 30 minutes in seconds
 
 const OPEN_METEO_URL = 'https://marine-api.open-meteo.com/v1/marine' +
   '?latitude=-26.4&longitude=153.1' +

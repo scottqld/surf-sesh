@@ -1990,7 +1990,7 @@ async function loadData(forceRefresh = false) {
     if (fetchedAt) {
       const ageMs = Date.now() - new Date(fetchedAt).getTime();
       const ageMins = Math.round(ageMs / 60000);
-      if (ageMins > 55) {
+      if (ageMins > 25) {
         document.getElementById('lastUpdated').innerHTML +=
           `<br><span style="color:rgba(255,200,60,0.9);font-size:8px;cursor:pointer;" onclick="loadData(true)" title="Tap to force refresh">⚠ cached ${ageMins}m ago</span>`;
       }
