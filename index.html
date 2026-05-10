@@ -1359,11 +1359,11 @@ async function generateAiSummary(breakData, forecast, score) {
 Data: score ${score}/10, swell ${swell}${period ? ' @ ' + period : ''}, wind ${wind}, ${ftStr ? 'face height ' + ftStr + ', ' : ''}${weather}. ${score >= 7 ? 'Good conditions.' : score >= 5 ? 'Average conditions.' : 'Poor conditions.'}`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://surf-worker.scottsurf.workers.dev/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 80,
         messages: [{ role: 'user', content: prompt }],
       }),

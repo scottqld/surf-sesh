@@ -214,7 +214,8 @@ export default {
     // CORS headers for browser requests
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json',
     };
 
@@ -256,6 +257,23 @@ export default {
           return { forecast, tides: { noosa: tidesNoosa, mooloolaba: tidesMooloolaba }, swell, buoy, wind };
         };
         data = noCache ? await buildAll() : await fetchWithCache(cache, cacheKey, buildAll);
+
+      } else if (path === '/ai' && request.method === 'POST') {
+        if (!env.ANTHROPIC_API_KEY) {
+          return new Response(JSON.stringify({ error: 'AI not configured' }), { status: 503, headers: corsHeaders });
+        }
+        const body = await request.json();
+        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(body),
+        });
+        const aiData = await aiRes.json();
+        return new Response(JSON.stringify(aiData), { headers: corsHeaders });
 
       } else {
         return new Response(JSON.stringify({ error: 'Unknown endpoint' }), {
