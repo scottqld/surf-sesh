@@ -297,18 +297,6 @@
   }
 
   /* WEATHER SYNOPSIS */
-  .synopsis-card {
-    margin: 12px 20px 0;
-    padding: 14px 16px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    font-size: 12px;
-    color: var(--accent);
-    line-height: 1.6;
-    font-style: italic;
-    transition: opacity 0.2s ease;
-  }
 
   /* FORECAST DAYS */
   .forecast-scroll {
@@ -326,6 +314,30 @@
     width: max-content;
     padding-bottom: 4px;
   }
+
+  .inner-tab-bar {
+    display: flex;
+    margin: 0 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .inner-tab-btn {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .inner-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .inner-tab-section { display: none; }
+  .inner-tab-section.active { display: block; }
 
   .forecast-card {
     width: 160px;
@@ -723,7 +735,7 @@
     <div class="logo">SURF<span>CALL</span> <small id="appVersion"></small></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
       <div class="last-updated" id="lastUpdated">—</div>
-      <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.5px;opacity:0.5;">v1.5</div>
+
     </div>
   </header>
 
@@ -770,35 +782,56 @@
         <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
         <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
       </div>
+      <button id="aboutBreakBtn" onclick="openAboutBreak()" style="position:absolute;bottom:10px;left:12px;background:rgba(10,12,15,0.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:rgba(255,255,255,0.85);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.2px;padding:4px 9px;cursor:pointer;text-transform:uppercase;">About this break ↗</button>
     </div>
     <div id="bestBreakBanner" style="display:none;margin:10px 20px 0;padding:10px 14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--high);letter-spacing:0.5px;"></div>
+    <div id="breakNotes" style="margin:8px 20px 0;"></div>
+    <!-- About this break popup -->
+    <div id="aboutBreakModal" onclick="if(event.target===this)closeAboutBreak()" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:540px;padding:20px 20px 36px;max-height:70vh;overflow-y:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <span id="aboutBreakTitle" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;"></span>
+          <button onclick="closeAboutBreak()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;">✕</button>
+        </div>
+        <p id="aboutBreakBody" style="font-size:13px;line-height:1.7;color:var(--text);"></p>
+      </div>
+    </div>
+
     <div id="warningBanner" class="warning-banner"></div>
     <div id="nightBanner" class="night-banner" style="display:none;">
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
     </div>
-    <div class="section-label" id="currentConditionsLabel">CONDITIONS</div>
-    <div class="current-card" id="currentCard"></div>
-    <div class="synopsis-card" id="breakNotes" style="margin-top:0;border-top:none;border-radius:0 0 12px 12px;"></div>
-    <div class="section-label">EXTENDED FORECAST <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
-    <div class="forecast-scroll">
-      <div class="forecast-row" id="forecastRow"></div>
+    <!-- Inner tabs: NOW / TODAY -->
+    <div class="inner-tab-bar">
+      <button class="inner-tab-btn active" id="innerBtn-now" onclick="switchInnerTab('now')">NOW</button>
+      <button class="inner-tab-btn" id="innerBtn-today" onclick="switchInnerTab('today')">FORECAST</button>
+    </div>
+    <div class="inner-tab-section active" id="inner-now">
+      <div class="current-card" id="currentCard"></div>
+    </div>
+    <div class="inner-tab-section" id="inner-today">
+      <div id="todayForecastPanel"></div>
+      <div class="section-label">HOURLY <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
+      <div class="forecast-scroll">
+        <div class="forecast-row" id="forecastRow"></div>
+      </div>
     </div>
     </div>
 
     <!-- TAB: PLANNER -->
     <div class="tab-section" id="tab-planner">
+    <div class="section-label">TOMORROW</div>
+    <div id="tomorrowPlannerCard" style="margin:0 20px 0;"></div>
     <div class="section-label">BEST SESSIONS THIS WEEK</div>
     <div id="sessionPlanner" style="padding:0 20px 12px;"></div>
     <div class="section-label">🚗 DOUBLE ISLAND TRIP</div>
     <div id="diTripCard" style="margin:0 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;"></div>
-    <div id="synopsisCard" onclick="toggleSynopsis()" style="cursor:pointer;margin:0 20px 0;font-size:12px;color:var(--accent);line-height:1.6;font-style:italic;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;"></div>
     <div class="section-label">SWELL TREND — 7 DAYS</div>
     <div class="chart-container">
       <div class="chart-title">
         <span>WAVE HEIGHT (M)</span>
         <div class="chart-legend">
-          <div class="legend-item"><div class="legend-dot" style="background: var(--accent)"></div><span>Total</span></div>
-          <div class="legend-item"><div class="legend-dot" style="background: var(--high)"></div><span>Swell</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background: var(--accent)"></div><span>Wave height</span></div>
           <div class="legend-item"><div class="legend-dot" style="background: rgba(0,229,160,0.9)"></div><span>≥12s</span></div>
           <div class="legend-item"><div class="legend-dot" style="background: rgba(255,200,60,0.9)"></div><span>8–11s</span></div>
           <div class="legend-item"><div class="legend-dot" style="background: rgba(255,80,80,0.9)"></div><span>&lt;8s</span></div>
@@ -909,7 +942,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.6';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1103,6 +1136,8 @@ function setBreak(index) {
     }
   });
   const b = BREAKS[index];
+  _currentBreakName = b.name;
+  _currentBreakNotes = b.notes || '';
   const imgEl = document.getElementById('breakImg');
   if (imgEl) imgEl.src = getBreakImg(index);
   showLiveCamButton(index);
@@ -1259,7 +1294,6 @@ function setBreak(index) {
 
   // Tomorrow tide comes from renderAll via cachedData.forecast._tide._tomorrow
   const tomorrowTideFromCache = cachedData?.forecast?._tide?._tomorrow ?? null;
-  let aboutOpen = _aboutOpen;
 
   // Offshore window panel — show when conditions are expected to turn
   const owPanel = document.getElementById('offshoreWindowPanel');
@@ -1313,14 +1347,7 @@ function setBreak(index) {
   document.getElementById('breakNotes').innerHTML =
     `${note ? `<span style="color:#fff;font-style:normal;" id="conditionNoteText">${note}</span>` : ''}
     ${contextStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:5px;">${contextStr.replace(/^ · /, '')}</div>` : ''}
-    <div id="aiSummary" style="margin-top:10px;font-size:12px;color:var(--accent);font-style:italic;min-height:0;"></div>
-    <div onclick="toggleAbout(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
-      <span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;">About this break</span>
-      <span id="aboutChevron" style="color:var(--accent);font-size:11px;transition:transform 0.2s;">${aboutOpen ? '▲' : '▼'}</span>
-    </div>
-    <div id="aboutBody" style="display:${aboutOpen ? 'block' : 'none'};margin-top:6px;">
-      <span style="color:#fff;">${b.notes}</span>
-    </div>`;
+    <div id="aiSummary" style="margin-top:10px;font-size:12px;color:var(--accent);font-style:italic;min-height:0;"></div>`;
 
   requestAnimationFrame(() => {
     breakNotesEl.style.opacity = '1';
@@ -1382,24 +1409,20 @@ Data: score ${score}/10, swell ${swell}${period ? ' @ ' + period : ''}, wind ${w
 
 ///////////////////////////////////////////////////
 // Crowd forecast — estimates crowd level based on score, day of week, and break character
-function toggleSynopsis() {
-  const collapsed = document.getElementById('synopsisCollapsed');
-  const expanded = document.getElementById('synopsisExpanded');
-  if (!collapsed || !expanded) return;
-  const isCollapsed = collapsed.style.display !== 'none';
-  collapsed.style.display = isCollapsed ? 'none' : '';
-  expanded.style.display = isCollapsed ? '' : 'none';
+
+let _currentBreakNotes = '';
+let _currentBreakName = '';
+
+function openAboutBreak() {
+  document.getElementById('aboutBreakTitle').textContent = _currentBreakName;
+  document.getElementById('aboutBreakBody').textContent = _currentBreakNotes;
+  const modal = document.getElementById('aboutBreakModal');
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.style.opacity = '1');
 }
 
-let _aboutOpen = false;
-
-function toggleAbout(headerEl) {
-  const body = document.getElementById('aboutBody');
-  const chevron = document.getElementById('aboutChevron');
-  const isOpen = body.style.display !== 'none';
-  body.style.display = isOpen ? 'none' : 'block';
-  chevron.textContent = isOpen ? '▼' : '▲';
-  _aboutOpen = !isOpen;
+function closeAboutBreak() {
+  document.getElementById('aboutBreakModal').style.display = 'none';
 }
 
 ///////////////////////////////////////////////////
@@ -2533,6 +2556,18 @@ function extractWindSpeed(text) {
 
 ///////////////////////////////////////////////////
 function renderForecast(forecast, tideData, swellData) {
+  // Helper: build formatted swell string — Open-Meteo values preferred, BOM text as fallback
+  const fmtSwell = (bomText, omHeight, omDir, omPeriod) => {
+    const dir = omDir  ?? extractDir(shortDir(bomText || ''));
+    const h   = omHeight ?? extractHeight(bomText || '');
+    const p   = omPeriod ?? extractPeriod(bomText || '');
+    return [
+      dir  ? dir : null,
+      h    !== null ? h.toFixed(1) + 'm' : null,
+      p    !== null ? Math.round(p) + 's' : null,
+    ].filter(Boolean).join(' · ') || shortDir(bomText || '') || '—';
+  };
+
   // Compute score for current break to show in card header
   const currentB = BREAKS[currentBreak];
   const currentScore = currentB ? scoreBreak(currentB, forecast, true) : null;
@@ -2547,13 +2582,6 @@ function renderForecast(forecast, tideData, swellData) {
   } else {
     warnEl.classList.remove('visible');
   }
-
-  // Synopsis — collapsed by default, tap to expand
-  const synopsisText = forecast.synopsis || '—';
-  const synopsisEl = document.getElementById('synopsisCard');
-  synopsisEl.innerHTML = `<span id="synopsisExpanded" style="display:none">${synopsisText}</span>
-    <span id="synopsisCollapsed" style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;font-style:normal;display:block;padding:6px 0;">BOM SYNOPSIS ▾</span>`;
-
 
   // Current conditions (first forecast day)
   const current = forecast.forecasts[0];
@@ -2660,7 +2688,7 @@ function renderForecast(forecast, tideData, swellData) {
     // Real-time swell values (Open-Meteo current hour)
     const rtDir  = degToCompass(currentSwellDirDeg) || extractDir(shortDir(current.swell));
     const rtH    = currentWaveHeight ?? extractHeight(current.swell);
-    const rtP    = currentPeriod;
+    const rtP    = forecast._period ?? currentPeriod;
     const hStr   = rtH !== null ? rtH.toFixed(1) + 'm' : '';
     const pStr   = rtP !== null ? Math.round(rtP) + 's' : '';
     const swellDetails = [hStr, pStr].filter(Boolean).join(' · ');
@@ -2741,35 +2769,103 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
       </div>
 
-      <div style="margin:0 12px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-        <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TODAY'S FORECAST</span>
-          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr;">
-          <div style="padding:11px 12px;">
-            <div class="condition-label">Weather</div>
-            <div class="condition-value">${current.weather}</div>
-          </div>
-          ${(() => {
-            const todayTides = getTidesForDay(0);
-            const now = new Date();
-            const remaining = todayTides.filter(t => {
-              const [hh, mm] = t.time.split(':').map(Number);
-              return hh * 60 + mm > now.getHours() * 60 + now.getMinutes();
-            }).slice(0, 3);
-            if (!remaining.length) return '';
-            const tideStr = remaining.map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
-            return `<div style="padding:11px 12px;border-top:1px solid var(--border);">
-              <div class="condition-label">Tides</div>
-              <div class="condition-value" style="font-size:12px;">${tideStr}</div>
-            </div>`;
-          })()}
-        </div>
-        <div id="offshoreWindowPanel"></div>
-        <div id="morningAfternoonPanel"></div>
-      </div>
     `;
+
+    // TODAY'S FORECAST block — rendered into the TODAY inner tab
+    const todayForecastPanel = document.getElementById('todayForecastPanel');
+    if (todayForecastPanel) {
+      const todayTides = getTidesForDay(0);
+      const nowTime2 = new Date();
+      const remainingTides = todayTides.filter(t => {
+        const [hh, mm] = t.time.split(':').map(Number);
+        return hh * 60 + mm > nowTime2.getHours() * 60 + nowTime2.getMinutes();
+      }).slice(0, 3);
+      const tidesRowHtml = remainingTides.length
+        ? `<div style="padding:11px 12px;border-top:1px solid var(--border);">
+            <div class="condition-label">Tides</div>
+            <div class="condition-value" style="font-size:12px;">${remainingTides.map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ')}</div>
+          </div>`
+        : '';
+      const todaySwellStr = fmtSwell(current.swell, forecast._currentWaveHeight, forecast._currentSwellDir, forecast._period);
+      const todayTidesStr = remainingTides.map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+      todayForecastPanel.innerHTML = `
+        <div style="margin:12px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TODAY'S FORECAST</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;">
+            <div style="padding:11px 12px;border-right:1px solid var(--border);">
+              <div class="condition-label">Winds</div>
+              <div class="condition-value">${shortDir(current.winds || '') || '—'}</div>
+            </div>
+            <div style="padding:11px 12px;">
+              <div class="condition-label">Swell</div>
+              <div class="condition-value">${todaySwellStr}</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+              <div class="condition-label">Weather</div>
+              <div class="condition-value">${current.weather || '—'}</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);">
+              <div class="condition-label">Tides</div>
+              <div class="condition-value" style="font-size:12px;">${todayTidesStr || '—'}</div>
+            </div>
+          </div>
+          <div id="offshoreWindowPanel"></div>
+          <div id="morningAfternoonPanel"></div>
+        </div>
+      `;
+
+      // Tomorrow block — appended below today inside the FORECAST inner tab
+      const tomorrow = forecast.forecasts[1];
+      if (tomorrow) {
+        const tmrwTides = getTidesForDay(1);
+        const tmrwTidesHtml = tmrwTides.length
+          ? `<div style="padding:11px 12px;border-top:1px solid var(--border);">
+              <div class="condition-label">Tides</div>
+              <div class="condition-value" style="font-size:12px;">${tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ')}</div>
+            </div>`
+          : '';
+        const tmrwSwellStr = fmtSwell(
+          tomorrow.swell,
+          forecast._swellHeightByDay?.[1] ?? null,
+          forecast._swellDirByDay?.[1] ?? null,
+          forecast._periodTomorrow ?? null
+        );
+        const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+        const tmrwBlock = `
+          <div style="margin:8px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TOMORROW — ${(tomorrow.day || '').toUpperCase()}</span>
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;">
+              <div style="padding:11px 12px;border-right:1px solid var(--border);">
+                <div class="condition-label">Winds</div>
+                <div class="condition-value">${shortDir(tomorrow.winds || '') || '—'}</div>
+              </div>
+              <div style="padding:11px 12px;">
+                <div class="condition-label">Swell</div>
+                <div class="condition-value">${tmrwSwellStr}</div>
+              </div>
+              <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+                <div class="condition-label">Weather</div>
+                <div class="condition-value">${tomorrow.weather || '—'}</div>
+              </div>
+              <div style="padding:11px 12px;border-top:1px solid var(--border);">
+                <div class="condition-label">Tides</div>
+                <div class="condition-value" style="font-size:12px;">${tmrwTidesStr || '—'}</div>
+              </div>
+            </div>
+          </div>`;
+        todayForecastPanel.innerHTML += tmrwBlock;
+
+        // Also populate the planner tomorrow card
+        const plannerCard = document.getElementById('tomorrowPlannerCard');
+        if (plannerCard) plannerCard.innerHTML = tmrwBlock.replace('margin:8px 12px 0', 'margin:0');
+      }
+    }
   }
 
   // Remaining forecast days
@@ -2802,7 +2898,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
         <div class="fc-row">
           <div class="fc-label">Swell</div>
-          <div class="fc-val">${(() => { const dir = extractDir(shortDir(day.swell)) || shortDir(day.swell) || '—'; const h = extractHeight(day.swell); const hStr = h !== null ? ' · ' + h.toFixed(1) + 'm' : ''; const pStr = swellPeriod ? ' · ' + swellPeriod + 's' : ''; return dir + hStr + pStr; })()}</div>
+          <div class="fc-val">${fmtSwell(day.swell, forecast._swellHeightByDay?.[dayIdx + 1] ?? null, forecast._swellDirByDay?.[dayIdx + 1] ?? null, dayIdx === 0 ? (forecast._periodTomorrow ?? null) : (forecast._periodByDay?.[dayIdx + 1] ?? null))}</div>
         </div>
         ${(() => { const h = extractHeight(day.swell); const d = extractDir(shortDir(day.swell)); const sH = estimateSurfHeight(h, b?.exposure, d, b); return sH !== null ? '<div class="fc-row"><div class="fc-label">Surf</div><div class="fc-val highlight fc-surf" data-offshore="' + (h||'') + '" data-dir="' + (d||'') + '">' + (Math.round(sH * 3.281 * 2) / 2) + 'ft</div></div>' : ''; })()}
         <div class="fc-row">
@@ -2890,16 +2986,14 @@ function renderSwellChart(swellData) {
 
   const times = swellData.hourly.time;
   const waveH = swellData.hourly.wave_height;
-  const swellH = swellData.hourly.swell_wave_height;
   const periodArr = swellData.hourly.swell_wave_period || swellData.hourly.wave_period || null;
 
-  // Sample every 6 hours
-  const step = 3; // sample every 3h for better peak resolution
-  const sampledTimes = [], sampledWave = [], sampledSwell = [], sampledPeriod = [];
+  // Sample every 3h for better peak resolution
+  const step = 3;
+  const sampledTimes = [], sampledWave = [], sampledPeriod = [];
   for (let i = 0; i < times.length; i += step) {
     sampledTimes.push(times[i]);
     sampledWave.push(waveH[i]);
-    sampledSwell.push(swellH[i]);
     sampledPeriod.push(periodArr ? periodArr[i] : null);
   }
 
@@ -2933,15 +3027,6 @@ function renderSwellChart(swellData) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Draw swell line
-  ctx.beginPath();
-  ctx.moveTo(xPos(0), yPos(sampledSwell[0]));
-  sampledSwell.forEach((v, i) => { if (i > 0) ctx.lineTo(xPos(i), yPos(v)); });
-  ctx.strokeStyle = 'rgba(0,229,160,0.7)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 3]);
-  ctx.stroke();
-  ctx.setLineDash([]);
 
   // Vertical axis separator
   ctx.beginPath();
@@ -3227,12 +3312,6 @@ async function loadNightMode() {
           </div>
         </div>`;
     }
-
-    // Populate synopsis card
-    const synopsisText = data.forecast.synopsis || '—';
-      const synopsisEl = document.getElementById('synopsisCard');
-    synopsisEl.innerHTML = `<span id="synopsisExpanded" style="display:none">${synopsisText}</span>
-      <span id="synopsisCollapsed" style="color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;font-style:normal;display:block;padding:6px 0;">BOM SYNOPSIS ▾</span>`;
 
     document.getElementById('loadingEl').style.display = 'none';
     document.getElementById('content').classList.add('visible');
@@ -3654,6 +3733,13 @@ function toggleLiveCam() {} // handled by showLiveCamButton's onclick
 
 // Hide break selector fade when scrolled to end
 let currentTab = 'conditions';
+function switchInnerTab(tab) {
+  document.querySelectorAll('.inner-tab-section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.inner-tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(`inner-${tab}`)?.classList.add('active');
+  document.getElementById(`innerBtn-${tab}`)?.classList.add('active');
+}
+
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-section').forEach(el => el.classList.remove('active'));
