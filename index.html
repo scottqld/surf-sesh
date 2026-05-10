@@ -789,6 +789,7 @@
     </div>
     <div id="bestBreakBanner" style="display:none;margin:10px 20px 0;padding:10px 14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--high);letter-spacing:0.5px;"></div>
     <div id="breakNotes" style="margin:8px 20px 0;"></div>
+    <div id="diTripCard" style="display:none;margin:8px 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;"></div>
     <!-- About this break popup -->
     <div id="aboutBreakModal" onclick="if(event.target===this)closeAboutBreak()" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:540px;padding:20px 20px 36px;max-height:70vh;overflow-y:auto;">
@@ -828,8 +829,6 @@
     <div id="tomorrowPlannerCard" style="margin:0 20px 0;"></div>
     <div class="section-label">BEST SESSIONS THIS WEEK</div>
     <div id="sessionPlanner" style="padding:0 20px 12px;"></div>
-    <div class="section-label">🚗 DOUBLE ISLAND TRIP</div>
-    <div id="diTripCard" style="margin:0 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;"></div>
     <div class="section-label">SWELL TREND — 7 DAYS</div>
     <div class="chart-container">
       <div class="chart-title">
@@ -1420,6 +1419,7 @@ function setBreak(index) {
   requestAnimationFrame(() => {
     breakNotesEl.style.opacity = '1';
     if (cachedData) generateAiSummary(b, cachedData.forecast, score);
+    if (cachedData) renderDITripGate(cachedData.forecast, cachedData.swell);
   });
 }
 
@@ -2136,7 +2136,12 @@ function renderDITripGate(forecast, swell) {
   if (!el) return;
 
   const diBreak = BREAKS.find(b => b.name === 'Double Island');
-  if (!diBreak) { el.innerHTML = ''; return; }
+  if (!diBreak || BREAKS[currentBreak]?.name !== 'Double Island') {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  el.style.display = '';
 
   const current = forecast.forecasts?.[0];
   if (!current) { el.innerHTML = ''; return; }
@@ -3943,7 +3948,6 @@ function switchTab(tab) {
   if (toggleWrap) toggleWrap.style.display = tab === 'conditions' ? '' : 'none';
   if (tab === 'planner' && cachedData?.swell) {
     setTimeout(() => renderSwellChart(cachedData.swell), 50);
-    renderDITripGate(cachedData.forecast, cachedData.swell);
   }
   if (tab === 'log') {
     initLogTab();
