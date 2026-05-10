@@ -2,8 +2,13 @@ const CACHE_TTL = 1800; // 30 minutes in seconds
 
 const OPEN_METEO_URL = 'https://marine-api.open-meteo.com/v1/marine' +
   '?latitude=-26.4&longitude=153.1' +
-  '&hourly=wave_height,wave_direction,wave_period,wind_wave_height,swell_wave_height,swell_wave_direction,swell_wave_period' +
+  '&hourly=wave_height,wave_direction,wave_period,sea_surface_temperature' +
+  '&models=ecmwf_wam025' +
   '&forecast_days=7&timezone=Australia%2FBrisbane';
+
+const QLD_WAVE_URL = 'https://apps.des.qld.gov.au/data-sets/waves/wave-7dayopdata.csv';
+// Tewantin AWS — closest BOM automatic weather station to Noosa, updates every 10 min
+const BOM_OBS_URL = 'https://www.bom.gov.au/fwo/IDQ60801/IDQ60801.94570.json';
 
 const BOM_URL = 'https://www.bom.gov.au/qld/forecasts/sunshine-coast-waters.shtml';
 const MSQ_NOOSA_URL = 'https://www.data.qld.gov.au/dataset/noosa-head-tide-gauge-predicted-high-low-data/resource/1977d083-3119-41aa-8758-3980f3eb8a3f/download/q048003a_noosa-head-storm-surge_2026_hilo.csv';
@@ -127,6 +132,70 @@ async function fetchTides(url, location) {
     return { location, tides: [], error: e.message };
   }
 }
+async function fetchWindObs() {
+  const res = await fetch(BOM_OBS_URL, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (personal surf app)' }
+  });
+  const json = await res.json();
+  const obs = json?.observations?.data?.[0];
+  if (!obs) throw new Error('No BOM observation data');
+  return {
+    station:    obs.name,
+    time:       obs.local_date_time_full,
+    wind_dir:   obs.wind_dir   ?? null,
+    wind_kmh:   obs.wind_spd_kmh ?? null,
+    gust_kmh:   obs.gust_kmh   ?? null,
+    fetchedAt:  new Date().toISOString(),
+  };
+}
+
+async function fetchWaveBuoy() {
+  const res = await fetch(QLD_WAVE_URL, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (personal surf app)' }
+  });
+  const text = await res.text();
+  const lines = text.trim().split('\n');
+  // First line is a metadata string — find the actual CSV header row
+  const headerIdx = lines.findIndex(l => l.includes('Site') && l.includes('Hsig'));
+  if (headerIdx === -1) throw new Error(`CSV header not found. First line: ${lines[0]?.substring(0, 80)}`);
+  const header = lines[headerIdx].split(',').map(h => h.trim());
+  const col = name => header.indexOf(name);
+
+  const SITES = ['Mooloolaba', 'Caloundra']; // prefer closest to Noosa
+  const latest = {};
+
+  for (const line of lines.slice(headerIdx + 1)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const matchedSite = SITES.find(s => trimmed.startsWith(s + ','));
+    if (!matchedSite) continue;
+    // Later rows overwrite earlier ones — CSV is time-ascending
+    latest[matchedSite] = trimmed.split(',').map(s => s.trim());
+  }
+
+  const row = latest['Mooloolaba'] || latest['Caloundra'];
+  if (!row) throw new Error(`No buoy match. headerIdx=${headerIdx} lines=${lines.length} header="${lines[headerIdx]?.substring(0, 60)}"`);
+
+  const Hsig      = parseFloat(row[col('Hsig')]);
+  const Tp        = parseFloat(row[col('Tp')]);
+  const Direction = parseFloat(row[col('Direction')]);
+  const SST       = parseFloat(row[col('SST')]);
+  const dateTime  = row[col('DateTime')];
+  const site      = row[col('Site')];
+
+  if (!Hsig || Hsig < 0) throw new Error(`Invalid buoy Hsig: ${Hsig}`);
+
+  return {
+    site,
+    dateTime,
+    Hsig,
+    Tp:        Tp > 0 ? Tp : null,
+    Direction: Direction >= 0 ? Direction : null,
+    SST:       SST > 0 ? SST : null,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 async function fetchSwell() {
   const res = await fetch(OPEN_METEO_URL);
   const data = await res.json();
@@ -175,23 +244,18 @@ export default {
 
       } else if (path === '/all') {
         const cacheKey = new Request('https://cache.surf/all');
-        data = noCache ? await (async () => {
-          const [forecast, tidesNoosa, tidesMooloolaba, swell] = await Promise.all([
+        const buildAll = async () => {
+          const [forecast, tidesNoosa, tidesMooloolaba, swell, buoy, wind] = await Promise.all([
             fetchBOM(),
             fetchTides(MSQ_NOOSA_URL, 'noosa'),
             fetchTides(MSQ_MOOLOOLABA_URL, 'mooloolaba'),
             fetchSwell(),
+            fetchWaveBuoy().catch(e => ({ error: e.message })),
+            fetchWindObs().catch(e => ({ error: e.message })),
           ]);
-          return { forecast, tides: { noosa: tidesNoosa, mooloolaba: tidesMooloolaba }, swell };
-        })() : await fetchWithCache(cache, cacheKey, async () => {
-          const [forecast, tidesNoosa, tidesMooloolaba, swell] = await Promise.all([
-            fetchBOM(),
-            fetchTides(MSQ_NOOSA_URL, 'noosa'),
-            fetchTides(MSQ_MOOLOOLABA_URL, 'mooloolaba'),
-            fetchSwell(),
-          ]);
-          return { forecast, tides: { noosa: tidesNoosa, mooloolaba: tidesMooloolaba }, swell };
-        });
+          return { forecast, tides: { noosa: tidesNoosa, mooloolaba: tidesMooloolaba }, swell, buoy, wind };
+        };
+        data = noCache ? await buildAll() : await fetchWithCache(cache, cacheKey, buildAll);
 
       } else {
         return new Response(JSON.stringify({ error: 'Unknown endpoint' }), {
