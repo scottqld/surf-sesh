@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SurfSesh">
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
@@ -1114,8 +1114,7 @@ function setBreak(index) {
   _currentBreakNotes = b.notes || '';
   const imgEl = document.getElementById('breakImg');
   const _imgSrc = getBreakImg(index);
-  console.log('setBreak', index, 'src length:', _imgSrc.length, 'imgEl:', !!imgEl);
-  if (imgEl) { imgEl.style.backgroundImage = `url("${_imgSrc}")`; console.log('bg set to:', imgEl.style.backgroundImage.substring(0, 40)); }
+  if (imgEl) { imgEl.style.backgroundImage = `url("${_imgSrc}")`; }
   showLiveCamButton(index);
 
   // Update surf height in current conditions card based on selected break exposure
@@ -1989,6 +1988,7 @@ async function loadData(forceRefresh = false) {
   } catch (e) {
     document.getElementById('loadingEl').style.display = 'none';
     document.getElementById('content').classList.add('visible');
+    setBreak(currentBreak);
     const errEl = document.getElementById('errorEl');
     errEl.innerHTML = `<div class="error-msg">Failed to load data.<br>${e.message}</div>`;
     errEl.style.display = 'block';
@@ -3378,6 +3378,8 @@ async function loadNightMode() {
 
   } catch (e) {
     document.getElementById('loadingEl').style.display = 'none';
+    document.getElementById('content').classList.add('visible');
+    setBreak(currentBreak);
     const errEl = document.getElementById('errorEl');
     errEl.innerHTML = `<div class="error-msg" style="opacity:0.5;">Surf check resumes at 4am.</div>`;
     errEl.style.display = 'block';
@@ -3869,7 +3871,7 @@ scheduleNextLoad();
 // ─── PWA: SERVICE WORKER ──────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('sw.js')
       .then(reg => console.log('SW registered:', reg.scope))
       .catch(err => console.warn('SW registration failed:', err));
   });
