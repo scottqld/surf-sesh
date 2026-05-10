@@ -3393,12 +3393,14 @@ async function loadNightMode() {
       forecastRow.appendChild(card);
     });
 
-    setBreak(currentBreak);
-    requestAnimationFrame(() => renderSwellChart(data.swell));
-    updateBreakIndicators(data.forecast);
-    renderTides(data.tides[currentStation]);
-    renderSessionPlanner(data.forecast, data.swell);
-    renderDITripGate(data.forecast, data.swell);
+    requestAnimationFrame(() => {
+      setBreak(currentBreak);
+      renderSwellChart(data.swell);
+      updateBreakIndicators(data.forecast);
+      renderTides(data.tides[currentStation]);
+      renderSessionPlanner(data.forecast, data.swell);
+      renderDITripGate(data.forecast, data.swell);
+    });
 
   } catch (e) {
     document.getElementById('loadingEl').style.display = 'none';
