@@ -1113,7 +1113,7 @@ function setBreak(index) {
   _currentBreakName = b.name;
   _currentBreakNotes = b.notes || '';
   const imgEl = document.getElementById('breakImg');
-  if (imgEl) imgEl.src = getBreakImg(index);
+  if (imgEl) { imgEl.src = ''; imgEl.src = getBreakImg(index); }
   showLiveCamButton(index);
 
   // Update surf height in current conditions card based on selected break exposure
@@ -2417,11 +2417,6 @@ function renderAll(data) {
   const bestIdx = updateBreakIndicators(data.forecast);
   const initialBreak = _hasLoaded ? currentBreak : bestIdx;
   _hasLoaded = true;
-
-  // Pre-load the image while content is still hidden so it's decoded and ready
-  // when the container becomes visible. Data URIs need explicit decode time.
-  const imgEl = document.getElementById('breakImg');
-  if (imgEl) imgEl.src = BREAK_IMGS[BREAKS[initialBreak || 0]?.name] || '';
 
   document.getElementById('loadingEl').style.display = 'none';
   document.getElementById('content').classList.add('visible');
