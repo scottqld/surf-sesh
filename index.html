@@ -1175,15 +1175,29 @@ function setBreak(index) {
     if (sv) { sv.style.color = c; sv.innerHTML = `${score}<span style="font-size:18px;color:var(--muted);"> /10</span>`; }
     if (sl) { sl.style.color = c; sl.textContent = lbl; }
 
-    // Photo score badge
+    // Photo score badge — only in day mode (live conditions)
     const badge    = document.getElementById('photoScoreBadge');
     const badgeNum = document.getElementById('photoScoreNum');
     const badgeLbl = document.getElementById('photoScoreLabel');
     if (badge && badgeNum && badgeLbl) {
-      badgeNum.textContent = score;
-      badgeNum.style.color = c;
-      badgeLbl.textContent = lbl.toUpperCase();
-      badge.style.display  = 'flex';
+      if (isActiveHours()) {
+        badgeNum.textContent = score;
+        badgeNum.style.color = c;
+        badgeLbl.textContent = lbl.toUpperCase();
+        badge.style.display  = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    // Today forecast panel score badge
+    const todayFcScore = document.getElementById('todayFcScore');
+    const todayFcScoreNum = document.getElementById('todayFcScoreNum');
+    const todayFcScoreLbl = document.getElementById('todayFcScoreLbl');
+    if (todayFcScore && todayFcScoreNum && todayFcScoreLbl) {
+      todayFcScoreNum.innerHTML = `<span style="color:${c};">${score}</span><span style="font-size:16px;color:var(--muted);">/10</span>`;
+      todayFcScoreLbl.textContent = lbl.toUpperCase();
+      todayFcScoreLbl.style.color = c;
+      todayFcScore.style.display = 'flex';
     }
   }
   // Update conditions section label with the selected break name
@@ -1236,6 +1250,23 @@ function setBreak(index) {
       return scoreBreak(b, f);
     });
     const maxUpcoming = upcomingScores.length ? Math.max(...upcomingScores) : -Infinity;
+
+    // Forecast panel score badges (tomorrow + day after)
+    [[0, 'tmrwFcScore'], [1, 'dayAfterFcScore']].forEach(([idx, id]) => {
+      if (upcomingScores.length <= idx) return;
+      const s = upcomingScores[idx];
+      const c2 = s >= 7 ? 'var(--high)' : s >= 5 ? 'var(--accent)' : 'var(--muted)';
+      const l2 = s >= 9 ? 'EPIC' : s >= 7 ? 'GOOD' : s >= 5 ? 'FUN' : 'POOR';
+      const el = document.getElementById(id);
+      const elNum = document.getElementById(id + 'Num');
+      const elLbl = document.getElementById(id + 'Lbl');
+      if (el && elNum && elLbl) {
+        elNum.innerHTML = `<span style="color:${c2};">${s}</span><span style="font-size:16px;color:var(--muted);">/10</span>`;
+        elLbl.textContent = l2; elLbl.style.color = c2;
+        el.style.display = 'flex';
+      }
+    });
+
     if (upcomingScores.length > 0) {
       if (score > maxUpcoming + 1) contextStr = ' · best in forecast';
       else if (score < maxUpcoming - 1) {
@@ -2764,9 +2795,15 @@ function renderForecast(forecast, tideData, swellData) {
       const todayTidesStr = remainingTides.map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
       todayForecastPanel.innerHTML = `
         <div style="margin:12px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-            <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TODAY'S FORECAST</span>
-            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
+          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <div id="todayFcScore" style="display:none;flex-direction:column;align-items:flex-start;line-height:1;">
+              <div id="todayFcScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;"></div>
+              <div id="todayFcScoreLbl" style="font-family:'Bebas Neue',sans-serif;font-size:13px;"></div>
+            </div>
+            <div style="text-align:right;">
+              <div class="current-day">${(current.day || '').toUpperCase()}</div>
+              <div class="current-issued">${(forecast.issuedAt || '').replace('Forecast issued at ', '')}</div>
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;">
             <div style="padding:11px 12px;border-right:1px solid var(--border);">
@@ -2810,9 +2847,15 @@ function renderForecast(forecast, tideData, swellData) {
         const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
         const tmrwBlock = `
           <div style="margin:8px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-            <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-              <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">TOMORROW — ${(tomorrow.day || '').toUpperCase()}</span>
-              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
+            <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <div id="tmrwFcScore" style="display:none;flex-direction:column;align-items:flex-start;line-height:1;">
+                <div id="tmrwFcScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;"></div>
+                <div id="tmrwFcScoreLbl" style="font-family:'Bebas Neue',sans-serif;font-size:13px;"></div>
+              </div>
+              <div style="text-align:right;">
+                <div class="current-day">TOMORROW</div>
+                <div class="current-issued">${(tomorrow.day || '').toUpperCase()}</div>
+              </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;">
               <div style="padding:11px 12px;border-right:1px solid var(--border);">
@@ -3295,10 +3338,15 @@ async function loadNightMode() {
         const tidesStr = tides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
         const period = dayIdx === 1 ? (data.forecast._periodTomorrow ?? null) : null;
         const swellStr = fmtSwell(day.swell, null, null, period);
+        const scoreId = dayIdx === 1 ? 'tmrwFcScore' : dayIdx === 2 ? 'dayAfterFcScore' : '';
+        const scoreBadgeHtml = scoreId ? `<div id="${scoreId}" style="display:none;flex-direction:column;align-items:flex-start;line-height:1;"><div id="${scoreId}Num" style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;"></div><div id="${scoreId}Lbl" style="font-family:'Bebas Neue',sans-serif;font-size:13px;"></div></div>` : '';
         return `<div style="margin:${dayIdx === 1 ? '12px' : '8px'} 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-            <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">${label}</span>
-            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
+          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            ${scoreBadgeHtml}
+            <div style="text-align:right;">
+              <div class="current-day">${dayIdx === 1 ? 'TOMORROW' : (day.day || '').toUpperCase()}</div>
+              ${dayIdx === 1 ? `<div class="current-issued">${(day.day || '').toUpperCase()}</div>` : ''}
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;">
             <div style="padding:11px 12px;border-right:1px solid var(--border);">
