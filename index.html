@@ -1378,7 +1378,9 @@ function setBreak(index) {
     const waveP = swHourly.swell_wave_period || swHourly.wave_period || null;
     const waveD = swHourly.swell_wave_direction || null;
     const now = new Date();
-    const brisbaneNow = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+    // In night mode the panel shows tomorrow's forecast, so target tomorrow's date
+    const offsetMs = isActiveHours() ? 10 * 3600000 : (10 + 24) * 3600000;
+    const brisbaneNow = new Date(now.getTime() + offsetMs);
     const todayStr = `${brisbaneNow.getUTCFullYear()}-${String(brisbaneNow.getUTCMonth()+1).padStart(2,'0')}-${String(brisbaneNow.getUTCDate()).padStart(2,'0')}`;
     // Score each hour 5am–7pm
     const hourScores = [];
@@ -3458,6 +3460,7 @@ async function loadNightMode() {
               <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
             </div>
           </div>
+          ${dayIdx === 1 ? '<div id="bestWindowPanel"></div>' : ''}
         </div>`;
       };
 
