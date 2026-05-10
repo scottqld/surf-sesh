@@ -1130,6 +1130,21 @@ function setBreak(index) {
       : '—';
   }
 
+  // Update forecast panel surf heights
+  if (cachedData) {
+    const fc = cachedData.forecast;
+    const fmtSurf = (h, dir, per) => {
+      const s = estimateSurfHeight(h, b.exposure, dir, b, per);
+      return s !== null ? `~${Math.round(s * 3.281 * 2) / 2}ft` : '—';
+    };
+    const todaySurfEl = document.getElementById('fcTodaySurf');
+    if (todaySurfEl) todaySurfEl.textContent = fmtSurf(fc._currentWaveHeight, fc._currentSwellDir, fc._period);
+    const tmrwSurfEl = document.getElementById('fcTmrwSurf');
+    if (tmrwSurfEl) tmrwSurfEl.textContent = fmtSurf(fc._swellHeightByDay?.[1], fc._swellDirByDay?.[1], fc._periodTomorrow);
+    const dayAfterSurfEl = document.getElementById('fcDayAfterSurf');
+    if (dayAfterSurfEl) dayAfterSurfEl.textContent = fmtSurf(fc._swellHeightByDay?.[2], fc._swellDirByDay?.[2], fc._periodByDay?.[2]);
+  }
+
   // Update forecast card scores and surf heights for newly selected break
   if (cachedData) {
     const forecast = cachedData.forecast;
@@ -2793,6 +2808,64 @@ function renderForecast(forecast, tideData, swellData) {
         : '';
       const todaySwellStr = fmtSwell(current.swell, forecast._currentWaveHeight, forecast._currentSwellDir, forecast._period);
       const todayTidesStr = remainingTides.map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+      const todaySwellDir = forecast._currentSwellDir ?? extractDir(shortDir(current.swell || ''));
+      const todayWindDir = extractDir(shortDir(current.winds || ''));
+      const todayWindSpeed = extractWindSpeed(current.winds || '');
+      const sst = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
+
+      // Tomorrow block
+      const tomorrow = forecast.forecasts[1];
+      let tmrwBlock = '';
+      if (tomorrow) {
+        const tmrwTides = getTidesForDay(1);
+        const tmrwSwellStr = fmtSwell(
+          tomorrow.swell,
+          forecast._swellHeightByDay?.[1] ?? null,
+          forecast._swellDirByDay?.[1] ?? null,
+          forecast._periodTomorrow ?? null
+        );
+        const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+        const tmrwSwellDir = forecast._swellDirByDay?.[1] ?? extractDir(shortDir(tomorrow.swell || ''));
+        const tmrwWindDir = extractDir(shortDir(tomorrow.winds || ''));
+        const tmrwWindSpeed = extractWindSpeed(tomorrow.winds || '');
+        tmrwBlock = `
+          <div style="margin:8px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <div id="tmrwFcScore" style="display:none;flex-direction:column;align-items:flex-start;line-height:1;">
+                <div id="tmrwFcScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;"></div>
+                <div id="tmrwFcScoreLbl" style="font-family:'Bebas Neue',sans-serif;font-size:13px;"></div>
+              </div>
+              <div style="text-align:right;">
+                <div class="current-day">TOMORROW</div>
+                <div class="current-issued">${(tomorrow.day || '').toUpperCase()}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;">
+              <div style="padding:11px 12px;border-right:1px solid var(--border);">
+                <div class="condition-label">Swell</div>
+                <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(tmrwSwellDir, 18, 'var(--accent)')}<span>${tmrwSwellStr}</span></div>
+              </div>
+              <div style="padding:11px 12px;">
+                <div class="condition-label">Wind</div>
+                <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(tmrwWindDir, 18, 'var(--text)')}<span>${shortDir(tomorrow.winds || '') || '—'}${tmrwWindSpeed ? ' · ' + tmrwWindSpeed : ''}</span></div>
+              </div>
+              <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+                <div class="condition-label">Surf</div>
+                <div class="condition-value highlight" id="fcTmrwSurf"><span style="color:var(--muted);letter-spacing:2px;">···</span></div>
+              </div>
+              <div style="padding:11px 12px;border-top:1px solid var(--border);">
+                <div class="condition-label">Weather</div>
+                <div class="condition-value">${tomorrow.weather || '—'}${sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : ''}</div>
+              </div>
+              <div style="padding:11px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
+                <div class="condition-label">Tides</div>
+                <div class="condition-value" style="font-size:12px;">${tmrwTidesStr || '—'}</div>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      // Build all HTML in one assignment
       todayForecastPanel.innerHTML = `
         <div style="margin:12px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
           <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
@@ -2807,18 +2880,22 @@ function renderForecast(forecast, tideData, swellData) {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;">
             <div style="padding:11px 12px;border-right:1px solid var(--border);">
-              <div class="condition-label">Winds</div>
-              <div class="condition-value">${shortDir(current.winds || '') || '—'}</div>
+              <div class="condition-label">Swell</div>
+              <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(todaySwellDir, 18, 'var(--accent)')}<span>${todaySwellStr}</span></div>
             </div>
             <div style="padding:11px 12px;">
-              <div class="condition-label">Swell</div>
-              <div class="condition-value">${todaySwellStr}</div>
+              <div class="condition-label">Wind</div>
+              <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(todayWindDir, 18, 'var(--text)')}<span>${shortDir(current.winds || '') || '—'}${todayWindSpeed ? ' · ' + todayWindSpeed : ''}</span></div>
             </div>
             <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
-              <div class="condition-label">Weather</div>
-              <div class="condition-value">${current.weather || '—'}</div>
+              <div class="condition-label">Surf</div>
+              <div class="condition-value highlight" id="fcTodaySurf"><span style="color:var(--muted);letter-spacing:2px;">···</span></div>
             </div>
             <div style="padding:11px 12px;border-top:1px solid var(--border);">
+              <div class="condition-label">Weather</div>
+              <div class="condition-value">${current.weather || '—'}${sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : ''}</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
               <div class="condition-label">Tides</div>
               <div class="condition-value" style="font-size:12px;">${todayTidesStr || '—'}</div>
             </div>
@@ -2826,59 +2903,11 @@ function renderForecast(forecast, tideData, swellData) {
           <div id="offshoreWindowPanel"></div>
           <div id="morningAfternoonPanel"></div>
         </div>
+        ${tmrwBlock}
       `;
 
-      // Tomorrow block — appended below today inside the FORECAST inner tab
-      const tomorrow = forecast.forecasts[1];
+      // Also populate the planner tomorrow card
       if (tomorrow) {
-        const tmrwTides = getTidesForDay(1);
-        const tmrwTidesHtml = tmrwTides.length
-          ? `<div style="padding:11px 12px;border-top:1px solid var(--border);">
-              <div class="condition-label">Tides</div>
-              <div class="condition-value" style="font-size:12px;">${tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ')}</div>
-            </div>`
-          : '';
-        const tmrwSwellStr = fmtSwell(
-          tomorrow.swell,
-          forecast._swellHeightByDay?.[1] ?? null,
-          forecast._swellDirByDay?.[1] ?? null,
-          forecast._periodTomorrow ?? null
-        );
-        const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
-        const tmrwBlock = `
-          <div style="margin:8px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-            <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-              <div id="tmrwFcScore" style="display:none;flex-direction:column;align-items:flex-start;line-height:1;">
-                <div id="tmrwFcScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;"></div>
-                <div id="tmrwFcScoreLbl" style="font-family:'Bebas Neue',sans-serif;font-size:13px;"></div>
-              </div>
-              <div style="text-align:right;">
-                <div class="current-day">TOMORROW</div>
-                <div class="current-issued">${(tomorrow.day || '').toUpperCase()}</div>
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;">
-              <div style="padding:11px 12px;border-right:1px solid var(--border);">
-                <div class="condition-label">Winds</div>
-                <div class="condition-value">${shortDir(tomorrow.winds || '') || '—'}</div>
-              </div>
-              <div style="padding:11px 12px;">
-                <div class="condition-label">Swell</div>
-                <div class="condition-value">${tmrwSwellStr}</div>
-              </div>
-              <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
-                <div class="condition-label">Weather</div>
-                <div class="condition-value">${tomorrow.weather || '—'}</div>
-              </div>
-              <div style="padding:11px 12px;border-top:1px solid var(--border);">
-                <div class="condition-label">Tides</div>
-                <div class="condition-value" style="font-size:12px;">${tmrwTidesStr || '—'}</div>
-              </div>
-            </div>
-          </div>`;
-        todayForecastPanel.innerHTML += tmrwBlock;
-
-        // Also populate the planner tomorrow card
         const plannerCard = document.getElementById('tomorrowPlannerCard');
         if (plannerCard) plannerCard.innerHTML = tmrwBlock.replace('margin:8px 12px 0', 'margin:0');
       }
@@ -3226,6 +3255,41 @@ async function loadNightMode() {
       nightWindWavePeriod  = windTArr   ? windTArr[useIdx]   : null;
       data.forecast._period          = nightPeriod;
       data.forecast._periodTomorrow  = periodArr && idxTmrw > -1 ? periodArr[idxTmrw] : null;
+
+      // Per-day swell height, direction and period from Open-Meteo (days 0–2)
+      const swellHArr2   = data.swell.hourly.wave_height || data.swell.hourly.swell_wave_height || null;
+      const swellDirArr2 = data.swell.hourly.swell_wave_direction || null;
+      const nowMs = Date.now();
+      data.forecast._swellHeightByDay = [0, 1, 2].map(i => {
+        const dayBrisbane = new Date(nowMs + (10 + 24 * i) * 3600000);
+        const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
+        const idxs = times.reduce((a, t, idx) => { if (t.startsWith(dayStr)) a.push(idx); return a; }, []);
+        if (!idxs.length || !swellHArr2) return null;
+        const morning = idxs.filter(idx => { const h = parseInt(times[idx].split('T')[1]); return h >= 6 && h <= 12; });
+        const vals = (morning.length ? morning : idxs).map(idx => swellHArr2[idx]).filter(v => v != null);
+        return vals.length ? Math.round(Math.max(...vals) * 10) / 10 : null;
+      });
+      data.forecast._swellDirByDay = [0, 1, 2].map(i => {
+        const dayBrisbane = new Date(nowMs + (10 + 24 * i) * 3600000);
+        const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
+        const idxs = times.reduce((a, t, idx) => { if (t.startsWith(dayStr)) a.push(idx); return a; }, []);
+        if (!idxs.length || !swellDirArr2) return null;
+        const dirs = idxs.map(idx => swellDirArr2[idx]).filter(v => v != null);
+        if (!dirs.length) return null;
+        const freq = {};
+        dirs.forEach(d => { const c = degToCompass(d); freq[c] = (freq[c] || 0) + 1; });
+        return Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+      });
+      data.forecast._periodByDay = [0, 1, 2].map(i => {
+        if (i === 0) return data.forecast._period;
+        if (i === 1) return data.forecast._periodTomorrow;
+        const dayBrisbane = new Date(nowMs + (10 + 48) * 3600000);
+        const dayStr = `${dayBrisbane.getUTCFullYear()}-${String(dayBrisbane.getUTCMonth()+1).padStart(2,'0')}-${String(dayBrisbane.getUTCDate()).padStart(2,'0')}`;
+        const idxs = times.reduce((a, t, idx) => { if (t.startsWith(dayStr)) a.push(idx); return a; }, []);
+        if (!idxs.length || !periodArr) return null;
+        const vals = idxs.map(idx => periodArr[idx]).filter(v => v != null);
+        return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+      });
     }
     data.forecast._tide = getCurrentTide(data.tides.noosa);
 
@@ -3312,15 +3376,15 @@ async function loadNightMode() {
               </div>
             </div>
             <div style="padding:11px 12px;">
-              <div class="condition-label">Surf</div>
-              <div class="condition-value highlight" id="surfHeightValue">—</div>
-            </div>
-            <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
               <div class="condition-label">Wind</div>
               <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
                 ${dirArrow(tomorrowWind.dir, 18, 'var(--text)')}
                 <span>${tomorrowWind.dir || '—'}${tomorrowWind.kmh ? ' · ' + tomorrowWind.kmh + ' km/h' : (windSpeed ? ' · ' + windSpeed : '')}</span>
               </div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+              <div class="condition-label">Surf</div>
+              <div class="condition-value highlight" id="surfHeightValue">—</div>
             </div>
             <div style="padding:11px 12px;border-top:1px solid var(--border);">
               <div class="condition-label">Weather</div>
@@ -3340,8 +3404,14 @@ async function loadNightMode() {
       const buildForecastBlock = (day, dayIdx, label) => {
         const tides = getTidesForDay(dayIdx);
         const tidesStr = tides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
-        const period = dayIdx === 1 ? (data.forecast._periodTomorrow ?? null) : null;
-        const swellStr = fmtSwell(day.swell, null, null, period);
+        const period   = data.forecast._periodByDay?.[dayIdx] ?? (dayIdx === 1 ? (data.forecast._periodTomorrow ?? null) : null);
+        const omHeight = data.forecast._swellHeightByDay?.[dayIdx] ?? null;
+        const omDir    = data.forecast._swellDirByDay?.[dayIdx] ?? null;
+        const swellStr = fmtSwell(day.swell, omHeight, omDir, period);
+        const swellDir = omDir ?? extractDir(shortDir(day.swell || ''));
+        const windDir  = extractDir(shortDir(day.winds || ''));
+        const windSpeed = extractWindSpeed(day.winds || '');
+        const nmSst = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
         const scoreId = dayIdx === 1 ? 'tmrwFcScore' : dayIdx === 2 ? 'dayAfterFcScore' : '';
         const scoreBadgeHtml = scoreId ? `<div id="${scoreId}" style="display:none;flex-direction:column;align-items:flex-start;line-height:1;"><div id="${scoreId}Num" style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;"></div><div id="${scoreId}Lbl" style="font-family:'Bebas Neue',sans-serif;font-size:13px;"></div></div>` : '';
         return `<div style="margin:${dayIdx === 1 ? '12px' : '8px'} 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
@@ -3354,18 +3424,22 @@ async function loadNightMode() {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;">
             <div style="padding:11px 12px;border-right:1px solid var(--border);">
-              <div class="condition-label">Winds</div>
-              <div class="condition-value">${shortDir(day.winds || '') || '—'}</div>
+              <div class="condition-label">Swell</div>
+              <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(swellDir, 18, 'var(--accent)')}<span>${swellStr}</span></div>
             </div>
             <div style="padding:11px 12px;">
-              <div class="condition-label">Swell</div>
-              <div class="condition-value">${swellStr}</div>
+              <div class="condition-label">Wind</div>
+              <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(windDir, 18, 'var(--text)')}<span>${shortDir(day.winds || '') || '—'}${windSpeed ? ' · ' + windSpeed : ''}</span></div>
             </div>
             <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
-              <div class="condition-label">Weather</div>
-              <div class="condition-value">${day.weather || '—'}</div>
+              <div class="condition-label">Surf</div>
+              <div class="condition-value highlight" id="${dayIdx === 1 ? 'fcTmrwSurf' : dayIdx === 2 ? 'fcDayAfterSurf' : ''}"><span style="color:var(--muted);letter-spacing:2px;">···</span></div>
             </div>
             <div style="padding:11px 12px;border-top:1px solid var(--border);">
+              <div class="condition-label">Weather</div>
+              <div class="condition-value">${day.weather || '—'}${nmSst ? `<span style="color:var(--muted);font-size:10px;"> · ${nmSst}</span>` : ''}</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
               <div class="condition-label">Tides</div>
               <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
             </div>
