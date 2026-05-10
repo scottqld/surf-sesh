@@ -811,7 +811,7 @@
     </div>
     <div class="inner-tab-section" id="inner-today">
       <div id="todayForecastPanel"></div>
-      <div class="section-label">HOURLY <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
+      <div class="section-label">UPCOMING <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
       <div class="forecast-scroll">
         <div class="forecast-row" id="forecastRow"></div>
       </div>
@@ -1151,7 +1151,7 @@ function setBreak(index) {
     const forecastRow = document.getElementById('forecastRow');
     if (forecastRow) {
       const cards = forecastRow.querySelectorAll('.forecast-card');
-      const days = (forecast.forecasts || []).slice(1);
+      const days = (forecast.forecasts || []).slice(2);
       cards.forEach((card, dayIdx) => {
         const day = days[dayIdx];
         if (!day) return;
@@ -1159,8 +1159,8 @@ function setBreak(index) {
         const scoreBadge = card.querySelector('.fc-score-badge');
         const dayForecast = {
           forecasts: [day],
-          _period: forecast._periodByDay ? (forecast._periodByDay[dayIdx + 1] ?? null) : (dayIdx === 0 ? (forecast._periodTomorrow ?? null) : null),
-          _tide:   dayIdx === 0 ? (forecast._tide?._tomorrow ?? null) : null,
+          _period: forecast._periodByDay?.[dayIdx + 2] ?? null,
+          _tide:   null,
         };
         const dayScore = scoreBreak(b, dayForecast);
         const scoreColor = dayScore >= 7 ? 'var(--high)' : dayScore >= 5 ? 'var(--accent)' : 'var(--muted)';
@@ -2914,20 +2914,24 @@ function renderForecast(forecast, tideData, swellData) {
     }
   }
 
-  // Remaining forecast days
+  // Remaining forecast days (today and tomorrow are already in todayForecastPanel)
   const forecastRow = document.getElementById('forecastRow');
   forecastRow.innerHTML = '';
-  forecast.forecasts.slice(1).forEach((day, dayIdx) => {
+  const upcomingDays = forecast.forecasts.slice(2);
+  if (!upcomingDays.length) {
+    forecastRow.innerHTML = '<div style="padding:12px;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">No additional forecast days available</div>';
+  }
+  upcomingDays.forEach((day, dayIdx) => {
     const card = document.createElement('div');
     card.className = 'forecast-card visible';
     const swellPeriod = extractPeriod(day.swell);
     const b = BREAKS[currentBreak];
 
-    // Score this day for the current break
+    // Score this day for the current break (cards start from forecasts[2], so offset by 2)
     const dayForecast = {
       forecasts: [day],
-      _period: dayIdx === 0 ? (forecast._periodTomorrow ?? null) : null,
-      _tide:   dayIdx === 0 ? (forecast._tide?._tomorrow ?? null) : null,
+      _period: forecast._periodByDay?.[dayIdx + 2] ?? null,
+      _tide:   null,
     };
     const dayScore = b ? scoreBreak(b, dayForecast) : null;
     const scoreColor = dayScore !== null ? (dayScore >= 7 ? 'var(--high)' : dayScore >= 5 ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)';
@@ -2944,7 +2948,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
         <div class="fc-row">
           <div class="fc-label">Swell</div>
-          <div class="fc-val">${fmtSwell(day.swell, forecast._swellHeightByDay?.[dayIdx + 1] ?? null, forecast._swellDirByDay?.[dayIdx + 1] ?? null, dayIdx === 0 ? (forecast._periodTomorrow ?? null) : (forecast._periodByDay?.[dayIdx + 1] ?? null))}</div>
+          <div class="fc-val">${fmtSwell(day.swell, forecast._swellHeightByDay?.[dayIdx + 2] ?? null, forecast._swellDirByDay?.[dayIdx + 2] ?? null, forecast._periodByDay?.[dayIdx + 2] ?? null)}</div>
         </div>
         ${(() => { const h = extractHeight(day.swell); const d = extractDir(shortDir(day.swell)); const sH = estimateSurfHeight(h, b?.exposure, d, b); return sH !== null ? '<div class="fc-row"><div class="fc-label">Surf</div><div class="fc-val highlight fc-surf" data-offshore="' + (h||'') + '" data-dir="' + (d||'') + '">' + (Math.round(sH * 3.281 * 2) / 2) + 'ft</div></div>' : ''; })()}
         <div class="fc-row">
@@ -3464,10 +3468,14 @@ async function loadNightMode() {
     document.getElementById('content').classList.add('visible');
     document.getElementById('currentConditionsLabel').textContent = 'TOMORROW\'S CONDITIONS';
 
-    // Forecast cards — skip tomorrow (now in main card), show day after onwards
+    // Forecast cards — tomorrow and day-after already in todayForecastPanel, show the rest
     const forecastRow = document.getElementById('forecastRow');
     forecastRow.innerHTML = '';
-    (data.forecast.forecasts || []).slice(1).forEach((day, dayIdx) => {
+    const upcomingDays = (data.forecast.forecasts || []).slice(2);
+    if (!upcomingDays.length) {
+      forecastRow.innerHTML = '<div style="padding:12px;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">No additional forecast days available</div>';
+    }
+    upcomingDays.forEach((day, dayIdx) => {
       const card = document.createElement('div');
       card.className = 'forecast-card visible';
       const swellPeriod = extractPeriod(day.swell);
