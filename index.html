@@ -2554,19 +2554,20 @@ function extractWindSpeed(text) {
   return null;
 }
 
+// Shared helper: format swell string — Open-Meteo values preferred, BOM text as fallback
+function fmtSwell(bomText, omHeight, omDir, omPeriod) {
+  const dir = omDir  != null ? omDir  : extractDir(shortDir(bomText || ''));
+  const h   = omHeight != null ? omHeight : extractHeight(bomText || '');
+  const p   = omPeriod != null ? omPeriod : extractPeriod(bomText || '');
+  return [
+    dir  ? dir : null,
+    h    !== null ? h.toFixed(1) + 'm' : null,
+    p    !== null ? Math.round(p) + 's' : null,
+  ].filter(Boolean).join(' · ') || shortDir(bomText || '') || '—';
+}
+
 ///////////////////////////////////////////////////
 function renderForecast(forecast, tideData, swellData) {
-  // Helper: build formatted swell string — Open-Meteo values preferred, BOM text as fallback
-  const fmtSwell = (bomText, omHeight, omDir, omPeriod) => {
-    const dir = omDir  ?? extractDir(shortDir(bomText || ''));
-    const h   = omHeight ?? extractHeight(bomText || '');
-    const p   = omPeriod ?? extractPeriod(bomText || '');
-    return [
-      dir  ? dir : null,
-      h    !== null ? h.toFixed(1) + 'm' : null,
-      p    !== null ? Math.round(p) + 's' : null,
-    ].filter(Boolean).join(' · ') || shortDir(bomText || '') || '—';
-  };
 
   // Compute score for current break to show in card header
   const currentB = BREAKS[currentBreak];
@@ -3311,6 +3312,53 @@ async function loadNightMode() {
             </div>` : ''}
           </div>
         </div>`;
+    }
+
+    // Populate FORECAST inner tab: tomorrow + day-after panels
+    const todayForecastPanel = document.getElementById('todayForecastPanel');
+    if (todayForecastPanel && tomorrow) {
+      const buildForecastBlock = (day, dayIdx, label) => {
+        const tides = getTidesForDay(dayIdx);
+        const tidesStr = tides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+        const period = dayIdx === 1 ? (data.forecast._periodTomorrow ?? null) : null;
+        const swellStr = fmtSwell(day.swell, null, null, period);
+        return `<div style="margin:${dayIdx === 1 ? '12px' : '8px'} 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+          <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">${label}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.4;">BOM</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;">
+            <div style="padding:11px 12px;border-right:1px solid var(--border);">
+              <div class="condition-label">Winds</div>
+              <div class="condition-value">${shortDir(day.winds || '') || '—'}</div>
+            </div>
+            <div style="padding:11px 12px;">
+              <div class="condition-label">Swell</div>
+              <div class="condition-value">${swellStr}</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+              <div class="condition-label">Weather</div>
+              <div class="condition-value">${day.weather || '—'}</div>
+            </div>
+            <div style="padding:11px 12px;border-top:1px solid var(--border);">
+              <div class="condition-label">Tides</div>
+              <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
+            </div>
+          </div>
+        </div>`;
+      };
+
+      const tmrwLabel = `TOMORROW — ${(tomorrow.day || '').toUpperCase()}`;
+      let panelHtml = buildForecastBlock(tomorrow, 1, tmrwLabel);
+
+      const dayAfter = data.forecast.forecasts[1];
+      if (dayAfter) {
+        panelHtml += buildForecastBlock(dayAfter, 2, (dayAfter.day || '').toUpperCase());
+      }
+      todayForecastPanel.innerHTML = panelHtml;
+
+      const plannerCard = document.getElementById('tomorrowPlannerCard');
+      if (plannerCard) plannerCard.innerHTML = buildForecastBlock(tomorrow, 1, tmrwLabel).replace('margin:12px', 'margin:0');
     }
 
     document.getElementById('loadingEl').style.display = 'none';
