@@ -3264,6 +3264,10 @@ async function loadNightMode() {
       nightBannerEl.style.display = '';
     }
 
+    // Relabel the NOW tab to TOMORROW in night mode
+    const nowBtn = document.getElementById('innerBtn-now');
+    if (nowBtn) nowBtn.textContent = 'TOMORROW';
+
     // Build night conditions card
     const nowBrisbaneEarly = new Date(Date.now() + 10 * 60 * 60 * 1000);
     const hEarly = nowBrisbaneEarly.getUTCHours();
