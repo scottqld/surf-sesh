@@ -720,7 +720,7 @@
 
 <div class="app">
   <header class="header">
-    <div class="logo">SURF<span>CALL</span></div>
+    <div class="logo">SURF<span>CALL</span> <small id="appVersion"></small></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
       <div class="last-updated" id="lastUpdated">—</div>
       <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.5px;opacity:0.5;">v1.5</div>
@@ -909,6 +909,8 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
+const APP_VERSION = '1.0.0';
+document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
 let _hasLoaded = false; // tracks whether initial data load has completed
