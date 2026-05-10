@@ -1113,7 +1113,9 @@ function setBreak(index) {
   _currentBreakName = b.name;
   _currentBreakNotes = b.notes || '';
   const imgEl = document.getElementById('breakImg');
-  if (imgEl) imgEl.style.backgroundImage = `url("${getBreakImg(index)}")`;
+  const _imgSrc = getBreakImg(index);
+  console.log('setBreak', index, 'src length:', _imgSrc.length, 'imgEl:', !!imgEl);
+  if (imgEl) { imgEl.style.backgroundImage = `url("${_imgSrc}")`; console.log('bg set to:', imgEl.style.backgroundImage.substring(0, 40)); }
   showLiveCamButton(index);
 
   // Update surf height in current conditions card based on selected break exposure
