@@ -729,6 +729,9 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
 </head>
 <body>
+<div id="ptrIndicator" style="position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-40px);z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;opacity:0;pointer-events:none;">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v4M8 2L5.5 4.5M8 2L10.5 4.5" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/><path d="M8 14v-4M8 14L5.5 11.5M8 14L10.5 11.5" stroke="var(--muted)" stroke-width="1.5" stroke-linecap="round"/></svg>
+</div>
 
 <div class="app">
   <header class="header">
@@ -810,6 +813,7 @@
       <div class="current-card" id="currentCard"></div>
     </div>
     <div class="inner-tab-section" id="inner-today">
+      <div id="weekSparkline" style="padding:10px 16px 4px;display:flex;justify-content:space-between;align-items:flex-end;gap:4px;"></div>
       <div id="todayForecastPanel"></div>
       <div class="section-label">UPCOMING <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
       <div class="forecast-scroll">
@@ -1363,6 +1367,48 @@ function setBreak(index) {
           ${afternoonNote.split('\n').map((l,i) => `<div style="font-size:11px;color:${i===0?'#fff':'var(--accent)'};">${l}</div>`).join('')}
         </div>` : '<div></div>'}
       </div>` : '';
+  }
+
+  // Best session window using Open-Meteo hourly data
+  const bwEl = document.getElementById('bestWindowPanel');
+  if (bwEl && cachedData?.swell?.hourly) {
+    const swHourly = cachedData.swell.hourly;
+    const times = swHourly.time;
+    const waveH = swHourly.wave_height || swHourly.swell_wave_height || null;
+    const waveP = swHourly.swell_wave_period || swHourly.wave_period || null;
+    const waveD = swHourly.swell_wave_direction || null;
+    const now = new Date();
+    const brisbaneNow = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+    const todayStr = `${brisbaneNow.getUTCFullYear()}-${String(brisbaneNow.getUTCMonth()+1).padStart(2,'0')}-${String(brisbaneNow.getUTCDate()).padStart(2,'0')}`;
+    // Score each hour 5am–7pm
+    const hourScores = [];
+    times.forEach((t, i) => {
+      if (!t.startsWith(todayStr)) return;
+      const hr = parseInt(t.split('T')[1]);
+      if (hr < 5 || hr > 17) return;
+      const h = waveH ? waveH[i] : null;
+      const p = waveP ? waveP[i] : null;
+      const dir = waveD ? degToCompass(waveD[i]) : null;
+      const sH = h !== null ? estimateSurfHeight(h, b.exposure, dir, b, p) : null;
+      if (sH === null) return;
+      const pBonus = p !== null ? (p >= 14 ? 1.3 : p >= 10 ? 1.1 : 1.0) : 1.0;
+      hourScores.push({ hr, score: sH * pBonus });
+    });
+    if (hourScores.length >= 2) {
+      // Find best 3-hour window
+      let bestSum = -1, bestStart = null;
+      for (let i = 0; i < hourScores.length - 2; i++) {
+        const sum = hourScores[i].score + hourScores[i+1].score + hourScores[i+2].score;
+        if (sum > bestSum) { bestSum = sum; bestStart = hourScores[i].hr; }
+      }
+      if (bestStart !== null) {
+        const fmt = h => h === 12 ? '12pm' : h > 12 ? (h-12) + 'pm' : h + 'am';
+        bwEl.innerHTML = `<div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--muted);">BEST WINDOW</span>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);">${fmt(bestStart)}–${fmt(bestStart+3)}</span>
+        </div>`;
+      } else { bwEl.innerHTML = ''; }
+    } else { bwEl.innerHTML = ''; }
   }
 
   document.getElementById('breakNotes').innerHTML =
@@ -2578,10 +2624,11 @@ function fmtSwell(bomText, omHeight, omDir, omPeriod) {
   const dir = omDir  != null ? omDir  : extractDir(shortDir(bomText || ''));
   const h   = omHeight != null ? omHeight : extractHeight(bomText || '');
   const p   = omPeriod != null ? omPeriod : extractPeriod(bomText || '');
+  const pColor = p !== null ? (p >= 14 ? 'var(--high)' : p >= 10 ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)';
   return [
     dir  ? dir : null,
     h    !== null ? h.toFixed(1) + 'm' : null,
-    p    !== null ? Math.round(p) + 's' : null,
+    p    !== null ? `<span style="color:${pColor}">${Math.round(p)}s</span>` : null,
   ].filter(Boolean).join(' · ') || shortDir(bomText || '') || '—';
 }
 
@@ -2900,6 +2947,7 @@ function renderForecast(forecast, tideData, swellData) {
               <div class="condition-value" style="font-size:12px;">${todayTidesStr || '—'}</div>
             </div>
           </div>
+          <div id="bestWindowPanel"></div>
           <div id="offshoreWindowPanel"></div>
           <div id="morningAfternoonPanel"></div>
         </div>
@@ -2959,6 +3007,29 @@ function renderForecast(forecast, tideData, swellData) {
     `;
     forecastRow.appendChild(card);
   });
+
+  // 7-day score sparkline
+  const sparkEl = document.getElementById('weekSparkline');
+  if (sparkEl && BREAKS[currentBreak]) {
+    const bk = BREAKS[currentBreak];
+    sparkEl.innerHTML = forecast.forecasts.map((day, i) => {
+      const df = {
+        forecasts: [day],
+        _period:   forecast._periodByDay?.[i] ?? (i === 0 ? forecast._period : i === 1 ? forecast._periodTomorrow : null),
+        _swellDir: forecast._swellDirByDay?.[i] ?? null,
+        _tide:     i === 0 ? forecast._tide : null,
+      };
+      const s = scoreBreak(bk, df);
+      const c = s >= 7 ? 'var(--high)' : s >= 5 ? 'var(--accent)' : 'var(--muted)';
+      const dayAbbr = (day.day || '').slice(0, 3).toUpperCase();
+      const barH = Math.max(4, Math.round(s / 10 * 28));
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:default;" title="${dayAbbr}: ${s}/10">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:11px;color:${c};">${s}</span>
+        <div style="width:100%;max-width:24px;height:${barH}px;background:${c};border-radius:3px 3px 0 0;opacity:${i===0?'1':'0.7'};"></div>
+        <span style="font-family:'DM Mono',monospace;font-size:7px;color:var(--muted);letter-spacing:0.5px;">${dayAbbr}</span>
+      </div>`;
+    }).join('');
+  }
 }
 
 ///////////////////////////////////////////////////
@@ -3406,6 +3477,28 @@ async function loadNightMode() {
     document.getElementById('loadingEl').style.display = 'none';
     document.getElementById('content').classList.add('visible');
     document.getElementById('currentConditionsLabel').textContent = 'TOMORROW\'S CONDITIONS';
+
+    // 7-day sparkline in night mode
+    const nmSparkEl = document.getElementById('weekSparkline');
+    if (nmSparkEl) {
+      const bk = BREAKS[currentBreak];
+      nmSparkEl.innerHTML = (data.forecast.forecasts || []).map((day, i) => {
+        const df = {
+          forecasts: [day],
+          _period:   data.forecast._periodByDay?.[i] ?? (i === 0 ? data.forecast._periodTomorrow : null),
+          _swellDir: data.forecast._swellDirByDay?.[i] ?? null,
+        };
+        const s = bk ? scoreBreak(bk, df) : 0;
+        const c = s >= 7 ? 'var(--high)' : s >= 5 ? 'var(--accent)' : 'var(--muted)';
+        const dayAbbr = (day.day || '').slice(0, 3).toUpperCase();
+        const barH = Math.max(4, Math.round(s / 10 * 28));
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;" title="${dayAbbr}: ${s}/10">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:11px;color:${c};">${s}</span>
+          <div style="width:100%;max-width:24px;height:${barH}px;background:${c};border-radius:3px 3px 0 0;opacity:0.7;"></div>
+          <span style="font-family:'DM Mono',monospace;font-size:7px;color:var(--muted);letter-spacing:0.5px;">${dayAbbr}</span>
+        </div>`;
+      }).join('');
+    }
 
     // Forecast cards — tomorrow and day-after already in todayForecastPanel, show the rest
     const forecastRow = document.getElementById('forecastRow');
@@ -3980,6 +4073,33 @@ window.addEventListener('appinstalled', () => {
   if (btn) btn.style.display = 'none';
   _installPrompt = null;
 });
+
+// Pull-to-refresh
+(function() {
+  let startY = 0, curY = 0, pulling = false;
+  const THRESHOLD = 72;
+  const ind = document.getElementById('ptrIndicator');
+  document.addEventListener('touchstart', e => {
+    if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; }
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    curY = e.touches[0].clientY;
+    const dy = Math.max(0, curY - startY);
+    if (ind && dy > 8) {
+      const progress = Math.min(dy / THRESHOLD, 1);
+      ind.style.opacity = progress;
+      ind.style.transform = `translateX(-50%) translateY(${Math.min(dy * 0.5, 36)}px)`;
+    }
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    const dy = Math.max(0, curY - startY);
+    pulling = false;
+    if (ind) { ind.style.opacity = '0'; ind.style.transform = 'translateX(-50%) translateY(-40px)'; }
+    if (dy >= THRESHOLD) { isActiveHours() ? loadData() : loadNightMode(); }
+  }, { passive: true });
+})();
 </script>
 </body>
 </html>
