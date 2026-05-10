@@ -774,7 +774,7 @@
     <!-- TAB: CONDITIONS -->
     <div class="tab-section active" id="tab-conditions">
     <div id="breakPhotoWrap" style="margin: 12px 20px 0; height: 190px; border-radius: 10px; overflow: hidden; position: relative;">
-      <img id="breakImg" alt="" style="width:100%; height:100%; object-fit:cover; display:block; transition: filter 0.4s;">
+      <div id="breakImg" style="position:absolute;inset:0;background-size:cover;background-position:center;transition:filter 0.4s;"></div>
       <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,12,15,0.65) 0%, transparent 55%);pointer-events:none;"></div>
       <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
       <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;position:absolute;top:8px;right:8px;background:rgba(10,12,15,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
@@ -1113,11 +1113,7 @@ function setBreak(index) {
   _currentBreakName = b.name;
   _currentBreakNotes = b.notes || '';
   const imgEl = document.getElementById('breakImg');
-  if (imgEl) {
-    const _src = getBreakImg(index);
-    imgEl.src = '';
-    setTimeout(() => { imgEl.src = _src; }, 0);
-  }
+  if (imgEl) imgEl.style.backgroundImage = `url("${getBreakImg(index)}")`;
   showLiveCamButton(index);
 
   // Update surf height in current conditions card based on selected break exposure
