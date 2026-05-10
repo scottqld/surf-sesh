@@ -1000,7 +1000,7 @@ let BREAKS = [
   {
     name: 'Sunshine Beach', subtitle: 'Sunshine',
     notes: 'Open beach break facing east. Best E swell with W offshore wind. Works across most sizes and tides. Good alternative when the points are too small or too crowded.',
-    tide: { ideal: 'mid-high', avoid: 'low' }, sizeCap: 9, exposure: 0.90, benefitsFromPeriod: true,
+    tide: { ideal: 'mid-high', avoid: 'low' }, sizeCap: 9, exposure: 0.60, benefitsFromPeriod: true,
     ideal:      { swellDirs: ['E','ESE','ENE'],       windDirs: ['W','WSW','WNW','SW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
     acceptable: { swellDirs: ['SE','NE'],             windDirs: ['NW','SSW'],                      swellMin: 0.3, swellMax: 1.5, periodMin: 6  },
     avoid:      { swellDirs: ['N','NW','S','SW'],     windDirs: ['NE','ENE','E','ESE','SE','N','S'], swellMin: 0, swellMax: 9,   periodMin: 0, windPenalty: 3 },
@@ -1097,7 +1097,18 @@ function setBreak(index) {
     if (!btn) return;
     btn.classList.toggle('active', i === index);
     if (i === index) {
-      btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      const toggle = document.querySelector('.station-toggle');
+      if (toggle) {
+        const btnLeft = btn.offsetLeft;
+        const btnRight = btnLeft + btn.offsetWidth;
+        const toggleLeft = toggle.scrollLeft;
+        const toggleRight = toggleLeft + toggle.clientWidth;
+        if (btnRight > toggleRight - 44) {
+          toggle.scrollTo({ left: btnLeft - 20, behavior: 'smooth' });
+        } else if (btnLeft < toggleLeft) {
+          toggle.scrollTo({ left: btnLeft - 20, behavior: 'smooth' });
+        }
+      }
     }
   });
   const b = BREAKS[index];
@@ -1859,7 +1870,7 @@ const BREAK_PATCHES = {
   'Nationals':      { exposure: 0.58 },
   'Tea Tree':       { exposure: 0.55 },
   'Granite Bay':    { exposure: 0.65 },
-  'Sunshine Beach': { exposure: 0.90 },
+  'Sunshine Beach': { exposure: 0.85 },
 };
 function applyBreakPatches(breaks) {
   return breaks.map(b => BREAK_PATCHES[b.name] ? { ...b, ...BREAK_PATCHES[b.name] } : b);
@@ -1979,7 +1990,7 @@ async function loadData(forceRefresh = false) {
     if (fetchedAt) {
       const ageMs = Date.now() - new Date(fetchedAt).getTime();
       const ageMins = Math.round(ageMs / 60000);
-      if (ageMins > 25) {
+      if (ageMins > 55) {
         document.getElementById('lastUpdated').innerHTML +=
           `<br><span style="color:rgba(255,200,60,0.9);font-size:8px;cursor:pointer;" onclick="loadData(true)" title="Tap to force refresh">⚠ cached ${ageMins}m ago</span>`;
       }
@@ -2320,18 +2331,10 @@ function renderAll(data) {
     const swellDirArr = data.swell.hourly.swell_wave_direction  || null;
     data.forecast._currentWaveHeight = swellHArr   && idxNow > -1 ? swellHArr[idxNow]   : null;
     data.forecast._currentSwellDir   = swellDirArr && idxNow > -1 ? degToCompass(swellDirArr[idxNow]) : null;
+    // Set _swellDir directly so all scoreBreak calls (banner + conditions) use Open-Meteo direction
+    // Do NOT set _swellHeight here — Open-Meteo swell_wave_height is just the swell component
+    // and can be tiny; BOM text height is more aligned with what surfers see
     data.forecast._swellDir = data.forecast._currentSwellDir ?? null;
-
-    // Override current conditions with real buoy data when available (Mooloolaba/Caloundra)
-    const buoy = data.buoy;
-    if (buoy && !buoy.error && buoy.Hsig > 0) {
-      data.forecast._currentWaveHeight = buoy.Hsig;
-      if (buoy.Tp   > 0)  data.forecast._period      = buoy.Tp;
-      if (buoy.Direction >= 0) {
-        data.forecast._currentSwellDir = degToCompass(buoy.Direction);
-        data.forecast._swellDir        = data.forecast._currentSwellDir;
-      }
-    }
 
     // Pre-compute daily average periods, swell direction and height from Open-Meteo
     // This gives fairer forecast scores beyond tomorrow
@@ -2471,6 +2474,12 @@ function shortDir(text) {
     m => dirs[m.toLowerCase()] || m);
 }
 
+///////////////////////////////////////////////////
+// Estimated surf (face) height from offshore Hm0, break exposure, and swell direction
+// Calibrated: First Point exposure=0.32 → 2.8m offshore = 0.9m surf (Surfline, May 2026)
+// Direction multiplier: ideal angle = 1.0, one step off = 0.8, two steps off = 0.6
+// Estimated surf (face) height from offshore Hm0, break exposure, swell direction and period
+// Period multiplier: longer period swell wraps around headlands more efficiently
 function estimateSurfHeight(offshoreH, exposure, swellDir, breakData, period) {
   if (offshoreH === null || offshoreH === undefined || !exposure) return null;
   let dirMultiplier = 1.0;
@@ -2604,9 +2613,7 @@ function renderForecast(forecast, tideData, swellData) {
 
   // Water temperature from Open-Meteo sea_surface_temperature
   let waterTemp = null;
-  if (cachedData?.buoy?.SST > 0) {
-    waterTemp = cachedData.buoy.SST;
-  } else if (swellData?.hourly?.sea_surface_temperature) {
+  if (swellData?.hourly?.sea_surface_temperature) {
     const tempArr = swellData.hourly.sea_surface_temperature;
     const tempTimes = swellData.hourly.time;
     const brisbaneNow = new Date(Date.now() + 10 * 60 * 60 * 1000);
@@ -2681,14 +2688,10 @@ function renderForecast(forecast, tideData, swellData) {
         </div>`
       : '';
 
-    // Wind — real-time Tewantin AWS preferred, BOM forecast text as fallback
-    const obsWind = cachedData.wind;
-    const wp      = current.windParsed;
-    const windDir = (obsWind && !obsWind.error && obsWind.wind_dir) ? obsWind.wind_dir
-                  : wp?.dir || extractDir(shortDir(current.winds));
-    const windKmh = (obsWind && !obsWind.error && obsWind.wind_kmh != null) ? obsWind.wind_kmh
-                  : wp?.kmh ?? null;
-    const windGust = (obsWind && !obsWind.error && obsWind.gust_kmh != null) ? obsWind.gust_kmh : null;
+    // Wind (BOM structured)
+    const wp     = current.windParsed;
+    const windDir = wp?.dir || extractDir(shortDir(current.winds));
+    const windKmh = wp?.kmh ?? null;
 
     currentCard.innerHTML = `
       <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
@@ -2720,7 +2723,7 @@ function renderForecast(forecast, tideData, swellData) {
             <div class="condition-label">Wind</div>
             <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
               ${dirArrow(windDir, 18, 'var(--text)')}
-              <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}${windGust ? ' · ' + windGust + ' gust' : ''}</span>
+              <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}</span>
             </div>
           </div>
           <div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
@@ -2731,7 +2734,10 @@ function renderForecast(forecast, tideData, swellData) {
             <div class="condition-label">Water</div>
             <div class="condition-value">${waterTemp !== null ? Math.round(waterTemp) + '°C' : '—'}</div>
           </div>
-
+          ${seasStr ? `<div style="padding:11px 12px;grid-column:1/-1;border-top:1px solid rgba(0,229,160,0.15);">
+            <div class="condition-label">Seas <span style="opacity:0.5;font-size:8px;">total incl. chop · BOM</span></div>
+            <div class="condition-value">${seasStr}</div>
+          </div>` : ''}
           <div style="padding:11px 12px;grid-column:1/-1;border-top:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Tide</div>
             <div class="condition-value">${tideStr}</div>
