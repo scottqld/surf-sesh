@@ -2447,18 +2447,17 @@ function renderAll(data) {
   document.getElementById('loadingEl').style.display = 'none';
   document.getElementById('content').classList.add('visible');
 
-  setBreak(initialBreak || 0);
-
-  // Defer chart and tides to next frame so content is painted first
+  // Defer setBreak to next frame so the img element has a painted layout before
+  // the blob URL is applied — avoids blank photo on first load
   requestAnimationFrame(() => {
+    setBreak(initialBreak || 0);
     renderTides(data.tides[currentStation]);
     renderSessionPlanner(data.forecast, data.swell);
     renderDITripGate(data.forecast, data.swell);
-    // Use setTimeout for chart to ensure layout is fully complete
     setTimeout(() => {
       try {
         renderSwellChart(data.swell);
-        } catch(e) { console.error('renderSwellChart error:', e); }
+      } catch(e) { console.error('renderSwellChart error:', e); }
     }, 50);
   });
 }
