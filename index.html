@@ -861,8 +861,8 @@
       <div class="section-label">RATE YOUR SESSION</div>
       <div style="margin:0 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
         <div style="margin-bottom:14px;">
-          <div class="condition-label" style="margin-bottom:6px;">BREAK</div>
-          <select id="logBreakSelect" class="log-select"></select>
+          <div class="condition-label" style="margin-bottom:4px;">LOGGING SESSION AT</div>
+          <div id="logBreakDisplay" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#fff;line-height:1.2;">—</div>
         </div>
         <div style="margin-bottom:14px;">
           <div class="condition-label" style="margin-bottom:8px;">TIME OF DAY</div>
@@ -1584,6 +1584,7 @@ function setBreak(index) {
     if (cachedData) renderDITripGate(cachedData.forecast, cachedData.swell);
     if (cachedData) renderPlannerBreakRow(cachedData.forecast);
     if (cachedData) { const sparkEl = document.getElementById('weekSparkline'); if (sparkEl) sparkEl.innerHTML = buildSparklineHTML(cachedData.forecast, true); }
+    if (currentTab === 'log') { const d = document.getElementById('logBreakDisplay'); if (d && BREAKS[currentBreak]) d.textContent = BREAKS[currentBreak].name; renderSessionLog(); renderCalibration(); }
   });
 }
 
@@ -3626,12 +3627,9 @@ function getSessions() {
 }
 
 function initLogTab() {
-  // Populate break selector, defaulting to currently selected break
-  const sel = document.getElementById('logBreakSelect');
-  if (sel && BREAKS.length) {
-    sel.innerHTML = BREAKS.map((b, i) => `<option value="${i}">${b.name}</option>`).join('');
-    sel.value = currentBreak;
-  }
+  // Sync break display label with current break selector
+  const display = document.getElementById('logBreakDisplay');
+  if (display && BREAKS[currentBreak]) display.textContent = BREAKS[currentBreak].name;
 
   // Build 1–10 score picker
   const picker = document.getElementById('logScorePicker');
@@ -3675,8 +3673,7 @@ function commitLogSession() {
     return;
   }
 
-  const sel      = document.getElementById('logBreakSelect');
-  const breakIdx = parseInt(sel?.value ?? currentBreak);
+  const breakIdx = currentBreak;
   const b        = BREAKS[breakIdx];
   const note     = document.getElementById('logNote')?.value?.trim() || '';
 
@@ -3738,12 +3735,20 @@ function deleteSession(id) {
 }
 
 function renderSessionLog() {
-  const sessions = getSessions();
-  const logEl    = document.getElementById('sessionLog');
-  const accEl    = document.getElementById('logAccuracy');
+  const allSessions = getSessions();
+  const breakName   = BREAKS[currentBreak]?.name;
+  const sessions    = allSessions.filter(s => s.break === breakName);
+  const logEl       = document.getElementById('sessionLog');
+  const accEl       = document.getElementById('logAccuracy');
   if (!logEl) return;
 
-  // Accuracy headline — avg absolute error between algo and user across all rated sessions
+  // Update section label to show current break
+  const sectionLbl = logEl.previousElementSibling;
+  if (sectionLbl && sectionLbl.classList.contains('section-label')) {
+    sectionLbl.textContent = `PAST SESSIONS — ${(breakName || '').toUpperCase()}`;
+  }
+
+  // Accuracy headline for current break
   const rated = sessions.filter(s => s.algoScore !== null);
   if (rated.length >= 3 && accEl) {
     const avgErr = rated.reduce((a, s) => a + Math.abs(s.myScore - s.algoScore), 0) / rated.length;
@@ -3753,7 +3758,7 @@ function renderSessionLog() {
   }
 
   if (!sessions.length) {
-    logEl.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:16px 0;">No sessions logged yet — rate a session above after you get out of the water.</div>`;
+    logEl.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:16px 0;">No sessions logged at ${breakName || 'this break'} yet.</div>`;
     return;
   }
 
@@ -3893,9 +3898,14 @@ function renderCalibration() {
   const sessions = getSessions().filter(s => s.algoScore !== null);
   const byBreak = {};
   sessions.forEach(s => { if (!byBreak[s.break]) byBreak[s.break] = []; byBreak[s.break].push(s); });
+  const currentBreakName = BREAKS[currentBreak]?.name;
   const rows = Object.entries(byBreak)
     .filter(([, arr]) => arr.length >= 3)
-    .sort((a, b) => b[1].length - a[1].length)
+    .sort(([aName, aArr], [bName, bArr]) => {
+      if (aName === currentBreakName) return -1;
+      if (bName === currentBreakName) return 1;
+      return bArr.length - aArr.length;
+    })
     .map(([name, arr]) => {
       const avgMine = arr.reduce((a, s) => a + s.myScore,   0) / arr.length;
       const avgAlgo = arr.reduce((a, s) => a + s.algoScore, 0) / arr.length;
