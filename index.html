@@ -827,6 +827,8 @@
 
     <!-- TAB: PLANNER -->
     <div class="tab-section" id="tab-planner">
+    <div id="plannerBreakHeader" style="padding:16px 20px 4px;display:flex;align-items:baseline;gap:8px;"></div>
+    <div id="plannerDayScores" style="padding:0 20px 16px;"></div>
     <div class="section-label">TOMORROW</div>
     <div id="tomorrowPlannerCard" style="margin:0 20px 0;"></div>
     <div class="section-label">BEST SESSIONS THIS WEEK</div>
@@ -1579,6 +1581,8 @@ function setBreak(index) {
     breakNotesEl.style.opacity = '1';
     if (cachedData) generateAiSummary(b, cachedData.forecast, score);
     if (cachedData) renderDITripGate(cachedData.forecast, cachedData.swell);
+    if (cachedData) renderPlannerBreakRow(cachedData.forecast);
+    if (cachedData) { const sparkEl = document.getElementById('weekSparkline'); if (sparkEl) sparkEl.innerHTML = buildSparklineHTML(cachedData.forecast, true); }
   });
 }
 
@@ -2447,7 +2451,42 @@ function renderDITripGate(forecast, swell) {
     </div>`;
 }
 
+function renderPlannerBreakRow(forecast) {
+  const b = BREAKS[currentBreak];
+  if (!b) return;
+
+  const headerEl = document.getElementById('plannerBreakHeader');
+  if (headerEl) {
+    headerEl.innerHTML = `
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">${b.name}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">SCORE BY DAY</span>`;
+  }
+
+  const rowEl = document.getElementById('plannerDayScores');
+  if (!rowEl || !forecast) return;
+  const days = forecast.forecasts || [];
+  rowEl.innerHTML = `<div style="display:flex;gap:6px;">` +
+    days.map((day, i) => {
+      const dayForecast = {
+        forecasts: [day],
+        _period:      forecast._periodByDay?.[i] ?? (i === 0 ? forecast._period : i === 1 ? forecast._periodTomorrow : null),
+        _swellDir:    forecast._swellDirByDay?.[i] ?? null,
+        _swellHeight: forecast._swellHeightByDay?.[i] ?? null,
+        _tide:        i === 0 ? forecast._tide : null,
+      };
+      const score = scoreBreak(b, dayForecast);
+      const c = scoreColor(score);
+      const dayAbbr = ['SUN','MON','TUE','WED','THU','FRI','SAT'][getBrisbaneNow(i).getUTCDay()];
+      const isToday = i === 0;
+      return `<div style="flex:1;background:var(--surface2);border:1px solid ${isToday ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${c};line-height:1;">${score}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.5px;">${dayAbbr}</span>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
 function renderSessionPlanner(forecast, swell) {
+  renderPlannerBreakRow(forecast);
   const el = document.getElementById('sessionPlanner');
   if (!el) return;
 
