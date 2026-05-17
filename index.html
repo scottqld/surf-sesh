@@ -792,12 +792,12 @@
     <div id="diTripCard" style="display:none;margin:8px 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;"></div>
     <!-- About this break popup -->
     <div id="aboutBreakModal" onclick="if(event.target===this)closeAboutBreak()" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:540px;padding:20px 20px 0;max-height:88vh;display:flex;flex-direction:column;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:540px;padding:20px 20px 0;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0;">
           <span id="aboutBreakTitle" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;"></span>
           <button onclick="closeAboutBreak()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;">✕</button>
         </div>
-        <div style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:max(36px, env(safe-area-inset-bottom, 0px) + 20px);">
+        <div id="aboutBreakScroll" style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:max(36px, env(safe-area-inset-bottom, 0px) + 20px);">
           <p id="aboutBreakBody" style="font-size:13px;line-height:1.7;color:var(--text);margin:0;"></p>
         </div>
       </div>
@@ -1644,6 +1644,22 @@ function openAboutBreak() {
   document.getElementById('aboutBreakTitle').textContent = _currentBreakName;
   document.getElementById('aboutBreakBody').textContent = _currentBreakNotes;
   const modal = document.getElementById('aboutBreakModal');
+  const sheet = modal.querySelector('div');
+  const scroll = document.getElementById('aboutBreakScroll');
+  const isDesktop = window.innerWidth >= 600;
+  if (isDesktop) {
+    modal.style.alignItems = 'center';
+    sheet.style.borderRadius = '16px';
+    sheet.style.maxHeight = '80vh';
+    sheet.style.width = '90%';
+    scroll.style.paddingBottom = '24px';
+  } else {
+    modal.style.alignItems = 'flex-end';
+    sheet.style.borderRadius = '16px 16px 0 0';
+    sheet.style.maxHeight = '88vh';
+    sheet.style.width = '100%';
+    scroll.style.paddingBottom = 'max(36px, env(safe-area-inset-bottom, 0px) + 20px)';
+  }
   modal.style.display = 'flex';
   requestAnimationFrame(() => modal.style.opacity = '1');
 }
