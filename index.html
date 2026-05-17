@@ -1646,19 +1646,23 @@ function openAboutBreak() {
   const modal = document.getElementById('aboutBreakModal');
   const sheet = modal.querySelector('div');
   const scroll = document.getElementById('aboutBreakScroll');
+  const navBar = document.querySelector('nav.tab-bar') || document.querySelector('.tab-bar');
+  const navH = navBar ? navBar.offsetHeight : 0;
   const isDesktop = window.innerWidth >= 600;
   if (isDesktop) {
     modal.style.alignItems = 'center';
+    modal.style.paddingBottom = '0px';
     sheet.style.borderRadius = '16px';
     sheet.style.maxHeight = '80vh';
     sheet.style.width = '90%';
     scroll.style.paddingBottom = '24px';
   } else {
     modal.style.alignItems = 'flex-end';
+    modal.style.paddingBottom = navH + 'px';
     sheet.style.borderRadius = '16px 16px 0 0';
-    sheet.style.maxHeight = '88vh';
+    sheet.style.maxHeight = 'calc(88vh - ' + navH + 'px)';
     sheet.style.width = '100%';
-    scroll.style.paddingBottom = 'max(36px, env(safe-area-inset-bottom, 0px) + 20px)';
+    scroll.style.paddingBottom = '20px';
   }
   modal.style.display = 'flex';
   requestAnimationFrame(() => modal.style.opacity = '1');
