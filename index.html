@@ -1078,7 +1078,7 @@ function buildSparklineHTML(forecast, highlightFirst = true) {
     };
     const s = scoreBreak(bk, df);
     const c = scoreColor(s);
-    const dayAbbr = (day.day || '').slice(0, 3).toUpperCase();
+    const dayAbbr = ['SUN','MON','TUE','WED','THU','FRI','SAT'][getBrisbaneNow(i).getUTCDay()];
     const barH = Math.max(4, Math.round(s / 10 * 28));
     const opacity = (highlightFirst && i === 0) ? '1' : '0.7';
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:default;" title="${dayAbbr}: ${s}/10">
