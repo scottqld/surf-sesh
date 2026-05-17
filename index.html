@@ -3995,8 +3995,6 @@ function switchTab(tab) {
   document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
   const toggleWrap = document.querySelector('.station-toggle-wrap');
   if (toggleWrap) toggleWrap.style.display = '';
-  const liveCam = document.getElementById('liveCamBtn');
-  if (liveCam && tab !== 'conditions') liveCam.style.display = 'none';
   const scoreBadge = document.getElementById('photoScoreBadge');
   if (scoreBadge && tab !== 'conditions') scoreBadge.style.display = 'none';
   if (tab === 'planner' && cachedData?.swell) {
