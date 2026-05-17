@@ -3995,7 +3995,7 @@ function switchTab(tab) {
   document.getElementById(`tab-${tab}`)?.classList.add('active');
   document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
   const toggleWrap = document.querySelector('.station-toggle-wrap');
-  if (toggleWrap) toggleWrap.style.display = tab === 'conditions' ? '' : 'none';
+  if (toggleWrap) toggleWrap.style.display = '';
   if (tab === 'planner' && cachedData?.swell) {
     setTimeout(() => renderSwellChart(cachedData.swell), 50);
   }
