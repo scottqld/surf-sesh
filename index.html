@@ -757,6 +757,18 @@
   <button class="scroll-arrow scroll-arrow-right" id="scrollRight" onclick="scrollBreaks(120)">›</button>
 </div>
 
+  <div id="breakPhotoWrap" style="margin: 0 20px 0; height: 190px; border-radius: 10px; overflow: hidden; position: relative;">
+    <div id="breakImg" style="position:absolute;inset:0;background-size:cover;background-position:center;transition:filter 0.4s;"></div>
+    <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,12,15,0.65) 0%, transparent 55%);pointer-events:none;"></div>
+    <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
+    <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;position:absolute;top:8px;right:8px;background:rgba(10,12,15,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
+    <div id="photoScoreBadge" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;">
+      <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
+      <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
+    </div>
+    <button id="aboutBreakBtn" onclick="openAboutBreak()" style="position:absolute;bottom:10px;left:12px;background:rgba(10,12,15,0.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:rgba(255,255,255,0.85);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.2px;padding:4px 9px;cursor:pointer;text-transform:uppercase;">About this break ↗</button>
+  </div>
+
   <div id="loadingEl" class="loading">
     <div class="loading-bars">
       <div class="loading-bar"></div>
@@ -776,17 +788,6 @@
   <div id="content" class="content">
     <!-- TAB: CONDITIONS -->
     <div class="tab-section active" id="tab-conditions">
-    <div id="breakPhotoWrap" style="margin: 12px 20px 0; height: 190px; border-radius: 10px; overflow: hidden; position: relative;">
-      <div id="breakImg" style="position:absolute;inset:0;background-size:cover;background-position:center;transition:filter 0.4s;"></div>
-      <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,12,15,0.65) 0%, transparent 55%);pointer-events:none;"></div>
-      <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
-      <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;position:absolute;top:8px;right:8px;background:rgba(10,12,15,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
-      <div id="photoScoreBadge" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;">
-        <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
-        <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
-      </div>
-      <button id="aboutBreakBtn" onclick="openAboutBreak()" style="position:absolute;bottom:10px;left:12px;background:rgba(10,12,15,0.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:rgba(255,255,255,0.85);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.2px;padding:4px 9px;cursor:pointer;text-transform:uppercase;">About this break ↗</button>
-    </div>
     <div id="bestBreakBanner" style="display:none;margin:10px 20px 0;padding:10px 14px;background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--high);letter-spacing:0.5px;"></div>
     <div id="breakNotes" style="margin:8px 20px 0;"></div>
     <div id="diTripCard" style="display:none;margin:8px 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;"></div>
@@ -2457,9 +2458,7 @@ function renderPlannerBreakRow(forecast) {
 
   const headerEl = document.getElementById('plannerBreakHeader');
   if (headerEl) {
-    headerEl.innerHTML = `
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">${b.name}</span>
-      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">SCORE BY DAY</span>`;
+    headerEl.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1.5px;">SCORE BY DAY — ${b.name.toUpperCase()}</span>`;
   }
 
   const rowEl = document.getElementById('plannerDayScores');
@@ -3996,6 +3995,10 @@ function switchTab(tab) {
   document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
   const toggleWrap = document.querySelector('.station-toggle-wrap');
   if (toggleWrap) toggleWrap.style.display = '';
+  const liveCam = document.getElementById('liveCamBtn');
+  if (liveCam && tab !== 'conditions') liveCam.style.display = 'none';
+  const scoreBadge = document.getElementById('photoScoreBadge');
+  if (scoreBadge && tab !== 'conditions') scoreBadge.style.display = 'none';
   if (tab === 'planner' && cachedData?.swell) {
     setTimeout(() => renderSwellChart(cachedData.swell), 50);
   }
