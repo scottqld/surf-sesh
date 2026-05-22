@@ -724,6 +724,22 @@
   .tab-section { display: none; }
   .tab-section.active { display: block; }
   .app { padding-bottom: 60px; }
+
+  /* Toggle switch */
+  .toggle-wrap { display:flex;align-items:center;justify-content:space-between;padding:16px 0; }
+  .toggle-label { font-family:'DM Mono',monospace;font-size:13px;color:var(--text); }
+  .toggle-sub   { font-size:11px;color:var(--muted);margin-top:2px; }
+  .toggle { position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0; }
+  .toggle input { opacity:0;width:0;height:0; }
+  .toggle-slider {
+    position:absolute;inset:0;background:var(--border);border-radius:24px;cursor:pointer;transition:.3s;
+  }
+  .toggle-slider:before {
+    content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;
+    background:#fff;border-radius:50%;transition:.3s;
+  }
+  input:checked + .toggle-slider { background:var(--accent); }
+  input:checked + .toggle-slider:before { transform:translateX(20px); }
 </style>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "973be145b9d84f478f21eb5a635fc5dc"}'></script><!-- End Cloudflare Web Analytics -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
@@ -915,6 +931,30 @@
       </div>
     </div>
 
+    <!-- TAB: SETTINGS -->
+    <div class="tab-section" id="tab-settings">
+      <div class="section-label">MORNING SURF REPORT</div>
+      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 16px;">
+        <div class="toggle-wrap" style="border-bottom:1px solid var(--border);">
+          <div>
+            <div class="toggle-label">Daily notification</div>
+            <div class="toggle-sub">Best break of the day at your chosen time</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="notifToggle" onchange="handleNotifToggle(this)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="notifTimeRow" style="display:none;padding:16px 0;border-bottom:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;">NOTIFICATION TIME</div>
+          <select id="notifHourSelect" onchange="updateNotifHour()"
+            style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;cursor:pointer;appearance:none;">
+          </select>
+        </div>
+        <div id="notifStatus" style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-height:36px;"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -937,6 +977,10 @@
       <path d="M11.5 20 Q10.5 22.5 10 24" stroke-width="1.4"/>
     </svg>
     SESSION
+  </button>
+  <button class="tab-btn" id="tabBtn-settings" onclick="switchTab('settings')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    SETTINGS
   </button>
   <button id="installBtn" onclick="installPWA()" style="display:none;position:fixed;bottom:80px;right:16px;z-index:999;background:var(--accent);color:#000;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;font-weight:700;border:none;border-radius:20px;padding:10px 16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,218,216,0.4);">⊕ ADD TO HOME</button>
 </nav>
@@ -4167,6 +4211,118 @@ window.addEventListener('appinstalled', () => {
     if (dy >= THRESHOLD) { isActiveHours() ? loadData() : loadNightMode(); }
   }, { passive: true });
 })();
+
+// ─── PUSH NOTIFICATIONS (Settings tab) ───────────────────────────────────────
+const VAPID_PUBLIC_KEY = 'BCb7XtE1ipTeb_yJArg29xPCwJXQnnREgfLyGt47MiYnUniKWZxonlQmwJwWWRcQ3Wpqnz_pS7ZFEiAbBrgXiu8';
+
+function urlBase64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+function buildHourOptions() {
+  const sel = document.getElementById('notifHourSelect');
+  if (!sel || sel.options.length) return;
+  for (let h = 0; h < 24; h++) {
+    const opt = document.createElement('option');
+    opt.value = h;
+    const ampm = h < 12 ? 'am' : 'pm';
+    const h12  = h % 12 || 12;
+    opt.textContent = `${h12}:00 ${ampm}`;
+    sel.appendChild(opt);
+  }
+  sel.value = localStorage.getItem('notifHour') ?? 7;
+}
+
+let _pushSub = null;
+
+async function initNotifications() {
+  buildHourOptions();
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    document.getElementById('notifToggle').disabled = true;
+    document.getElementById('notifStatus').textContent = 'Push not supported in this browser.';
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      _pushSub = sub;
+      document.getElementById('notifToggle').checked = true;
+      document.getElementById('notifTimeRow').style.display = '';
+      const saved = localStorage.getItem('notifHour');
+      if (saved !== null) document.getElementById('notifHourSelect').value = saved;
+      document.getElementById('notifStatus').textContent = 'Morning report active ✓';
+    }
+  } catch { /* SW not ready yet — handled on tab switch */ }
+}
+
+async function handleNotifToggle(checkbox) {
+  checkbox.disabled = true;
+  try {
+    if (checkbox.checked) await enableNotifications();
+    else await disableNotifications();
+  } finally {
+    checkbox.disabled = false;
+  }
+}
+
+async function enableNotifications() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    document.getElementById('notifToggle').checked = false;
+    document.getElementById('notifStatus').textContent = 'Permission denied — enable in browser settings.';
+    return;
+  }
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+  });
+  _pushSub = sub;
+  const hour = parseInt(document.getElementById('notifHourSelect').value);
+  localStorage.setItem('notifHour', hour);
+  await fetch(`${WORKER_URL}/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscription: sub.toJSON(), preferredHour: hour }),
+  });
+  document.getElementById('notifTimeRow').style.display = '';
+  document.getElementById('notifStatus').textContent = 'Morning report active ✓';
+}
+
+async function disableNotifications() {
+  if (_pushSub) {
+    await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: _pushSub.endpoint }),
+    }).catch(() => {});
+    await _pushSub.unsubscribe();
+    _pushSub = null;
+  }
+  document.getElementById('notifTimeRow').style.display = 'none';
+  document.getElementById('notifStatus').textContent = '';
+}
+
+async function updateNotifHour() {
+  if (!_pushSub) return;
+  const hour = parseInt(document.getElementById('notifHourSelect').value);
+  localStorage.setItem('notifHour', hour);
+  await fetch(`${WORKER_URL}/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscription: _pushSub.toJSON(), preferredHour: hour }),
+  }).catch(() => {});
+}
+
+// Init when the settings tab becomes active
+const _origSwitchTab = switchTab;
+window.switchTab = function(tab) {
+  _origSwitchTab(tab);
+  if (tab === 'settings') initNotifications();
+};
 </script>
 </body>
 </html>

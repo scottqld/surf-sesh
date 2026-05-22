@@ -87,3 +87,27 @@ async function cacheFirstWithRevalidate(request) {
     .catch(() => null);
   return cached || fetchPromise;
 }
+
+// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+self.addEventListener('push', event => {
+  const data = event.data?.json() ?? {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || '🏄 SurfSesh', {
+      body:  data.body  || 'Tap for today\'s surf conditions.',
+      icon:  data.icon  || '/surf-sesh/icon-192.png',
+      badge: data.badge || '/surf-sesh/icon-192.png',
+      data:  { url: data.url || '/surf-sesh/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/surf-sesh/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      const existing = windowClients.find(c => c.url.includes('/surf-sesh/') && 'focus' in c);
+      return existing ? existing.focus() : clients.openWindow(targetUrl);
+    })
+  );
+});
