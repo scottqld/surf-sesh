@@ -4275,21 +4275,41 @@ async function enableNotifications() {
     document.getElementById('notifStatus').textContent = 'Permission denied — enable in browser settings.';
     return;
   }
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-  });
+
+  // Show time picker immediately so user can set their preferred time
+  document.getElementById('notifTimeRow').style.display = '';
+  document.getElementById('notifStatus').textContent = 'Subscribing…';
+
+  let sub;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  } catch (e) {
+    document.getElementById('notifToggle').checked = false;
+    document.getElementById('notifTimeRow').style.display = 'none';
+    document.getElementById('notifStatus').textContent = 'Push subscription failed: ' + e.message;
+    return;
+  }
+
   _pushSub = sub;
   const hour = parseInt(document.getElementById('notifHourSelect').value);
   localStorage.setItem('notifHour', hour);
-  await fetch(`${WORKER_URL}/subscribe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscription: sub.toJSON(), preferredHour: hour }),
-  });
-  document.getElementById('notifTimeRow').style.display = '';
-  document.getElementById('notifStatus').textContent = 'Morning report active ✓';
+
+  try {
+    const res = await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), preferredHour: hour }),
+    });
+    document.getElementById('notifStatus').textContent = res.ok
+      ? 'Morning report active ✓'
+      : 'Subscribed — server sync failed, will retry on next save.';
+  } catch {
+    document.getElementById('notifStatus').textContent = 'Subscribed locally — server sync failed.';
+  }
 }
 
 async function disableNotifications() {
