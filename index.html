@@ -700,93 +700,67 @@
   /* Night mode — subtle body tint */
   body.night-mode { background: #060810; }
 
-  /* Night mode compact header strip — sits above the forecast panels */
-  /* Night mode hero card */
-  .night-hero {
-    margin: 12px 12px 4px;
-    padding: 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-  }
-  .night-hero-header {
+  /* Night mode overnight banner */
+  .night-banner {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 14px;
+    gap: 8px;
+    padding: 10px 20px 6px;
   }
-  .night-hero-title {
+  .night-banner-label {
     font-family: 'DM Mono', monospace;
     font-size: 11px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--text);
+    color: var(--muted);
   }
-  .night-hero-pill {
+  .night-banner-pill {
     font-family: 'DM Mono', monospace;
     font-size: 10px;
     color: var(--muted);
-    background: rgba(232,168,58,0.1);
-    border: 1px solid rgba(232,168,58,0.25);
-    padding: 3px 9px;
-    border-radius: 20px;
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 10px;
     letter-spacing: 0.5px;
   }
-  .night-hero-score-row {
+
+  /* ─── FORECAST DAY TABS ─────────────────────────────────────────────────── */
+  #forecastDayTabs {
     display: flex;
-    align-items: baseline;
+    overflow-x: auto;
+    padding: 12px 16px 4px;
     gap: 6px;
-    margin-bottom: 16px;
+    scrollbar-width: none;
   }
-  .night-hero-score-num {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 64px;
-    line-height: 1;
-  }
-  .night-hero-score-denom {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 26px;
-    color: var(--muted);
-    margin-right: 6px;
-  }
-  .night-hero-verdict {
-    font-family: 'DM Mono', monospace;
-    font-size: 14px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-  }
-  .night-hero-break {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 1px;
-    margin-top: 2px;
-  }
-  .night-hero-conditions {
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
+  #forecastDayTabs::-webkit-scrollbar { display: none; }
+  .day-tab-btn {
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    align-items: center;
+    gap: 3px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    min-width: 52px;
+    transition: border-color 0.15s, background 0.15s;
   }
-  .night-hero-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+  .day-tab-btn.active {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.08);
   }
-  .night-hero-key {
+  .day-tab-label {
     font-family: 'DM Mono', monospace;
-    font-size: 10px;
+    font-size: 9px;
     letter-spacing: 1.5px;
-    text-transform: uppercase;
     color: var(--muted);
-    flex-shrink: 0;
+    text-transform: uppercase;
   }
-  .night-hero-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
-    color: var(--text);
-    text-align: right;
+  .day-tab-btn.active .day-tab-label { color: var(--accent); }
+  .day-tab-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    line-height: 1;
   }
   /* TAB BAR */
   .tab-bar {
@@ -939,12 +913,8 @@
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
     </div>
     <div class="current-card" id="currentCard"></div>
-    <div id="weekSparkline" style="padding:10px 16px 4px;display:flex;justify-content:space-between;align-items:flex-end;gap:4px;"></div>
-    <div id="todayForecastPanel"></div>
-    <div class="section-label">UPCOMING <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
-    <div class="forecast-scroll">
-      <div class="forecast-row" id="forecastRow"></div>
-    </div>
+    <div id="forecastDayTabs"></div>
+    <div id="forecastDayPanel"></div>
     </div>
 
     <!-- TAB: PLANNER -->
@@ -1099,7 +1069,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1239,6 +1209,107 @@ function buildSparklineHTML(forecast, highlightFirst = true) {
       <span style="font-family:'DM Mono',monospace;font-size:7px;color:var(--muted);letter-spacing:0.5px;">${dayAbbr}</span>
     </div>`;
   }).join('');
+}
+
+// State for the forecast day tab bar (set by renderForecastTabs, read by selectForecastTab + setBreak)
+let _forecastTabState = null;
+
+/**
+ * Build the forecast day tab bar and render the first tab's panel.
+ * @param {object} forecast        - the full forecast object
+ * @param {number} forecastStartIdx - which index of forecast.forecasts is tab 0
+ * @param {number} realDayStart    - which real day (0=today) tab 0 represents (for tides/_periodByDay)
+ */
+function renderForecastTabs(forecast, forecastStartIdx, realDayStart) {
+  _forecastTabState = { forecast, forecastStartIdx, realDayStart };
+  const bar = document.getElementById('forecastDayTabs');
+  if (!bar) return;
+  const b = BREAKS[currentBreak];
+  const days = forecast.forecasts.slice(forecastStartIdx);
+  bar.innerHTML = days.map((day, tabIdx) => {
+    const realDayIdx = realDayStart + tabIdx;
+    const fc = {
+      forecasts: [day],
+      _period:   forecast._periodByDay?.[realDayIdx] ?? null,
+      _swellDir: forecast._swellDirByDay?.[realDayIdx] ?? null,
+      _tide:     null,
+    };
+    const score = b ? scoreBreak(b, fc) : null;
+    const color = score !== null ? scoreColor(score) : 'var(--muted)';
+    const dow   = ['SUN','MON','TUE','WED','THU','FRI','SAT'][getBrisbaneNow(realDayIdx).getUTCDay()];
+    const label = tabIdx === 0 ? 'TMW' : dow;
+    return `<button class="day-tab-btn${tabIdx === 0 ? ' active' : ''}" onclick="selectForecastTab(${tabIdx})">
+      <span class="day-tab-label">${label}</span>
+      <span class="day-tab-score" style="color:${color};">${score ?? '—'}</span>
+    </button>`;
+  }).join('');
+  selectForecastTab(0);
+}
+
+/**
+ * Show the forecast panel for a specific tab index. Updates active state and
+ * re-renders forecastDayPanel using buildForecastPanelBlock (consistent style).
+ */
+function selectForecastTab(tabIdx) {
+  if (!_forecastTabState) return;
+  const { forecast, forecastStartIdx, realDayStart } = _forecastTabState;
+  document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', i === tabIdx);
+  });
+  const forecastIdx = forecastStartIdx + tabIdx;
+  const realDayIdx  = realDayStart + tabIdx;
+  const day   = forecast.forecasts[forecastIdx];
+  const panel = document.getElementById('forecastDayPanel');
+  if (!day || !panel) return;
+
+  const sst       = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
+  const tides     = getTidesForDay(realDayIdx);
+  const tidesStr  = tides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+  const period    = forecast._periodByDay?.[realDayIdx] ?? null;
+  const omHeight  = forecast._swellHeightByDay?.[realDayIdx] ?? null;
+  const omDir     = forecast._swellDirByDay?.[realDayIdx]    ?? null;
+  const swellStr  = fmtSwell(day.swell, omHeight, omDir, period);
+  const swellDir  = omDir ?? extractDir(shortDir(day.swell || ''));
+  const windDir   = extractDir(shortDir(day.winds || ''));
+  const windSpeed = extractWindSpeed(day.winds || '');
+  const b  = BREAKS[currentBreak];
+  const fc = { forecasts: [day], _period: period, _swellDir: omDir, _tide: null };
+  const score = b ? scoreBreak(b, fc) : null;
+  const dow   = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][getBrisbaneNow(realDayIdx).getUTCDay()];
+  const labelStr   = tabIdx === 0 ? 'TOMORROW' : dow;
+  const sublabelStr = (day.day || '').toUpperCase();
+  // Use stable IDs for first two tabs so setBreak finds them
+  const scoreId = tabIdx === 0 ? 'tmrwFcScore'    : tabIdx === 1 ? 'dayAfterFcScore' : `dayTabScore${tabIdx}`;
+  const surfId  = tabIdx === 0 ? 'fcTmrwSurf'     : tabIdx === 1 ? 'fcDayAfterSurf'  : `dayTabSurf${tabIdx}`;
+
+  panel.innerHTML = buildForecastPanelBlock(day, {
+    scoreId,
+    surfId,
+    tidesStr,
+    swellStr,
+    swellDir,
+    windStr:     `${shortDir(day.winds || '') || '—'}${windSpeed ? ' · ' + windSpeed : ''}`,
+    windDir,
+    weather:     day.weather,
+    sst,
+    topMargin:   '12px',
+    label:       labelStr,
+    sublabel:    sublabelStr !== labelStr ? sublabelStr : '',
+    extraPanels: tabIdx === 0 ? '<div id="bestWindowPanel"></div>' : '',
+  });
+
+  if (score !== null) {
+    const c    = scoreColor(score);
+    const el   = document.getElementById(scoreId);
+    const elN  = document.getElementById(scoreId + 'Num');
+    const elL  = document.getElementById(scoreId + 'Lbl');
+    if (el && elN && elL) {
+      elN.innerHTML     = `<span style="color:${c};">${score}</span><span style="font-size:16px;color:var(--muted);">/10</span>`;
+      elL.textContent   = scoreLabel(score, true);
+      elL.style.color   = c;
+      el.style.display  = 'flex';
+    }
+  }
 }
 
 /**
@@ -1584,7 +1655,7 @@ function setBreak(index) {
     });
     const maxUpcoming = upcomingScores.length ? Math.max(...upcomingScores) : -Infinity;
 
-    // Forecast panel score badges (tomorrow + day after)
+    // Forecast panel score badge — update whichever tab panel is currently rendered
     [[0, 'tmrwFcScore'], [1, 'dayAfterFcScore']].forEach(([idx, id]) => {
       if (upcomingScores.length <= idx) return;
       const s = upcomingScores[idx];
@@ -1597,6 +1668,24 @@ function setBreak(index) {
         el.style.display = 'flex';
       }
     });
+
+    // Refresh day tab bar scores and re-render the active panel
+    if (_forecastTabState) {
+      const { forecast: tabFc, forecastStartIdx, realDayStart } = _forecastTabState;
+      document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, tabIdx) => {
+        const realDayIdx  = realDayStart + tabIdx;
+        const forecastIdx = forecastStartIdx + tabIdx;
+        const d = tabFc.forecasts[forecastIdx];
+        if (!d) return;
+        const fc2 = { forecasts: [d], _period: tabFc._periodByDay?.[realDayIdx] ?? null, _swellDir: tabFc._swellDirByDay?.[realDayIdx] ?? null, _tide: null };
+        const s2  = b ? scoreBreak(b, fc2) : null;
+        const col = s2 !== null ? scoreColor(s2) : 'var(--muted)';
+        const span = btn.querySelector('.day-tab-score');
+        if (span) { span.textContent = s2 ?? '—'; span.style.color = col; }
+      });
+      const activeIdx = [...document.querySelectorAll('#forecastDayTabs .day-tab-btn')].findIndex(btn => btn.classList.contains('active'));
+      if (activeIdx >= 0) selectForecastTab(activeIdx);
+    }
 
     if (upcomingScores.length > 0) {
       if (score > maxUpcoming + 1) contextStr = ' · best in forecast';
@@ -3358,102 +3447,37 @@ function renderForecast(forecast, tideData, swellData) {
 
     `;
 
-    // TODAY'S FORECAST block — rendered into the TODAY inner tab
-    const todayForecastPanel = document.getElementById('todayForecastPanel');
-    if (todayForecastPanel) {
-      const sst = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
-
-      // Prep today's data
-      const todayTides = getTidesForDay(0);
-      const brisbaneNowMins = getBrisbaneNow().getUTCHours() * 60 + getBrisbaneNow().getUTCMinutes();
-      const remainingTides = todayTides.filter(t => {
-        const [hh, mm] = t.time.split(':').map(Number);
-        return hh * 60 + mm > brisbaneNowMins;
-      }).slice(0, 3);
-      const todayTidesStr = remainingTides.map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
-      const todaySwellStr = fmtSwell(current.swell, forecast._currentWaveHeight, forecast._currentSwellDir, forecast._period);
-      const todaySwellDir = forecast._currentSwellDir ?? extractDir(shortDir(current.swell || ''));
-      const todayWindDir  = extractDir(shortDir(current.winds || ''));
-      const todayWindSpeed = extractWindSpeed(current.winds || '');
-
-      // Today block
-      const todayBlock = buildForecastPanelBlock(current, {
-        scoreId:     'todayFcScore',
-        surfId:      'fcTodaySurf',
-        tidesStr:    todayTidesStr,
-        swellStr:    todaySwellStr,
-        swellDir:    todaySwellDir,
-        windStr:     `${shortDir(current.winds || '') || '—'}${todayWindSpeed ? ' · ' + todayWindSpeed : ''}`,
-        windDir:     todayWindDir,
-        weather:     current.weather,
+    // Build tomorrow block for the planner tab only
+    const sst = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
+    const tomorrow = forecast.forecasts[1];
+    if (tomorrow) {
+      const tmrwTides    = getTidesForDay(1);
+      const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+      const tmrwSwellStr = fmtSwell(tomorrow.swell, forecast._swellHeightByDay?.[1] ?? null, forecast._swellDirByDay?.[1] ?? null, forecast._periodTomorrow ?? null);
+      const tmrwSwellDir = forecast._swellDirByDay?.[1] ?? extractDir(shortDir(tomorrow.swell || ''));
+      const tmrwWindDir  = extractDir(shortDir(tomorrow.winds || ''));
+      const tmrwWindSpeed = extractWindSpeed(tomorrow.winds || '');
+      const tmrwBlock = buildForecastPanelBlock(tomorrow, {
+        scoreId:  'tmrwFcScore',
+        surfId:   'fcTmrwSurf',
+        tidesStr: tmrwTidesStr,
+        swellStr: tmrwSwellStr,
+        swellDir: tmrwSwellDir,
+        windStr:  `${shortDir(tomorrow.winds || '') || '—'}${tmrwWindSpeed ? ' · ' + tmrwWindSpeed : ''}`,
+        windDir:  tmrwWindDir,
+        weather:  tomorrow.weather,
         sst,
-        topMargin:   '12px',
-        label:       (current.day || '').toUpperCase(),
-        sublabel:    (forecast.issuedAt || '').replace('Forecast issued at ', ''),
-        extraPanels: '<div id="bestWindowPanel"></div><div id="offshoreWindowPanel"></div><div id="morningAfternoonPanel"></div>',
+        topMargin: '0',
+        label:    'TOMORROW',
+        sublabel: (tomorrow.day || '').toUpperCase(),
       });
-
-      // Tomorrow block
-      const tomorrow = forecast.forecasts[1];
-      let tmrwBlock = '';
-      if (tomorrow) {
-        const tmrwTides = getTidesForDay(1);
-        const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
-        const tmrwSwellStr = fmtSwell(tomorrow.swell, forecast._swellHeightByDay?.[1] ?? null, forecast._swellDirByDay?.[1] ?? null, forecast._periodTomorrow ?? null);
-        const tmrwSwellDir = forecast._swellDirByDay?.[1] ?? extractDir(shortDir(tomorrow.swell || ''));
-        const tmrwWindDir  = extractDir(shortDir(tomorrow.winds || ''));
-        const tmrwWindSpeed = extractWindSpeed(tomorrow.winds || '');
-        tmrwBlock = buildForecastPanelBlock(tomorrow, {
-          scoreId:  'tmrwFcScore',
-          surfId:   'fcTmrwSurf',
-          tidesStr: tmrwTidesStr,
-          swellStr: tmrwSwellStr,
-          swellDir: tmrwSwellDir,
-          windStr:  `${shortDir(tomorrow.winds || '') || '—'}${tmrwWindSpeed ? ' · ' + tmrwWindSpeed : ''}`,
-          windDir:  tmrwWindDir,
-          weather:  tomorrow.weather,
-          sst,
-          topMargin: '8px',
-          label:    'TOMORROW',
-          sublabel: (tomorrow.day || '').toUpperCase(),
-        });
-      }
-
-      todayForecastPanel.innerHTML = todayBlock + tmrwBlock;
-
-      // Also populate the planner tomorrow card
-      if (tomorrow) {
-        const plannerCard = document.getElementById('tomorrowPlannerCard');
-        if (plannerCard) plannerCard.innerHTML = tmrwBlock.replace('margin:8px 12px 0', 'margin:0');
-      }
+      const plannerCard = document.getElementById('tomorrowPlannerCard');
+      if (plannerCard) plannerCard.innerHTML = tmrwBlock;
     }
   }
 
-  // Remaining forecast days (today and tomorrow are already in todayForecastPanel)
-  const forecastRow = document.getElementById('forecastRow');
-  forecastRow.innerHTML = '';
-  const upcomingDays = forecast.forecasts.slice(2);
-  if (!upcomingDays.length) {
-    forecastRow.innerHTML = '<div style="padding:12px;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">No additional forecast days available</div>';
-  }
-  upcomingDays.forEach((day, dayIdx) => {
-    const card = document.createElement('div');
-    card.className = 'forecast-card visible';
-    const b = BREAKS[currentBreak];
-    const dayForecast = {
-      forecasts: [day],
-      _period:   forecast._periodByDay?.[dayIdx + 2] ?? null,
-      _tide:     null,
-    };
-    const dayScore  = b ? scoreBreak(b, dayForecast) : null;
-    const swellStr  = fmtSwell(day.swell, forecast._swellHeightByDay?.[dayIdx + 2] ?? null, forecast._swellDirByDay?.[dayIdx + 2] ?? null, forecast._periodByDay?.[dayIdx + 2] ?? null);
-    card.innerHTML  = buildForecastCardHTML(day, dayScore, b, swellStr);
-    forecastRow.appendChild(card);
-  });
-
-  // 7-day score sparkline
-  const sparkEl = document.getElementById('weekSparkline');
-  if (sparkEl) sparkEl.innerHTML = buildSparklineHTML(forecast, true);
+  // Forecast day tabs — tomorrow through end of forecast (today shown in currentCard)
+  renderForecastTabs(forecast, 1, 1);
 }
 
 ///////////////////////////////////////////////////
@@ -3817,135 +3841,53 @@ async function loadNightMode() {
     const currentCard = document.getElementById('currentCard');
     if (currentCard) currentCard.innerHTML = '';
 
-    // Build compact overnight strip — prepended to forecast panels
+    // Overnight banner in currentCard
     const tomorrow = data.forecast.forecasts[0];
-    const heroBreak = BREAKS[currentBreak];
-    const heroScore = heroBreak ? scoreBreak(heroBreak, data.forecast) : null;
-    const heroColor = heroScore !== null ? scoreColor(heroScore) : 'var(--muted)';
-    const heroLabel = heroScore !== null ? scoreLabel(heroScore, true) : '—';
-    const heroBreakName = heroBreak?.name || '';
+    const currentCardEl = document.getElementById('currentCard');
+    if (currentCardEl) {
+      currentCardEl.innerHTML = `<div class="night-banner">
+        <span class="night-banner-label">🌙 Overnight</span>
+        <span class="night-banner-pill">Live at 4am · in ${timeStr}</span>
+      </div>`;
+    }
 
-    // Populate FORECAST inner tab: tomorrow + day-after panels using shared builder
-    const todayForecastPanel = document.getElementById('todayForecastPanel');
-    if (todayForecastPanel && tomorrow) {
-      const nmSst = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
-
-      const buildNightPanel = (day, dayIdx) => {
-        const tides    = getTidesForDay(dayIdx);
-        const tidesStr = tides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
-        const period   = data.forecast._periodByDay?.[dayIdx] ?? (dayIdx === 1 ? (data.forecast._periodTomorrow ?? null) : null);
-        const omHeight = data.forecast._swellHeightByDay?.[dayIdx] ?? null;
-        const omDir    = data.forecast._swellDirByDay?.[dayIdx]    ?? null;
-        const swellStr = fmtSwell(day.swell, omHeight, omDir, period);
-        const swellDir = omDir ?? extractDir(shortDir(day.swell || ''));
-        const windDir  = extractDir(shortDir(day.winds || ''));
-        const windSpeed = extractWindSpeed(day.winds || '');
-        const scoreId  = dayIdx === 1 ? 'tmrwFcScore' : dayIdx === 2 ? 'dayAfterFcScore' : '';
-        const surfId   = dayIdx === 1 ? 'fcTmrwSurf'  : dayIdx === 2 ? 'fcDayAfterSurf'  : '';
-        return buildForecastPanelBlock(day, {
-          scoreId,
-          surfId,
-          tidesStr,
-          swellStr,
-          swellDir,
-          windStr:     `${shortDir(day.winds || '') || '—'}${windSpeed ? ' · ' + windSpeed : ''}`,
-          windDir,
-          weather:     day.weather,
-          sst:         nmSst,
-          topMargin:   dayIdx === 1 ? '12px' : '8px',
-          label:       dayIdx === 1 ? 'TOMORROW' : (day.day || '').toUpperCase(),
-          sublabel:    dayIdx === 1 ? (day.day || '').toUpperCase() : '',
-          extraPanels: dayIdx === 1 ? '<div id="bestWindowPanel"></div>' : '',
-        });
-      };
-
-      const tmrwHtml = buildNightPanel(tomorrow, 1);
-      const dayAfter = data.forecast.forecasts[1];
-
-      // Compute readable condition values for the hero
-      const heroSwell = fmtSwell(
-        tomorrow.swell,
-        data.forecast._swellHeightByDay?.[1] ?? null,
-        data.forecast._swellDirByDay?.[1] ?? null,
-        data.forecast._period
-      );
-      const heroWindSpeed = extractWindSpeed(tomorrow.winds || '');
-      const heroWind = `${shortDir(tomorrow.winds || '') || '—'}${heroWindSpeed ? ' · ' + heroWindSpeed : ''}`;
-      const heroTidesList = getTidesForDay(1);
-      const heroFirstTide = heroTidesList[0];
-      const heroTideStr = heroFirstTide
-        ? `${heroFirstTide.type} ${formatTideTime(heroFirstTide.time)} · ${parseFloat(heroFirstTide.height).toFixed(1)}m`
-        : '—';
-
-      const nightHeroHtml = `
-        <div class="night-hero">
-          <div class="night-hero-header">
-            <span class="night-hero-title">🌙 Tomorrow's Conditions</span>
-            <span class="night-hero-pill">4am · in ${timeStr}</span>
-          </div>
-          <div class="night-hero-score-row">
-            <span class="night-hero-score-num" style="color:${heroColor};">${heroScore ?? '—'}</span>
-            <span class="night-hero-score-denom">/10</span>
-            <div style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:6px;">
-              <span class="night-hero-verdict" style="color:${heroColor};">${heroLabel}</span>
-              <span class="night-hero-break">${heroBreakName}</span>
-            </div>
-            <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;align-self:flex-start;margin-top:8px;margin-left:auto;">?</button>
-          </div>
-          <div class="night-hero-conditions">
-            <div class="night-hero-row">
-              <span class="night-hero-key">Swell</span>
-              <span class="night-hero-val">${heroSwell}</span>
-            </div>
-            <div class="night-hero-row">
-              <span class="night-hero-key">Wind</span>
-              <span class="night-hero-val">${heroWind}</span>
-            </div>
-            <div class="night-hero-row">
-              <span class="night-hero-key">First tide</span>
-              <span class="night-hero-val">${heroTideStr}</span>
-            </div>
-          </div>
-          <div id="bestWindowPanel"></div>
-        </div>`;
-
-      // Hero already covers tomorrow — forecast panel starts from day-after
-      todayForecastPanel.innerHTML = nightHeroHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
-
+    // Planner tomorrow card
+    const nmSst = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
+    if (tomorrow) {
+      const tmrwTidesNm    = getTidesForDay(1);
+      const tmrwTidesStrNm = tmrwTidesNm.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
+      const tmrwPeriodNm   = data.forecast._periodByDay?.[1] ?? data.forecast._periodTomorrow ?? null;
+      const tmrwHeightNm   = data.forecast._swellHeightByDay?.[1] ?? null;
+      const tmrwDirNm      = data.forecast._swellDirByDay?.[1]    ?? null;
+      const tmrwSwellStrNm = fmtSwell(tomorrow.swell, tmrwHeightNm, tmrwDirNm, tmrwPeriodNm);
+      const tmrwSwellDirNm = tmrwDirNm ?? extractDir(shortDir(tomorrow.swell || ''));
+      const tmrwWindDirNm  = extractDir(shortDir(tomorrow.winds || ''));
+      const tmrwWindSpeedNm = extractWindSpeed(tomorrow.winds || '');
+      const plannerTmrwBlock = buildForecastPanelBlock(tomorrow, {
+        scoreId:  'tmrwFcScore',
+        surfId:   'fcTmrwSurf',
+        tidesStr: tmrwTidesStrNm,
+        swellStr: tmrwSwellStrNm,
+        swellDir: tmrwSwellDirNm,
+        windStr:  `${shortDir(tomorrow.winds || '') || '—'}${tmrwWindSpeedNm ? ' · ' + tmrwWindSpeedNm : ''}`,
+        windDir:  tmrwWindDirNm,
+        weather:  tomorrow.weather,
+        sst:      nmSst,
+        topMargin: '0',
+        label:    'TOMORROW',
+        sublabel: (tomorrow.day || '').toUpperCase(),
+      });
       const plannerCard = document.getElementById('tomorrowPlannerCard');
-      if (plannerCard) plannerCard.innerHTML = tmrwHtml.replace('margin:12px', 'margin:0');
+      if (plannerCard) plannerCard.innerHTML = plannerTmrwBlock;
     }
 
     document.getElementById('loadingEl').style.display = 'none';
     document.getElementById('content').classList.add('visible');
     document.getElementById('currentConditionsLabel').textContent = 'TOMORROW\'S CONDITIONS';
 
-    // 7-day sparkline in night mode (first bar = tomorrow, no special highlight needed)
-    const nmSparkEl = document.getElementById('weekSparkline');
-    if (nmSparkEl) nmSparkEl.innerHTML = buildSparklineHTML(data.forecast, false);
-
-    // Forecast cards — tomorrow and day-after already in todayForecastPanel, show the rest
-    const forecastRow = document.getElementById('forecastRow');
-    forecastRow.innerHTML = '';
-    const upcomingDays = (data.forecast.forecasts || []).slice(2);
-    if (!upcomingDays.length) {
-      forecastRow.innerHTML = '<div style="padding:12px;color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px;">No additional forecast days available</div>';
-    }
-    upcomingDays.forEach((day, dayIdx) => {
-      const card = document.createElement('div');
-      card.className = 'forecast-card visible';
-      const b = BREAKS[currentBreak];
-      const dayForecast = {
-        forecasts: [day],
-        _period:   data.forecast._periodByDay?.[dayIdx + 2]   ?? null,
-        _swellDir: data.forecast._swellDirByDay?.[dayIdx + 2] ?? null,
-      };
-      const dayScore = b ? scoreBreak(b, dayForecast) : null;
-      // Use fmtSwell for consistent formatting (same as day mode)
-      const swellStr = fmtSwell(day.swell, data.forecast._swellHeightByDay?.[dayIdx + 2] ?? null, data.forecast._swellDirByDay?.[dayIdx + 2] ?? null, data.forecast._periodByDay?.[dayIdx + 2] ?? null);
-      card.innerHTML = buildForecastCardHTML(day, dayScore, b, swellStr);
-      forecastRow.appendChild(card);
-    });
+    // Forecast day tabs — in night mode forecast.forecasts[0] = tomorrow (already sliced)
+    // realDayStart=1 so _periodByDay[1] (tomorrow) is used for the first tab
+    renderForecastTabs(data.forecast, 0, 1);
 
     requestAnimationFrame(() => {
       setBreak(currentBreak);
