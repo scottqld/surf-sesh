@@ -894,6 +894,17 @@
       </div>
     </div>
 
+    <!-- Score Explain Sheet -->
+    <div id="scoreExplainModal" onclick="if(event.target===this)closeScoreExplain()" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:540px;padding:20px 20px 0;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0;">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">Score Breakdown</span>
+          <button onclick="closeScoreExplain()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;">✕</button>
+        </div>
+        <div id="scoreExplainBody" style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:max(36px, env(safe-area-inset-bottom, 0px) + 20px);"></div>
+      </div>
+    </div>
+
     <div id="warningBanner" class="warning-banner"></div>
     <div id="nightBanner" class="night-banner" style="display:none;">
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
@@ -1068,7 +1079,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1984,6 +1995,168 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
   const hardCap = breakData.maxScore ?? 10;
 
   return Math.min(Math.max(0, Math.round(raw)), sizeCap, hardCap);
+}
+
+/** Return score + per-factor breakdown for the explain sheet. Mirrors scoreBreak logic exactly. */
+function scoreBreakExplain(breakData, forecast) {
+  if (!forecast || !forecast.forecasts || forecast.forecasts.length === 0) return null;
+  const current = forecast.forecasts[0];
+  const swellText    = shortDir(current.swell || '');
+  const windText     = shortDir(current.winds  || '');
+  const swellDir     = forecast._swellDir ?? extractDir(swellText);
+  const swellHeight  = extractHeight(swellText);
+  const windDir      = extractDir(windText);
+  const period       = forecast._period ?? null;
+  const tide         = forecast._tide   ?? null;
+  const windSpeedKts = extractWindSpeedKts(current.winds || '');
+  const { ideal, acceptable, avoid } = breakData;
+
+  // Scoring height
+  let scoringHeight = swellHeight;
+  if (swellHeight !== null && breakData.exposure && swellDir) {
+    let dm = 1.0;
+    if (ideal.swellDirs.includes(swellDir))      dm = 1.0;
+    else if (acceptable.swellDirs.includes(swellDir)) dm = 0.8;
+    else { const md = Math.min(...ideal.swellDirs.map(d => dirDistance(swellDir, d))); dm = md <= 2 ? 0.6 : 0.4; }
+    scoringHeight = swellHeight * breakData.exposure * dm;
+  }
+
+  const swellPts        = scoreFactor(swellDir, ideal.swellDirs, acceptable.swellDirs, avoid.swellDirs, 3);
+  const windPts         = scoreFactor(windDir,  ideal.windDirs,  acceptable.windDirs,  avoid.windDirs,  3);
+  const windPenalty     = (windDir && avoid.windDirs.includes(windDir) && avoid.windPenalty) ? avoid.windPenalty : 0;
+  const windIsIdeal     = windDir && ideal.windDirs.includes(windDir);
+  const windSpeedPenalty = (!windIsIdeal && windSpeedKts !== null) ? (windSpeedKts > 30 ? 2 : windSpeedKts > 20 ? 1 : 0) : 0;
+  const hasCrossSwell   = /cross.?swell|moderate cross|secondary swell|confused/i.test(current.swell || '');
+  const crossSwellPenalty = hasCrossSwell ? 1 : 0;
+  const bankPenalty     = breakData.bankPenalty || 0;
+  let periodPts = 0;
+  if (period !== null) { if (period >= ideal.periodMin) periodPts = 1; else if (period >= acceptable.periodMin) periodPts = 0.5; }
+  const tidePts = scoreTide(tide, breakData.tide);
+
+  const raw = swellPts + windPts + periodPts + tidePts - windPenalty - windSpeedPenalty - crossSwellPenalty - bankPenalty;
+
+  let sizeCap = 10;
+  if (scoringHeight !== null) {
+    if      (scoringHeight < 0.3)  sizeCap = 2;
+    else if (scoringHeight < 0.45) sizeCap = 4;
+    else if (scoringHeight < 0.6)  sizeCap = 5;
+    else if (scoringHeight < 0.75) sizeCap = 6;
+    else if (scoringHeight < 0.9)  sizeCap = 7;
+    else if (scoringHeight < 1.2)  sizeCap = 8;
+    else if (scoringHeight < 1.6)  sizeCap = 9;
+  }
+  if (breakData.sizeCap !== undefined) sizeCap = Math.min(sizeCap, breakData.sizeCap);
+  const hardCap = breakData.maxScore ?? 10;
+  const score = Math.min(Math.max(0, Math.round(raw)), sizeCap, hardCap);
+
+  // Human-readable factors
+  const factors = [];
+  const swellDirLabel = swellDir || '?';
+  if (swellDir) {
+    if      (ideal.swellDirs.includes(swellDir))      factors.push({ label: `Swell direction (${swellDirLabel})`, pts: swellPts, max: 3, status: 'good', note: `ideal — best from ${ideal.swellDirs.join('/')}` });
+    else if (acceptable.swellDirs.includes(swellDir)) factors.push({ label: `Swell direction (${swellDirLabel})`, pts: swellPts, max: 3, status: 'ok',   note: `workable — best from ${ideal.swellDirs.join('/')}` });
+    else if (avoid.swellDirs.length && avoid.swellDirs.includes(swellDir)) factors.push({ label: `Swell direction (${swellDirLabel})`, pts: swellPts, max: 3, status: 'bad', note: `wrong — best from ${ideal.swellDirs.join('/')}` });
+    else factors.push({ label: `Swell direction (${swellDirLabel})`, pts: swellPts, max: 3, status: 'ok', note: `close to ideal (${ideal.swellDirs.join('/')})` });
+  } else {
+    factors.push({ label: 'Swell direction', pts: swellPts, max: 3, status: 'neutral', note: 'unknown — neutral score applied' });
+  }
+
+  if (windDir) {
+    if      (ideal.windDirs.includes(windDir))      factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'good', note: 'offshore' });
+    else if (acceptable.windDirs.includes(windDir)) factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'ok',   note: 'manageable' });
+    else if (avoid.windDirs.includes(windDir))      factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'bad',  note: 'onshore' });
+    else factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'ok', note: 'cross-shore' });
+  } else {
+    factors.push({ label: 'Wind direction', pts: windPts, max: 3, status: 'neutral', note: 'unknown — neutral score applied' });
+  }
+
+  if (windPenalty > 0)      factors.push({ label: 'Onshore wind penalty', pts: -windPenalty, max: 0, status: 'bad', note: '' });
+  if (windSpeedPenalty > 0) factors.push({ label: `Wind strength (${windSpeedKts ? Math.round(windSpeedKts * 1.852) : '?'} km/h)`, pts: -windSpeedPenalty, max: 0, status: 'bad', note: 'strong winds hurt surface quality' });
+  if (crossSwellPenalty > 0) factors.push({ label: 'Cross-swell / confused seas', pts: -1, max: 0, status: 'bad', note: 'lumpy conditions' });
+  if (bankPenalty > 0)       factors.push({ label: 'Sandbank condition', pts: -bankPenalty, max: 0, status: 'bad', note: '' });
+
+  if (period !== null) {
+    if      (period >= ideal.periodMin)      factors.push({ label: `Period (${Math.round(period)}s)`, pts: 1,   max: 1, status: 'good',    note: `groundswell — ideal ≥${ideal.periodMin}s` });
+    else if (period >= acceptable.periodMin) factors.push({ label: `Period (${Math.round(period)}s)`, pts: 0.5, max: 1, status: 'ok',      note: `OK — ideal ≥${ideal.periodMin}s` });
+    else                                     factors.push({ label: `Period (${Math.round(period)}s)`, pts: 0,   max: 1, status: 'bad',     note: `windswell — ideal ≥${ideal.periodMin}s` });
+  } else {
+    factors.push({ label: 'Swell period', pts: 0, max: 1, status: 'neutral', note: 'not available' });
+  }
+
+  if (tide && breakData.tide && breakData.tide.ideal !== 'all') {
+    const h = tide.current;
+    const tideStr = h < 0.5 ? 'low' : h < 1.2 ? 'mid' : 'high';
+    if      (tidePts > 0)  factors.push({ label: `Tide (${tideStr} ${h.toFixed(1)}m)`, pts: 1,  max: 1, status: 'good',    note: `ideal: ${breakData.tide.ideal}` });
+    else if (tidePts < 0)  factors.push({ label: `Tide (${tideStr} ${h.toFixed(1)}m)`, pts: -1, max: 1, status: 'bad',     note: `avoid: ${tideStr}` });
+    else                   factors.push({ label: `Tide (${tideStr} ${h.toFixed(1)}m)`, pts: 0,  max: 1, status: 'neutral', note: 'neutral' });
+  }
+
+  let sizeCapNote = '';
+  if (sizeCap < 10 && scoringHeight !== null) {
+    const ftH = Math.round(scoringHeight * 3.281 * 2) / 2;
+    sizeCapNote = sizeCap <= 2
+      ? `Flat — est. ~${ftH}ft face — barely surfable`
+      : `Small surf — est. ~${ftH}ft face — score capped at ${sizeCap}`;
+  }
+
+  return { score, factors, raw: Math.round(raw), sizeCap, sizeCapNote, breakName: breakData.name };
+}
+
+function openScoreExplain() {
+  const b = BREAKS[currentBreak];
+  if (!b || !cachedData) return;
+  const ex = scoreBreakExplain(b, cachedData.forecast);
+  if (!ex) return;
+  const c = scoreColor(ex.score);
+
+  let html = `
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:${c};line-height:1;">${ex.score}</span>
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--muted);">/10</span>
+      <span style="font-family:'DM Mono',monospace;font-size:13px;color:${c};letter-spacing:1.5px;">${scoreLabel(ex.score, true)}</span>
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:20px;text-transform:uppercase;">${ex.breakName}</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">`;
+
+  for (const f of ex.factors) {
+    const dot = f.status === 'good' ? 'var(--high)' : f.status === 'bad' ? 'var(--accent2)' : f.status === 'ok' ? 'var(--accent)' : 'var(--muted)';
+    const ptsStr = f.pts > 0 ? `+${f.pts}` : f.pts < 0 ? `${f.pts}` : '—';
+    const ptsColor = f.pts > 0 ? 'var(--high)' : f.pts < 0 ? 'var(--accent2)' : 'var(--muted)';
+    html += `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:1px;"></div>
+        <div style="flex:1;">
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text);">${f.label}</div>
+          ${f.note ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:1px;">${f.note}</div>` : ''}
+        </div>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:${ptsColor};min-width:28px;text-align:right;">${ptsStr}</span>
+      </div>`;
+  }
+  html += `</div>`;
+
+  html += `
+    <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px;display:flex;flex-direction:column;gap:7px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">RAW TOTAL</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text);">${ex.raw} pts → rounded ${Math.max(0, ex.raw)}/10</span>
+      </div>
+      ${ex.sizeCapNote ? `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;flex-shrink:0;">SIZE CAP</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--accent2);text-align:right;">${ex.sizeCapNote}</span>
+      </div>` : ''}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text);letter-spacing:1px;">FINAL SCORE</span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${c};">${ex.score}/10</span>
+      </div>
+    </div>`;
+
+  document.getElementById('scoreExplainBody').innerHTML = html;
+  document.getElementById('scoreExplainModal').style.display = 'flex';
+}
+
+function closeScoreExplain() {
+  document.getElementById('scoreExplainModal').style.display = 'none';
 }
 
 ///////////////////////////////////////////////////
@@ -3114,7 +3287,10 @@ function renderForecast(forecast, tideData, swellData) {
     currentCard.innerHTML = `
       <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
         <div>
-          <div id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:${currentScoreColor};">${currentScore ?? '—'}<span style="font-size:18px;color:var(--muted);"> /10</span></div>
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <div id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:${currentScoreColor};">${currentScore ?? '—'}<span style="font-size:18px;color:var(--muted);"> /10</span></div>
+            <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;margin-bottom:4px;">?</button>
+          </div>
           <div id="cardScoreLabel" style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${currentScoreColor};">${currentScoreLabel}</div>
         </div>
         <div style="text-align:right;">
@@ -3698,6 +3874,7 @@ async function loadNightMode() {
               <span class="night-hero-verdict" style="color:${heroColor};">${heroLabel}</span>
               <span class="night-hero-break">${heroBreakName}</span>
             </div>
+            <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;align-self:flex-start;margin-top:8px;margin-left:auto;">?</button>
           </div>
           <div class="night-hero-conditions">
             <div class="night-hero-row">
