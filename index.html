@@ -192,6 +192,29 @@
     color: var(--accent);
   }
 
+  /* Break selector buttons overlaid on photo */
+  .station-btn-photo {
+    display: inline-block;
+    padding: 7px 14px;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .station-btn-photo.active {
+    color: #fff;
+    text-shadow: 0 0 12px rgba(0,229,160,0.6);
+    border-bottom: 2px solid var(--high);
+    padding-bottom: 5px;
+  }
+
   /* WARNING BANNER */
   .warning-banner {
     margin: 0 20px 12px;
@@ -832,31 +855,37 @@
     </div>
   </header>
 
-<div class="station-toggle-wrap">
-  <div class="station-toggle">
-    <button class="station-btn active" id="btn0" onclick="setBreak(0)">Groyne</button>
-    <button class="station-btn" id="btn1" onclick="setBreak(1)">First Pt.</button>
-    <button class="station-btn" id="btn2" onclick="setBreak(2)">Nationals</button>
-    <button class="station-btn" id="btn3" onclick="setBreak(3)">Tea Tree</button>
-    <button class="station-btn" id="btn4" onclick="setBreak(4)">Granite</button>
-    <button class="station-btn" id="btn5" onclick="setBreak(5)">Sunshine</button>
-    <button class="station-btn" id="btn6" onclick="setBreak(6)">D.I.</button>
-  </div>
-  <div class="station-toggle-fade"></div>
-  <button class="scroll-arrow scroll-arrow-left" id="scrollLeft" onclick="scrollBreaks(-120)" style="display:none;">‹</button>
-  <button class="scroll-arrow scroll-arrow-right" id="scrollRight" onclick="scrollBreaks(120)">›</button>
-</div>
-
-  <div id="breakPhotoWrap" style="margin: 0 20px 0; height: 190px; border-radius: 10px; overflow: hidden; position: relative;">
+  <!-- Break photo + selector combined -->
+  <div id="breakPhotoWrap" style="margin: 0 20px; height: 180px; border-radius: 10px; overflow: hidden; position: relative;">
     <div id="breakImg" style="position:absolute;inset:0;background-size:cover;background-position:center;transition:filter 0.4s;"></div>
-    <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(10,12,15,0.65) 0%, transparent 55%);pointer-events:none;"></div>
+    <!-- Gradient: dark at top for score badge, dark at bottom for selector -->
+    <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(6,8,16,0.55) 0%, transparent 40%, transparent 45%, rgba(6,8,16,0.85) 100%);pointer-events:none;"></div>
     <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
-    <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;position:absolute;top:8px;right:8px;background:rgba(10,12,15,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
+    <!-- Score badge top-left -->
     <div id="photoScoreBadge" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;">
       <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
       <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
     </div>
-    <button id="aboutBreakBtn" onclick="openAboutBreak()" style="position:absolute;bottom:10px;left:12px;background:rgba(10,12,15,0.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:rgba(255,255,255,0.85);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.2px;padding:4px 9px;cursor:pointer;text-transform:uppercase;">About this break ↗</button>
+    <!-- Live cam + About buttons top-right -->
+    <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;align-items:center;">
+      <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;background:rgba(6,8,16,0.65);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
+      <button id="aboutBreakBtn" onclick="openAboutBreak()" style="background:rgba(6,8,16,0.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:rgba(255,255,255,0.85);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.2px;padding:4px 9px;cursor:pointer;text-transform:uppercase;">About ↗</button>
+    </div>
+    <!-- Break selector overlaid at bottom of photo -->
+    <div class="station-toggle-wrap" style="position:absolute;bottom:0;left:0;right:0;">
+      <div class="station-toggle" style="margin:0;background:transparent;border:none;border-radius:0;padding:6px 8px 10px;">
+        <button class="station-btn-photo active" id="btn0" onclick="setBreak(0)">Groyne</button>
+        <button class="station-btn-photo" id="btn1" onclick="setBreak(1)">First Pt.</button>
+        <button class="station-btn-photo" id="btn2" onclick="setBreak(2)">Nationals</button>
+        <button class="station-btn-photo" id="btn3" onclick="setBreak(3)">Tea Tree</button>
+        <button class="station-btn-photo" id="btn4" onclick="setBreak(4)">Granite</button>
+        <button class="station-btn-photo" id="btn5" onclick="setBreak(5)">Sunshine</button>
+        <button class="station-btn-photo" id="btn6" onclick="setBreak(6)">D.I.</button>
+      </div>
+      <div class="station-toggle-fade" style="background:linear-gradient(to right,transparent,rgba(6,8,16,0.85) 70%);"></div>
+      <button class="scroll-arrow scroll-arrow-left" id="scrollLeft" onclick="scrollBreaks(-120)" style="display:none;">‹</button>
+      <button class="scroll-arrow scroll-arrow-right" id="scrollRight" onclick="scrollBreaks(120)">›</button>
+    </div>
   </div>
 
   <div id="loadingEl" class="loading">
@@ -909,21 +938,12 @@
     <div id="nightBanner" class="night-banner" style="display:none;">
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
     </div>
-    <!-- Inner tabs: NOW / TODAY -->
-    <div class="inner-tab-bar">
-      <button class="inner-tab-btn active" id="innerBtn-now" onclick="switchInnerTab('now')">NOW</button>
-      <button class="inner-tab-btn" id="innerBtn-today" onclick="switchInnerTab('today')">FORECAST</button>
-    </div>
-    <div class="inner-tab-section active" id="inner-now">
-      <div class="current-card" id="currentCard"></div>
-    </div>
-    <div class="inner-tab-section" id="inner-today">
-      <div id="weekSparkline" style="padding:10px 16px 4px;display:flex;justify-content:space-between;align-items:flex-end;gap:4px;"></div>
-      <div id="todayForecastPanel"></div>
-      <div class="section-label">UPCOMING <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
-      <div class="forecast-scroll">
-        <div class="forecast-row" id="forecastRow"></div>
-      </div>
+    <div class="current-card" id="currentCard"></div>
+    <div id="weekSparkline" style="padding:10px 16px 4px;display:flex;justify-content:space-between;align-items:flex-end;gap:4px;"></div>
+    <div id="todayForecastPanel"></div>
+    <div class="section-label">UPCOMING <span id="forecastBreakLabel" style="font-size:8px;letter-spacing:1px;opacity:0.5;"></span></div>
+    <div class="forecast-scroll">
+      <div class="forecast-row" id="forecastRow"></div>
     </div>
     </div>
 
@@ -1079,7 +1099,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -2896,9 +2916,9 @@ function renderAll(data) {
     BREAKS = applyBreakPatches(data.breaks);
     // Rebuild break selector buttons if count changed
     const toggle = document.querySelector('.station-toggle');
-    if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn').length) {
+    if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn-photo').length) {
       toggle.innerHTML = BREAKS.map((b, i) =>
-        `<button class="station-btn${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i})">${breakBtnLabel(b)}</button>`
+        `<button class="station-btn-photo${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i})">${breakBtnLabel(b)}</button>`
       ).join('');
     }
   }
@@ -3794,12 +3814,8 @@ async function loadNightMode() {
       ? `${Math.floor(minsUntil4am / 60)}h ${minsUntil4am % 60}m`
       : minsUntil4am > 0 ? `${minsUntil4am}m` : 'soon';
 
-    // Night mode: hide inner tab bar, show forecast tab directly
-    const innerTabBar = document.querySelector('.inner-tab-bar');
-    if (innerTabBar) innerTabBar.style.display = 'none';
     const currentCard = document.getElementById('currentCard');
     if (currentCard) currentCard.innerHTML = '';
-    switchInnerTab('today');
 
     // Build compact overnight strip — prepended to forecast panels
     const tomorrow = data.forecast.forecasts[0];
@@ -3943,9 +3959,6 @@ async function loadNightMode() {
     document.getElementById('content').classList.add('visible');
     setBreak(currentBreak);
     const errEl = document.getElementById('errorEl');
-    const innerTabBar = document.querySelector('.inner-tab-bar');
-    if (innerTabBar) innerTabBar.style.display = 'none';
-    switchInnerTab('today');
     errEl.innerHTML = `<div style="padding:12px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">🌙 Overnight · Live conditions resume at 4am.<br><span style="opacity:0.5;font-size:9px;">Forecast unavailable — check back soon.</span></div>`;
     errEl.style.display = 'block';
   } finally {
@@ -4424,10 +4437,6 @@ function scheduleNextLoad() {
     if (isActiveHours()) {
       // Clean up night mode UI before full load
       document.body.classList.remove('night-mode');
-      const innerTabBar = document.querySelector('.inner-tab-bar');
-      if (innerTabBar) innerTabBar.style.display = '';
-      const nowBtn = document.getElementById('innerBtn-now');
-      if (nowBtn) { nowBtn.style.display = ''; nowBtn.textContent = 'NOW'; }
       document.getElementById('currentConditionsLabel').textContent = 'CURRENT CONDITIONS';
       const currentCard = document.getElementById('currentCard');
       if (currentCard) { currentCard.innerHTML = ''; currentCard.style.display = ''; }
