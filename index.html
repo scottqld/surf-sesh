@@ -1069,7 +1069,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3883,7 +3883,8 @@ async function loadNightMode() {
 
     document.getElementById('loadingEl').style.display = 'none';
     document.getElementById('content').classList.add('visible');
-    document.getElementById('currentConditionsLabel').textContent = 'TOMORROW\'S CONDITIONS';
+    const nmCondLabel = document.getElementById('currentConditionsLabel');
+    if (nmCondLabel) nmCondLabel.textContent = 'TOMORROW\'S CONDITIONS';
 
     // Forecast day tabs — in night mode forecast.forecasts[0] = tomorrow (already sliced)
     // realDayStart=1 so _periodByDay[1] (tomorrow) is used for the first tab
