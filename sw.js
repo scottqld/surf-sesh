@@ -1,10 +1,10 @@
 // SurfCall Service Worker
 // Strategy:
-//   - App shell (index.html): cache-first, background revalidate
+//   - App shell (index.html): network-first, cache fallback (always fresh when online)
 //   - API calls (/all, /forecast, etc.): network-first, cache fallback
 //   - Offline: serve stale cache and post message to page to show stale banner
 
-const CACHE_NAME   = 'surfcall-v18';
+const CACHE_NAME   = 'surfcall-v19';
 const SHELL_URL    = '/surf-sesh/';
 const API_PATTERNS = ['/all', '/forecast', '/swell', '/tides', '/conditions'];
 
@@ -43,9 +43,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // App shell (HTML navigation) — cache-first, revalidate in background
+  // App shell (HTML navigation) — network-first, cache fallback (always fresh when online)
   if (request.mode === 'navigate' || url.pathname === '/surf-sesh/' || url.pathname === '/surf-sesh/index.html') {
-    event.respondWith(cacheFirstWithRevalidate(request));
+    event.respondWith(networkFirstWithFallback(request));
     return;
   }
 
@@ -76,16 +76,6 @@ async function networkFirstWithFallback(request) {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-}
-
-// Cache-first: serve shell from cache instantly, revalidate in background
-async function cacheFirstWithRevalidate(request) {
-  const cache  = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  const fetchPromise = fetch(request.clone())
-    .then(res => { if (res.ok) cache.put(request, res.clone()); return res; })
-    .catch(() => null);
-  return cached || fetchPromise;
 }
 
 // ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
