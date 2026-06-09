@@ -1069,7 +1069,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.5';
+const APP_VERSION = '2.6';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1219,25 +1219,31 @@ let _forecastTabState = null;
  * @param {object} forecast        - the full forecast object
  * @param {number} forecastStartIdx - which index of forecast.forecasts is tab 0
  * @param {number} realDayStart    - which real day (0=today) tab 0 represents (for tides/_periodByDay)
+ * @param {object|null} prefixEntry - optional BOM day entry to prepend as a TODAY tab (night mode)
  */
-function renderForecastTabs(forecast, forecastStartIdx, realDayStart) {
-  _forecastTabState = { forecast, forecastStartIdx, realDayStart };
+function renderForecastTabs(forecast, forecastStartIdx, realDayStart, prefixEntry = null) {
+  // Build a flat list: [{ day, realDayIdx }, ...] covering all tabs
+  const forecastDays = forecast.forecasts.slice(forecastStartIdx);
+  const allTabs = [
+    ...(prefixEntry ? [{ day: prefixEntry, realDayIdx: 0 }] : []),
+    ...forecastDays.map((day, i) => ({ day, realDayIdx: realDayStart + i })),
+  ];
+  _forecastTabState = { forecast, forecastStartIdx, realDayStart, prefixEntry, allTabs };
+
   const bar = document.getElementById('forecastDayTabs');
   if (!bar) return;
   const b = BREAKS[currentBreak];
-  const days = forecast.forecasts.slice(forecastStartIdx);
-  bar.innerHTML = days.map((day, tabIdx) => {
-    const realDayIdx = realDayStart + tabIdx;
+  bar.innerHTML = allTabs.map(({ day, realDayIdx }, tabIdx) => {
     const fc = {
       forecasts: [day],
       _period:   forecast._periodByDay?.[realDayIdx] ?? null,
       _swellDir: forecast._swellDirByDay?.[realDayIdx] ?? null,
-      _tide:     null,
+      _tide:     realDayIdx === 0 ? (forecast._tide ?? null) : null,
     };
     const score = b ? scoreBreak(b, fc) : null;
     const color = score !== null ? scoreColor(score) : 'var(--muted)';
     const dow   = ['SUN','MON','TUE','WED','THU','FRI','SAT'][getBrisbaneNow(realDayIdx).getUTCDay()];
-    const label = tabIdx === 0 ? 'TMW' : dow;
+    const label = realDayIdx === 0 ? (isActiveHours() ? 'NOW' : 'TODAY') : realDayIdx === 1 ? 'TMW' : dow;
     return `<button class="day-tab-btn${tabIdx === 0 ? ' active' : ''}" onclick="selectForecastTab(${tabIdx})">
       <span class="day-tab-label">${label}</span>
       <span class="day-tab-score" style="color:${color};">${score ?? '—'}</span>
@@ -1252,15 +1258,14 @@ function renderForecastTabs(forecast, forecastStartIdx, realDayStart) {
  */
 function selectForecastTab(tabIdx) {
   if (!_forecastTabState) return;
-  const { forecast, forecastStartIdx, realDayStart } = _forecastTabState;
+  const { forecast, allTabs } = _forecastTabState;
   document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, i) => {
     btn.classList.toggle('active', i === tabIdx);
   });
-  const forecastIdx = forecastStartIdx + tabIdx;
-  const realDayIdx  = realDayStart + tabIdx;
-  const day   = forecast.forecasts[forecastIdx];
+  const tabEntry = allTabs?.[tabIdx];
   const panel = document.getElementById('forecastDayPanel');
-  if (!day || !panel) return;
+  if (!tabEntry || !panel) return;
+  const { day, realDayIdx } = tabEntry;
 
   const sst       = cachedData?.buoy?.SST ? Math.round(cachedData.buoy.SST) + '°C' : null;
   const tides     = getTidesForDay(realDayIdx);
@@ -1276,11 +1281,15 @@ function selectForecastTab(tabIdx) {
   const fc = { forecasts: [day], _period: period, _swellDir: omDir, _tide: null };
   const score = b ? scoreBreak(b, fc) : null;
   const dow   = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][getBrisbaneNow(realDayIdx).getUTCDay()];
-  const labelStr   = tabIdx === 0 ? 'TOMORROW' : dow;
+  const labelStr   = realDayIdx === 0 ? 'TODAY' : realDayIdx === 1 ? 'TOMORROW' : dow;
   const sublabelStr = (day.day || '').toUpperCase();
-  // Use stable IDs for first two tabs so setBreak finds them
-  const scoreId = tabIdx === 0 ? 'tmrwFcScore'    : tabIdx === 1 ? 'dayAfterFcScore' : `dayTabScore${tabIdx}`;
-  const surfId  = tabIdx === 0 ? 'fcTmrwSurf'     : tabIdx === 1 ? 'fcDayAfterSurf'  : `dayTabSurf${tabIdx}`;
+  // Map score/surf IDs by realDayIdx — consistent across day and night modes
+  const scoreId = realDayIdx === 0 ? 'todayFcScore'   : realDayIdx === 1 ? 'tmrwFcScore'    : realDayIdx === 2 ? 'dayAfterFcScore' : `dayTabScore${realDayIdx}`;
+  const surfId  = realDayIdx === 0 ? 'fcTodaySurf'    : realDayIdx === 1 ? 'fcTmrwSurf'     : realDayIdx === 2 ? 'fcDayAfterSurf'  : `dayTabSurf${realDayIdx}`;
+  // TODAY gets best-window + morning/afternoon panels; TOMORROW gets best-window only
+  const extraPanels = realDayIdx === 0
+    ? '<div id="bestWindowPanel"></div><div id="offshoreWindowPanel"></div><div id="morningAfternoonPanel"></div>'
+    : realDayIdx === 1 ? '<div id="bestWindowPanel"></div>' : '';
 
   panel.innerHTML = buildForecastPanelBlock(day, {
     scoreId,
@@ -1295,7 +1304,7 @@ function selectForecastTab(tabIdx) {
     topMargin:   '12px',
     label:       labelStr,
     sublabel:    sublabelStr !== labelStr ? sublabelStr : '',
-    extraPanels: tabIdx === 0 ? '<div id="bestWindowPanel"></div>' : '',
+    extraPanels,
   });
 
   if (score !== null) {
@@ -1671,13 +1680,12 @@ function setBreak(index) {
 
     // Refresh day tab bar scores and re-render the active panel
     if (_forecastTabState) {
-      const { forecast: tabFc, forecastStartIdx, realDayStart } = _forecastTabState;
+      const { forecast: tabFc, allTabs: tabsList } = _forecastTabState;
       document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, tabIdx) => {
-        const realDayIdx  = realDayStart + tabIdx;
-        const forecastIdx = forecastStartIdx + tabIdx;
-        const d = tabFc.forecasts[forecastIdx];
-        if (!d) return;
-        const fc2 = { forecasts: [d], _period: tabFc._periodByDay?.[realDayIdx] ?? null, _swellDir: tabFc._swellDirByDay?.[realDayIdx] ?? null, _tide: null };
+        const entry = tabsList?.[tabIdx];
+        if (!entry) return;
+        const { day: d, realDayIdx } = entry;
+        const fc2 = { forecasts: [d], _period: tabFc._periodByDay?.[realDayIdx] ?? null, _swellDir: tabFc._swellDirByDay?.[realDayIdx] ?? null, _tide: realDayIdx === 0 ? (tabFc._tide ?? null) : null };
         const s2  = b ? scoreBreak(b, fc2) : null;
         const col = s2 !== null ? scoreColor(s2) : 'var(--muted)';
         const span = btn.querySelector('.day-tab-score');
@@ -3476,8 +3484,8 @@ function renderForecast(forecast, tideData, swellData) {
     }
   }
 
-  // Forecast day tabs — tomorrow through end of forecast (today shown in currentCard)
-  renderForecastTabs(forecast, 1, 1);
+  // Forecast day tabs — today (NOW) through end of forecast
+  renderForecastTabs(forecast, 0, 0);
 }
 
 ///////////////////////////////////////////////////
@@ -3816,6 +3824,8 @@ async function loadNightMode() {
     // Use tomorrow's period and swell direction so score matches what the card displays
     data.forecast._period   = data.forecast._periodTomorrow;
     data.forecast._swellDir = data.forecast._swellDirByDay?.[1] ?? null;
+    // Save today's BOM entry before slicing (used as TODAY tab prefix in renderForecastTabs)
+    const todayForecastEntry = data.forecast.forecasts[0];
     // Replace forecasts[0] with tomorrow's BOM text so scoreBreak reads tomorrow's winds/swell
     data.forecast.forecasts = data.forecast.forecasts.slice(1);
 
@@ -3886,9 +3896,9 @@ async function loadNightMode() {
     const nmCondLabel = document.getElementById('currentConditionsLabel');
     if (nmCondLabel) nmCondLabel.textContent = 'TOMORROW\'S CONDITIONS';
 
-    // Forecast day tabs — in night mode forecast.forecasts[0] = tomorrow (already sliced)
-    // realDayStart=1 so _periodByDay[1] (tomorrow) is used for the first tab
-    renderForecastTabs(data.forecast, 0, 1);
+    // Forecast day tabs — forecast already sliced (forecasts[0] = tomorrow).
+    // Pass todayForecastEntry as prefix so TODAY tab appears first (labelled "TODAY" at night).
+    renderForecastTabs(data.forecast, 0, 1, todayForecastEntry);
 
     requestAnimationFrame(() => {
       setBreak(currentBreak);
