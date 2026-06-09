@@ -1099,7 +1099,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3906,9 +3906,11 @@ async function loadNightMode() {
               <span class="night-hero-val">${heroTideStr}</span>
             </div>
           </div>
+          <div id="bestWindowPanel"></div>
         </div>`;
 
-      todayForecastPanel.innerHTML = nightHeroHtml + tmrwHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
+      // Hero already covers tomorrow — forecast panel starts from day-after
+      todayForecastPanel.innerHTML = nightHeroHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
 
       const plannerCard = document.getElementById('tomorrowPlannerCard');
       if (plannerCard) plannerCard.innerHTML = tmrwHtml.replace('margin:12px', 'margin:0');
