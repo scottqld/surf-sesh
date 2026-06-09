@@ -678,29 +678,92 @@
   body.night-mode { background: #060810; }
 
   /* Night mode compact header strip — sits above the forecast panels */
-  .night-strip {
+  /* Night mode hero card */
+  .night-hero {
+    margin: 12px 12px 4px;
+    padding: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .night-hero-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 20px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid rgba(100,120,180,0.12);
+    margin-bottom: 14px;
   }
-  .night-strip-left {
+  .night-hero-title {
     font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 1px;
-    color: var(--muted);
-  }
-  .night-strip-label {
-    text-transform: uppercase;
+    font-size: 11px;
     letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text);
   }
-  .night-strip-countdown { opacity: 0.7; }
-  .night-strip-score {
+  .night-hero-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    background: rgba(232,168,58,0.1);
+    border: 1px solid rgba(232,168,58,0.25);
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+  .night-hero-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .night-hero-score-num {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 16px;
+    font-size: 64px;
+    line-height: 1;
+  }
+  .night-hero-score-denom {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  .night-hero-verdict {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .night-hero-break {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
     letter-spacing: 1px;
+    margin-top: 2px;
+  }
+  .night-hero-conditions {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .night-hero-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .night-hero-key {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .night-hero-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    text-align: right;
   }
   /* TAB BAR */
   .tab-bar {
@@ -1005,7 +1068,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '1.9';
+const APP_VERSION = '2.0';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3606,12 +3669,53 @@ async function loadNightMode() {
 
       const tmrwHtml = buildNightPanel(tomorrow, 1);
       const dayAfter = data.forecast.forecasts[1];
-      const nightStripHtml = `
-        <div class="night-strip">
-          <span class="night-strip-left">🌙 <span class="night-strip-label">Overnight</span> · <span class="night-strip-countdown" id="nightCountdown">Live at 4am · in ${timeStr}</span></span>
-          <span class="night-strip-score" style="color:${heroColor};">${heroScore ?? '—'}<span style="font-size:11px;color:var(--muted);"> /10 </span>${heroLabel}</span>
+
+      // Compute readable condition values for the hero
+      const heroSwell = fmtSwell(
+        tomorrow.swell,
+        data.forecast._swellHeightByDay?.[1] ?? null,
+        data.forecast._swellDirByDay?.[1] ?? null,
+        data.forecast._period
+      );
+      const heroWindSpeed = extractWindSpeed(tomorrow.winds || '');
+      const heroWind = `${shortDir(tomorrow.winds || '') || '—'}${heroWindSpeed ? ' · ' + heroWindSpeed : ''}`;
+      const heroTidesList = getTidesForDay(1);
+      const heroFirstTide = heroTidesList[0];
+      const heroTideStr = heroFirstTide
+        ? `${heroFirstTide.type} ${formatTideTime(heroFirstTide.time)} · ${parseFloat(heroFirstTide.height).toFixed(1)}m`
+        : '—';
+
+      const nightHeroHtml = `
+        <div class="night-hero">
+          <div class="night-hero-header">
+            <span class="night-hero-title">🌙 Tomorrow's Conditions</span>
+            <span class="night-hero-pill">4am · in ${timeStr}</span>
+          </div>
+          <div class="night-hero-score-row">
+            <span class="night-hero-score-num" style="color:${heroColor};">${heroScore ?? '—'}</span>
+            <span class="night-hero-score-denom">/10</span>
+            <div style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:6px;">
+              <span class="night-hero-verdict" style="color:${heroColor};">${heroLabel}</span>
+              <span class="night-hero-break">${heroBreakName}</span>
+            </div>
+          </div>
+          <div class="night-hero-conditions">
+            <div class="night-hero-row">
+              <span class="night-hero-key">Swell</span>
+              <span class="night-hero-val">${heroSwell}</span>
+            </div>
+            <div class="night-hero-row">
+              <span class="night-hero-key">Wind</span>
+              <span class="night-hero-val">${heroWind}</span>
+            </div>
+            <div class="night-hero-row">
+              <span class="night-hero-key">First tide</span>
+              <span class="night-hero-val">${heroTideStr}</span>
+            </div>
+          </div>
         </div>`;
-      todayForecastPanel.innerHTML = nightStripHtml + tmrwHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
+
+      todayForecastPanel.innerHTML = nightHeroHtml + tmrwHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
 
       const plannerCard = document.getElementById('tomorrowPlannerCard');
       if (plannerCard) plannerCard.innerHTML = tmrwHtml.replace('margin:12px', 'margin:0');
