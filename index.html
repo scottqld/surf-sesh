@@ -677,104 +677,30 @@
   /* Night mode — subtle body tint */
   body.night-mode { background: #060810; }
 
-  /* Night hero card — replaces the empty currentCard slot */
-  .night-hero {
-    margin: 12px 0 4px;
-    padding: 16px;
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(100,120,180,0.15);
-    border-radius: 12px;
-  }
-  .night-hero-top {
+  /* Night mode compact header strip — sits above the forecast panels */
+  .night-strip {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-  .night-hero-moon { font-size: 17px; opacity: 0.85; }
-  .night-hero-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 2px;
-    color: var(--muted);
-    text-transform: uppercase;
-    flex: 1;
-  }
-  .night-hero-pill {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-    background: rgba(232,168,58,0.08);
-    border: 1px solid rgba(232,168,58,0.2);
-    padding: 3px 8px;
-    border-radius: 20px;
-  }
-  .night-hero-score-row {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    margin-bottom: 14px;
-  }
-  .night-hero-score-num {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 54px;
-    line-height: 1;
-  }
-  .night-hero-score-denom {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 22px;
-    color: var(--muted);
-    margin-right: 4px;
-  }
-  .night-hero-score-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 2px;
-    display: block;
-  }
-  .night-hero-score-sub {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    color: var(--muted);
-    letter-spacing: 1px;
-    display: block;
-    margin-top: 2px;
-  }
-  .night-hero-conditions {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-    padding-top: 12px;
-  }
-  .night-hero-row {
-    display: flex;
     justify-content: space-between;
-    align-items: center;
+    padding: 10px 20px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(100,120,180,0.12);
   }
-  .night-hero-key {
+  .night-strip-left {
     font-family: 'DM Mono', monospace;
     font-size: 9px;
-    letter-spacing: 1.5px;
-    color: var(--muted);
-  }
-  .night-hero-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    color: var(--text);
-    text-align: right;
-    max-width: 65%;
-  }
-  .night-hero-hint {
-    margin-top: 12px;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
     letter-spacing: 1px;
     color: var(--muted);
-    opacity: 0.4;
-    text-align: center;
+  }
+  .night-strip-label {
     text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .night-strip-countdown { opacity: 0.7; }
+  .night-strip-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 1px;
   }
   /* TAB BAR */
   .tab-bar {
@@ -1079,7 +1005,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.8';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3629,68 +3555,20 @@ async function loadNightMode() {
       ? `${Math.floor(minsUntil4am / 60)}h ${minsUntil4am % 60}m`
       : minsUntil4am > 0 ? `${minsUntil4am}m` : 'soon';
 
-    // Rename NOW tab to TOMORROW and switch to it — hero card lives there
-    const nowBtn = document.getElementById('innerBtn-now');
-    if (nowBtn) { nowBtn.textContent = 'TOMORROW'; nowBtn.style.display = ''; }
-    switchInnerTab('now');
+    // Night mode: hide inner tab bar, show forecast tab directly
+    const innerTabBar = document.querySelector('.inner-tab-bar');
+    if (innerTabBar) innerTabBar.style.display = 'none';
+    const currentCard = document.getElementById('currentCard');
+    if (currentCard) currentCard.innerHTML = '';
+    switchInnerTab('today');
 
-    // Build tomorrow hero card for currentCard slot
+    // Build compact overnight strip — prepended to forecast panels
     const tomorrow = data.forecast.forecasts[0];
     const heroBreak = BREAKS[currentBreak];
     const heroScore = heroBreak ? scoreBreak(heroBreak, data.forecast) : null;
     const heroColor = heroScore !== null ? scoreColor(heroScore) : 'var(--muted)';
     const heroLabel = heroScore !== null ? scoreLabel(heroScore, true) : '—';
-    const heroSwell = tomorrow ? fmtSwell(
-      tomorrow.swell,
-      data.forecast._swellHeightByDay?.[1] ?? null,
-      data.forecast._swellDirByDay?.[1] ?? null,
-      data.forecast._period
-    ) : '—';
-    const heroWindSpeed = tomorrow ? extractWindSpeed(tomorrow.winds || '') : '';
-    const heroWind = tomorrow
-      ? `${shortDir(tomorrow.winds || '') || '—'}${heroWindSpeed ? ' · ' + heroWindSpeed : ''}`
-      : '—';
-    const heroTides = getTidesForDay(1);
-    const heroFirstTide = heroTides[0];
-    const heroTideStr = heroFirstTide
-      ? `${heroFirstTide.type} ${formatTideTime(heroFirstTide.time)} ${parseFloat(heroFirstTide.height).toFixed(1)}m`
-      : '—';
     const heroBreakName = heroBreak?.name || '';
-
-    const currentCard = document.getElementById('currentCard');
-    if (currentCard) {
-      currentCard.innerHTML = `
-        <div class="night-hero">
-          <div class="night-hero-top">
-            <span class="night-hero-moon">🌙</span>
-            <span class="night-hero-label">Overnight</span>
-            <span class="night-hero-pill">Live at 4am · in ${timeStr}</span>
-          </div>
-          <div class="night-hero-score-row">
-            <span class="night-hero-score-num" style="color:${heroColor};">${heroScore ?? '—'}</span>
-            <span class="night-hero-score-denom">/10</span>
-            <div style="display:flex;flex-direction:column;margin-left:4px;">
-              <span class="night-hero-score-label" style="color:${heroColor};">${heroLabel}</span>
-              <span class="night-hero-score-sub">TOMORROW${heroBreakName ? ' · ' + heroBreakName.toUpperCase() : ''}</span>
-            </div>
-          </div>
-          <div class="night-hero-conditions">
-            <div class="night-hero-row">
-              <span class="night-hero-key">SWELL</span>
-              <span class="night-hero-val">${heroSwell}</span>
-            </div>
-            <div class="night-hero-row">
-              <span class="night-hero-key">WIND</span>
-              <span class="night-hero-val">${heroWind}</span>
-            </div>
-            <div class="night-hero-row">
-              <span class="night-hero-key">FIRST TIDE</span>
-              <span class="night-hero-val">${heroTideStr}</span>
-            </div>
-          </div>
-          <div class="night-hero-hint">Tap Forecast for full conditions</div>
-        </div>`;
-    }
 
     // Populate FORECAST inner tab: tomorrow + day-after panels using shared builder
     const todayForecastPanel = document.getElementById('todayForecastPanel');
@@ -3728,7 +3606,12 @@ async function loadNightMode() {
 
       const tmrwHtml = buildNightPanel(tomorrow, 1);
       const dayAfter = data.forecast.forecasts[1];
-      todayForecastPanel.innerHTML = tmrwHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
+      const nightStripHtml = `
+        <div class="night-strip">
+          <span class="night-strip-left">🌙 <span class="night-strip-label">Overnight</span> · <span class="night-strip-countdown" id="nightCountdown">Live at 4am · in ${timeStr}</span></span>
+          <span class="night-strip-score" style="color:${heroColor};">${heroScore ?? '—'}<span style="font-size:11px;color:var(--muted);"> /10 </span>${heroLabel}</span>
+        </div>`;
+      todayForecastPanel.innerHTML = nightStripHtml + tmrwHtml + (dayAfter ? buildNightPanel(dayAfter, 2) : '');
 
       const plannerCard = document.getElementById('tomorrowPlannerCard');
       if (plannerCard) plannerCard.innerHTML = tmrwHtml.replace('margin:12px', 'margin:0');
@@ -3779,21 +3662,10 @@ async function loadNightMode() {
     document.getElementById('content').classList.add('visible');
     setBreak(currentBreak);
     const errEl = document.getElementById('errorEl');
-    // Show minimal night hero even on error — at least show countdown
-    const currentCard = document.getElementById('currentCard');
-    if (currentCard) {
-      currentCard.innerHTML = `
-        <div class="night-hero">
-          <div class="night-hero-top">
-            <span class="night-hero-moon">🌙</span>
-            <span class="night-hero-label">Overnight</span>
-          </div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);padding:8px 0;">
-            Live conditions resume at 4am.<br>
-            <span style="opacity:0.5;font-size:9px;">Forecast unavailable — check back soon.</span>
-          </div>
-        </div>`;
-    }
+    const innerTabBar = document.querySelector('.inner-tab-bar');
+    if (innerTabBar) innerTabBar.style.display = 'none';
+    switchInnerTab('today');
+    errEl.innerHTML = `<div style="padding:12px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">🌙 Overnight · Live conditions resume at 4am.<br><span style="opacity:0.5;font-size:9px;">Forecast unavailable — check back soon.</span></div>`;
     errEl.style.display = 'block';
   } finally {
     btn.classList.remove('spinning');
@@ -4271,6 +4143,8 @@ function scheduleNextLoad() {
     if (isActiveHours()) {
       // Clean up night mode UI before full load
       document.body.classList.remove('night-mode');
+      const innerTabBar = document.querySelector('.inner-tab-bar');
+      if (innerTabBar) innerTabBar.style.display = '';
       const nowBtn = document.getElementById('innerBtn-now');
       if (nowBtn) { nowBtn.style.display = ''; nowBtn.textContent = 'NOW'; }
       document.getElementById('currentConditionsLabel').textContent = 'CURRENT CONDITIONS';
