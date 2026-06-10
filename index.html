@@ -1083,7 +1083,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.5';
+const APP_VERSION = '3.6';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1169,6 +1169,7 @@ let currentBreak = 0;
 let _userPickedBreak = false; // once the user picks a break manually, auto-selection stops overriding it
 let _wasNightLoad = false;    // true while the last data load was night mode
 let _bestPick = null;         // { idx, score, name, adv } from updateBreakIndicators
+let _windOutlook = null;      // Open-Meteo hourly wind forecast (Brisbane-local times)
 
 // ─── SHARED HELPERS ─────────────────────────────────────────────────────────
 
@@ -2601,6 +2602,43 @@ function updateBreakIndicators(forecast, isLive = isActiveHours()) {
 }
 
 /**
+ * Short-term wind outlook for the NOW card — Open-Meteo hourly wind, fetched
+ * client-side (the worker payload only carries the current AWS observation).
+ */
+async function fetchWindOutlook() {
+  try {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-26.39&longitude=153.09&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=Australia%2FBrisbane&forecast_days=2');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _windOutlook = (await res.json()).hourly || null;
+  } catch (e) {
+    _windOutlook = null;
+  }
+  renderWindOutlook();
+}
+
+function renderWindOutlook() {
+  const el = document.getElementById('windOutlook');
+  if (!el) return;
+  if (!_windOutlook) { el.textContent = ''; return; }
+  const { time, wind_speed_10m: spd, wind_direction_10m: dir } = _windOutlook;
+  if (!time || !spd) { el.textContent = ''; return; }
+  const nowB = getBrisbaneNow();
+  const nowStr = `${getBrisbaneDateStr(0)}T${String(nowB.getUTCHours()).padStart(2, '0')}`;
+  const idx = time.findIndex(t => t >= nowStr);
+  if (idx < 0) { el.textContent = ''; return; }
+  // Expected wind 2-4 hours out
+  const pts = [2, 3, 4].map(o => ({ s: spd[idx + o], d: dir?.[idx + o] })).filter(p => p.s != null);
+  if (!pts.length) { el.textContent = ''; return; }
+  const speeds = pts.map(p => Math.round(p.s));
+  const lo = Math.min(...speeds), hi = Math.max(...speeds);
+  const compass = pts[1]?.d != null ? degToCompass(pts[1].d) : (pts[0]?.d != null ? degToCompass(pts[0].d) : null);
+  const curDir = cachedData?.wind?.wind_dir || null;
+  const turning = curDir && compass && curDir !== compass;
+  const rangeStr = lo === hi ? `${lo}` : `${lo}–${hi}`;
+  el.textContent = `next 2–4h: ${turning ? '↻ turning ' : '→ '}${compass || ''} ${rangeStr} km/h`;
+}
+
+/**
  * Best-break shortcut banner. Hidden while the best break is selected;
  * whenever the user is on any other break it shows a tappable jump-back.
  */
@@ -3196,6 +3234,7 @@ function renderAll(data) {
 
   requestAnimationFrame(() => {
     setBreak(initialBreak || 0);
+    fetchWindOutlook(); // async; fills #windOutlook in the NOW card when it lands
     renderTides(data.tides[currentStation]);
     renderSessionPlanner(data.forecast, data.swell);
     renderDITripGate(data.forecast, data.swell);
@@ -3497,6 +3536,7 @@ function renderForecast(forecast, tideData, swellData) {
               ${dirArrow(windDir, 18, 'var(--text)')}
               <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}${windGust ? ' · ' + windGust + ' gust' : ''}</span>
             </div>
+            <div class="condition-sub" id="windOutlook"></div>
           </div>
           <div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Surf</div>
