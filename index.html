@@ -862,13 +862,13 @@
     <!-- Break selector overlaid at bottom of photo -->
     <div class="station-toggle-wrap" style="position:absolute;bottom:0;left:0;right:0;">
       <div class="station-toggle" style="margin:0;background:transparent;border:none;border-radius:0;padding:6px 8px 10px;">
-        <button class="station-btn-photo active" id="btn0" onclick="setBreak(0)">Groyne</button>
-        <button class="station-btn-photo" id="btn1" onclick="setBreak(1)">First Pt.</button>
-        <button class="station-btn-photo" id="btn2" onclick="setBreak(2)">Nationals</button>
-        <button class="station-btn-photo" id="btn3" onclick="setBreak(3)">Tea Tree</button>
-        <button class="station-btn-photo" id="btn4" onclick="setBreak(4)">Granite</button>
-        <button class="station-btn-photo" id="btn5" onclick="setBreak(5)">Sunshine</button>
-        <button class="station-btn-photo" id="btn6" onclick="setBreak(6)">D.I.</button>
+        <button class="station-btn-photo active" id="btn0" onclick="setBreak(0, true)">Groyne</button>
+        <button class="station-btn-photo" id="btn1" onclick="setBreak(1, true)">First Pt.</button>
+        <button class="station-btn-photo" id="btn2" onclick="setBreak(2, true)">Nationals</button>
+        <button class="station-btn-photo" id="btn3" onclick="setBreak(3, true)">Tea Tree</button>
+        <button class="station-btn-photo" id="btn4" onclick="setBreak(4, true)">Granite</button>
+        <button class="station-btn-photo" id="btn5" onclick="setBreak(5, true)">Sunshine</button>
+        <button class="station-btn-photo" id="btn6" onclick="setBreak(6, true)">D.I.</button>
       </div>
       <div class="station-toggle-fade" style="background:linear-gradient(to right,transparent,rgba(6,8,16,0.85) 70%);"></div>
       <div class="station-toggle-fade-left" id="stFadeLeft" style="background:linear-gradient(to left,transparent,rgba(6,8,16,0.85) 70%);opacity:0;"></div>
@@ -1083,7 +1083,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.3';
+const APP_VERSION = '3.4';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1166,6 +1166,8 @@ let BREAKS = [
 ];
 
 let currentBreak = 0;
+let _userPickedBreak = false; // once the user picks a break manually, auto-selection stops overriding it
+let _wasNightLoad = false;    // true while the last data load was night mode
 
 // ─── SHARED HELPERS ─────────────────────────────────────────────────────────
 
@@ -1590,7 +1592,8 @@ function conditionNoteTomorrow(breakData, forecast) {
 }
 
 ///////////////////////////////////////////////////
-function setBreak(index) {
+function setBreak(index, fromUser = false) {
+  if (fromUser) _userPickedBreak = true;
   currentBreak = index;
   BREAKS.forEach((_, i) => {
     const btn = document.getElementById(`btn${i}`);
@@ -2544,7 +2547,7 @@ function conditionNote(breakData, forecast) {
 }
 
 ///////////////////////////////////////////////////
-function updateBreakIndicators(forecast) {
+function updateBreakIndicators(forecast, isLive = isActiveHours()) {
   // Clear all existing dots first to avoid stale state between mode switches
   BREAKS.forEach((_, i) => {
     const btn = document.getElementById(`btn${i}`);
@@ -2552,9 +2555,15 @@ function updateBreakIndicators(forecast) {
     btn.style.color = '';
   });
 
+  // Score each break the same way the visible panel does: live score in day
+  // mode, canonical tomorrow inputs at night — so the pick matches the UI.
+  const scoreNow = b => isLive
+    ? scoreBreak(b, forecast, true)
+    : scoreBreak(b, { forecasts: [forecast.forecasts[0]], ...dayScoreAux(forecast, 1) });
+
   let bestScore = -1, bestBreak = null;
   BREAKS.forEach((b, i) => {
-    const score = scoreBreak(b, forecast);
+    const score = scoreNow(b);
     if (score > bestScore) { bestScore = score; bestBreak = b; }
     const btn = document.getElementById(`btn${i}`);
     btn.childNodes[0].textContent = breakBtnLabel(b);
@@ -2578,7 +2587,7 @@ function updateBreakIndicators(forecast) {
 
   // Best break banner — prefer non-advanced breaks unless no good alternative
   // intermediateAdvanced breaks (Granite Bay) are excluded from advanced filter
-  const scores = BREAKS.map((b, idx) => ({ b, idx, score: scoreBreak(b, forecast) }));
+  const scores = BREAKS.map((b, idx) => ({ b, idx, score: scoreNow(b) }));
   const nonAdv = scores.filter(s => !s.b.advanced && !(s.b.maxScore && s.score >= s.b.maxScore));
   const all    = scores.filter(s => !(s.b.maxScore && s.score >= s.b.maxScore));
   const bestNonAdv = nonAdv.length ? nonAdv.reduce((a, s) => s.score > a.score ? s : a, { score: -1 }) : { score: -1 };
@@ -2592,7 +2601,7 @@ function updateBreakIndicators(forecast) {
     banner.textContent = `${label}: ${pick.b.name} ${pick.score}/10${isAdv ? ' · advanced' : ''}${betterAdv}`;
     banner.style.cursor = 'pointer';
     banner.onclick = () => {
-      setBreak(pick.idx);
+      setBreak(pick.idx, true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       const btn = document.getElementById(`btn${pick.idx}`);
       if (btn) { btn.style.outline = '2px solid var(--high)'; setTimeout(() => btn.style.outline = '', 800); }
@@ -3026,7 +3035,7 @@ function renderSessionPlanner(forecast, swell) {
         .join(' · ');
     })();
     const isLast = i === displaySessions.length - 1;
-    return `<div onclick="setBreak(${s.breakIdx});switchTab('conditions');" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}cursor:pointer;">
+    return `<div onclick="setBreak(${s.breakIdx}, true);switchTab('conditions');" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}cursor:pointer;">
       <div style="min-width:0;flex:1;">
         <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;">${s.day.toUpperCase()}${adv}</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#fff;line-height:1.2;">${s.break.name}</div>
@@ -3052,7 +3061,7 @@ function renderAll(data) {
     const toggle = document.querySelector('.station-toggle');
     if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn-photo').length) {
       toggle.innerHTML = BREAKS.map((b, i) =>
-        `<button class="station-btn-photo${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i})">${breakBtnLabel(b)}</button>`
+        `<button class="station-btn-photo${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i}, true)">${breakBtnLabel(b)}</button>`
       ).join('');
     }
   }
@@ -3164,11 +3173,12 @@ function renderAll(data) {
     }
   }
 
-  // On first load, jump to the recommended break automatically.
-  // On subsequent refreshes, keep whatever break the user has selected.
+  // Jump to the recommended break on first load and when going live after a
+  // night-mode session — but never override a break the user picked themselves.
   const bestIdx = updateBreakIndicators(data.forecast);
-  const initialBreak = _hasLoaded ? currentBreak : bestIdx;
+  const initialBreak = (!_userPickedBreak && (!_hasLoaded || _wasNightLoad)) ? bestIdx : currentBreak;
   _hasLoaded = true;
+  _wasNightLoad = false;
 
   document.getElementById('loadingEl').style.display = 'none';
   document.getElementById('content').classList.add('visible');
@@ -3792,6 +3802,7 @@ function renderSwellChart(swellData) {
 }
 
 async function loadNightMode() {
+  _wasNightLoad = true; // lets the next live load re-pick the best break (unless user chose one)
   document.body.classList.add('night-mode');
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');
@@ -3946,10 +3957,14 @@ async function loadNightMode() {
     // Pass todayForecastEntry as prefix so TODAY tab appears first (labelled "TODAY" at night).
     renderForecastTabs(data.forecast, 0, 1, todayForecastEntry);
 
+    // First load jumps to the best break (scored on tomorrow at night), same as day mode
+    const bestIdxNm = updateBreakIndicators(data.forecast);
+    const initialBreakNm = (_hasLoaded || _userPickedBreak) ? currentBreak : bestIdxNm;
+    _hasLoaded = true;
+
     requestAnimationFrame(() => {
-      setBreak(currentBreak);
+      setBreak(initialBreakNm || 0);
       renderSwellChart(data.swell);
-      updateBreakIndicators(data.forecast);
       renderTides(data.tides[currentStation]);
       renderSessionPlanner(data.forecast, data.swell);
       renderDITripGate(data.forecast, data.swell);
