@@ -303,10 +303,11 @@
 
   .condition-label {
     font-family: 'DM Mono', monospace;
-    font-size: 9px;
+    font-size: 10px;
+    font-weight: 500;
     letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: var(--muted);
+    color: #b9c6d4; /* fixed bright tone — never tinted by score colouring */
     margin-bottom: 4px;
   }
 
@@ -415,7 +416,7 @@
   .fc-label {
     font-family: 'DM Mono', monospace;
     font-size: 9px;
-    color: var(--muted);
+    color: #b9c6d4;
     text-transform: uppercase;
     letter-spacing: 1px;
     width: 36px;
@@ -1084,7 +1085,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1705,16 +1706,17 @@ function setBreak(index) {
   const morningNote = noteResult.morning;
   const afternoonNote = noteResult.afternoon;
 
-  // Score-based photo overlay: desaturate + darken on poor conditions
+  // Score-based photo overlay: subtle desaturate/darken on poor conditions —
+  // capped so the photo always stays clearly visible
   const overlayEl = document.getElementById('scoreOverlay');
   const imgElRef = document.getElementById('breakImg');
   if (overlayEl && score !== null) {
     if (score < 4) {
-      overlayEl.style.background = 'rgba(10,12,15,0.45)';
-      if (imgElRef) imgElRef.style.filter = 'saturate(0.3)';
+      overlayEl.style.background = 'rgba(10,12,15,0.22)';
+      if (imgElRef) imgElRef.style.filter = 'saturate(0.65)';
     } else if (score < 6) {
-      overlayEl.style.background = 'rgba(10,12,15,0.2)';
-      if (imgElRef) imgElRef.style.filter = 'saturate(0.7)';
+      overlayEl.style.background = 'rgba(10,12,15,0.1)';
+      if (imgElRef) imgElRef.style.filter = 'saturate(0.85)';
     } else {
       overlayEl.style.background = 'transparent';
       if (imgElRef) imgElRef.style.filter = 'saturate(1)';
