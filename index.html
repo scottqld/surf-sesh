@@ -924,8 +924,8 @@
     <div id="nightBanner" class="night-banner" style="display:none;">
       <span class="night-banner-inner">Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am &nbsp;&nbsp;·&nbsp;&nbsp; Live conditions resume at 4am</span>
     </div>
-    <div class="current-card" id="currentCard"></div>
     <div id="forecastDayTabs"></div>
+    <div class="current-card" id="currentCard"></div>
     <div id="forecastDayPanel"></div>
     </div>
 
@@ -1082,7 +1082,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.8';
+const APP_VERSION = '2.9';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1226,6 +1226,8 @@ function buildSparklineHTML(forecast, highlightFirst = true) {
 
 // State for the forecast day tab bar (set by renderForecastTabs, read by selectForecastTab + setBreak)
 let _forecastTabState = null;
+// Per-day snapshot of async-populated extra panels, keyed by realDayIdx (reset on break change)
+let _extrasCacheByDay = {};
 
 /**
  * Build the forecast day tab bar and render the first tab's panel.
@@ -1253,7 +1255,8 @@ function renderForecastTabs(forecast, forecastStartIdx, realDayStart, prefixEntr
       _swellDir: forecast._swellDirByDay?.[realDayIdx] ?? null,
       _tide:     realDayIdx === 0 ? (forecast._tide ?? null) : null,
     };
-    const score = b ? scoreBreak(b, fc) : null;
+    // NOW pill uses the live score in day mode so it always matches the live conditions card
+    const score = b ? (realDayIdx === 0 && isActiveHours() ? scoreBreak(b, forecast, true) : scoreBreak(b, fc)) : null;
     const color = score !== null ? scoreColor(score) : 'var(--muted)';
     const dow   = ['SUN','MON','TUE','WED','THU','FRI','SAT'][getBrisbaneNow(realDayIdx).getUTCDay()];
     const label = realDayIdx === 0 ? (isActiveHours() ? 'NOW' : 'TODAY') : realDayIdx === 1 ? 'TMW' : dow;
@@ -1272,6 +1275,18 @@ function renderForecastTabs(forecast, forecastStartIdx, realDayStart, prefixEntr
 function selectForecastTab(tabIdx) {
   if (!_forecastTabState) return;
   const { forecast, allTabs } = _forecastTabState;
+  // Snapshot the async-populated extras (best window etc.) for the outgoing tab,
+  // so switching away and back doesn't blank them until the next setBreak.
+  const prevIdx = _forecastTabState.activeIdx;
+  if (prevIdx != null && allTabs?.[prevIdx]) {
+    const cache = {};
+    ['bestWindowPanel', 'offshoreWindowPanel', 'morningAfternoonPanel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.innerHTML) cache[id] = el.innerHTML;
+    });
+    _extrasCacheByDay[allTabs[prevIdx].realDayIdx] = cache;
+  }
+  _forecastTabState.activeIdx = tabIdx;
   document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, i) => {
     btn.classList.toggle('active', i === tabIdx);
   });
@@ -1308,23 +1323,60 @@ function selectForecastTab(tabIdx) {
     ? '<div id="bestWindowPanel"></div><div id="offshoreWindowPanel"></div><div id="morningAfternoonPanel"></div>'
     : realDayIdx === 1 ? '<div id="bestWindowPanel"></div>' : '';
 
-  panel.innerHTML = buildForecastPanelBlock(day, {
-    scoreId,
-    surfId,
-    tidesStr,
-    swellStr,
-    swellDir,
-    windStr:     `${shortDir(day.winds || '') || '—'}${windSpeed ? ' · ' + windSpeed : ''}`,
-    windDir,
-    weather:     day.weather,
-    sst,
-    topMargin:   '12px',
-    label:       labelStr,
-    sublabel:    sublabelStr !== labelStr ? sublabelStr : '',
-    extraPanels,
-  });
+  // NOW tab in day mode: the live conditions card carries swell/wind/surf/score,
+  // so the panel only adds what the card doesn't have — weather, day tides, windows.
+  const liveCard = document.getElementById('currentCard');
+  const showLive = realDayIdx === 0 && isActiveHours() && liveCard && liveCard.innerHTML.trim() !== '';
+  if (liveCard) liveCard.style.display = showLive ? '' : 'none';
 
-  if (score !== null) {
+  if (showLive) {
+    const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
+    panel.innerHTML = `<div style="margin:12px 12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="padding:11px 12px;">
+        <div class="condition-label">Weather</div>
+        <div class="condition-value">${day.weather || '—'}${sstHtml}</div>
+      </div>
+      <div style="padding:11px 12px;border-top:1px solid var(--border);">
+        <div class="condition-label">Tides</div>
+        <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
+      </div>
+      ${extraPanels}
+    </div>`;
+  } else {
+    panel.innerHTML = buildForecastPanelBlock(day, {
+      scoreId,
+      surfId,
+      tidesStr,
+      swellStr,
+      swellDir,
+      windStr:     `${shortDir(day.winds || '') || '—'}${windSpeed ? ' · ' + windSpeed : ''}`,
+      windDir,
+      weather:     day.weather,
+      sst,
+      topMargin:   '12px',
+      label:       labelStr,
+      sublabel:    sublabelStr !== labelStr ? sublabelStr : '',
+      extraPanels,
+    });
+  }
+
+  // Restore extras populated for this day by an earlier setBreak pass
+  const cached = _extrasCacheByDay[realDayIdx];
+  if (cached) {
+    Object.entries(cached).forEach(([id, html]) => {
+      const el = document.getElementById(id);
+      if (el && !el.innerHTML) el.innerHTML = html;
+    });
+  }
+
+  // Fill the surf estimate immediately — setBreak also updates it, but that only runs on break change
+  if (!showLive && b && omHeight !== null) {
+    const surfEl = document.getElementById(surfId);
+    const sH = estimateSurfHeight(omHeight, b.exposure, swellDir, b, period);
+    if (surfEl && sH !== null) surfEl.textContent = `~${Math.round(sH * 3.281 * 2) / 2}ft`;
+  }
+
+  if (!showLive && score !== null) {
     const c    = scoreColor(score);
     const el   = document.getElementById(scoreId);
     const elN  = document.getElementById(scoreId + 'Num');
@@ -1708,13 +1760,14 @@ function setBreak(index) {
 
     // Refresh day tab bar scores and re-render the active panel
     if (_forecastTabState) {
+      _extrasCacheByDay = {}; // cached extras belong to the previous break
       const { forecast: tabFc, allTabs: tabsList } = _forecastTabState;
       document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, tabIdx) => {
         const entry = tabsList?.[tabIdx];
         if (!entry) return;
         const { day: d, realDayIdx } = entry;
         const fc2 = { forecasts: [d], _period: tabFc._periodByDay?.[realDayIdx] ?? null, _swellDir: tabFc._swellDirByDay?.[realDayIdx] ?? null, _tide: realDayIdx === 0 ? (tabFc._tide ?? null) : null };
-        const s2  = b ? scoreBreak(b, fc2) : null;
+        const s2  = b ? (realDayIdx === 0 && isActiveHours() ? scoreBreak(b, tabFc, true) : scoreBreak(b, fc2)) : null;
         const col = s2 !== null ? scoreColor(s2) : 'var(--muted)';
         const span = btn.querySelector('.day-tab-score');
         if (span) { span.textContent = s2 ?? '—'; span.style.color = col; }
