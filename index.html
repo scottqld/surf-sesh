@@ -1083,7 +1083,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.4';
+const APP_VERSION = '3.5';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1168,6 +1168,7 @@ let BREAKS = [
 let currentBreak = 0;
 let _userPickedBreak = false; // once the user picks a break manually, auto-selection stops overriding it
 let _wasNightLoad = false;    // true while the last data load was night mode
+let _bestPick = null;         // { idx, score, name, adv } from updateBreakIndicators
 
 // ─── SHARED HELPERS ─────────────────────────────────────────────────────────
 
@@ -1595,6 +1596,7 @@ function conditionNoteTomorrow(breakData, forecast) {
 function setBreak(index, fromUser = false) {
   if (fromUser) _userPickedBreak = true;
   currentBreak = index;
+  renderBestBreakBanner();
   BREAKS.forEach((_, i) => {
     const btn = document.getElementById(`btn${i}`);
     if (!btn) return;
@@ -2593,25 +2595,34 @@ function updateBreakIndicators(forecast, isLive = isActiveHours()) {
   const bestNonAdv = nonAdv.length ? nonAdv.reduce((a, s) => s.score > a.score ? s : a, { score: -1 }) : { score: -1 };
   const bestAll    = all.length    ? all.reduce((a, s) => s.score > a.score ? s : a, { score: -1 })    : scores.reduce((a, s) => s.score > a.score ? s : a, { score: -1 });
   const pick = (bestNonAdv.score >= bestAll.score - 2) ? bestNonAdv : bestAll;
+  _bestPick = pick.b ? { idx: pick.idx, score: pick.score, name: pick.b.name, adv: !!pick.b.advanced } : null;
+  renderBestBreakBanner();
+  return pick.idx ?? 0;
+}
+
+/**
+ * Best-break shortcut banner. Hidden while the best break is selected;
+ * whenever the user is on any other break it shows a tappable jump-back.
+ */
+function renderBestBreakBanner() {
   const banner = document.getElementById('bestBreakBanner');
-  if (banner && pick.score >= 5) {
-    const isAdv = pick.b?.advanced;
-    const label = pick.score >= 8 ? '🔥 Firing' : '✓ Best option';
-    const betterAdv = bestAll.score > pick.score ? ` (${bestAll.b.name} ${bestAll.score} · advanced)` : '';
-    banner.textContent = `${label}: ${pick.b.name} ${pick.score}/10${isAdv ? ' · advanced' : ''}${betterAdv}`;
-    banner.style.cursor = 'pointer';
-    banner.onclick = () => {
-      setBreak(pick.idx, true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      const btn = document.getElementById(`btn${pick.idx}`);
-      if (btn) { btn.style.outline = '2px solid var(--high)'; setTimeout(() => btn.style.outline = '', 800); }
-    };
-    banner.style.display = '';
-  } else if (banner) {
+  if (!banner) return;
+  if (!_bestPick || currentBreak === _bestPick.idx) {
     banner.style.display = 'none';
     banner.onclick = null;
+    return;
   }
-  return pick.idx ?? 0;
+  const { idx, score, name, adv } = _bestPick;
+  const label = score >= 8 ? '🔥 Firing' : score >= 5 ? '✓ Best option' : '★ Best break';
+  banner.innerHTML = `<span>${label}: ${name} ${score}/10${adv ? ' · advanced' : ''}</span><span style="float:right;opacity:0.8;">Go →</span>`;
+  banner.style.cursor = 'pointer';
+  banner.onclick = () => {
+    setBreak(idx, true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const btn = document.getElementById(`btn${idx}`);
+    if (btn) { btn.style.outline = '2px solid var(--high)'; setTimeout(() => btn.style.outline = '', 800); }
+  };
+  banner.style.display = '';
 }
 ///////////////////////////////////////////////////
 
