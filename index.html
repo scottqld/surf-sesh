@@ -1083,7 +1083,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.6';
+const APP_VERSION = '3.7';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1324,18 +1324,24 @@ function selectForecastTab(tabIdx) {
   if (liveCard) liveCard.style.display = showLive ? '' : 'none';
 
   if (showLive) {
-    const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
-    panel.innerHTML = `<div style="margin:12px 20px 0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-      <div style="padding:11px 12px;">
-        <div class="condition-label">Weather</div>
-        <div class="condition-value">${day.weather || '—'}${sstHtml}</div>
-      </div>
-      <div style="padding:11px 12px;border-top:1px solid var(--border);">
-        <div class="condition-label">Tides</div>
-        <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
-      </div>
-      ${extraPanels}
-    </div>`;
+    // Render the day-level info (weather, full tides, windows) inside the live
+    // card itself so the NOW tab is a single panel, like the other day tabs.
+    panel.innerHTML = '';
+    const extrasHost = document.getElementById('nowDayExtras');
+    if (extrasHost) {
+      const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
+      extrasHost.innerHTML = `<div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+        <div style="padding:11px 12px;">
+          <div class="condition-label">Weather</div>
+          <div class="condition-value">${day.weather || '—'}${sstHtml}</div>
+        </div>
+        <div style="padding:11px 12px;border-top:1px solid var(--border);">
+          <div class="condition-label">Tides</div>
+          <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
+        </div>
+        ${extraPanels}
+      </div>`;
+    }
   } else {
     panel.innerHTML = buildForecastPanelBlock(day, {
       scoreId,
@@ -3554,6 +3560,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
       </div>
 
+      <div id="nowDayExtras"></div>
     `;
 
     // Build tomorrow block for the planner tab only
