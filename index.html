@@ -768,11 +768,13 @@
     text-transform: uppercase;
   }
   .day-tab-btn.active .day-tab-label { color: var(--accent); }
-  .day-tab-score {
+  .day-tab-date {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 22px;
+    font-size: 20px;
     line-height: 1;
+    color: var(--text);
   }
+  .day-tab-btn.active .day-tab-date { color: var(--accent); }
   /* TAB BAR */
   .tab-bar {
     position: fixed;
@@ -1082,7 +1084,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.9';
+const APP_VERSION = '3.0';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1247,22 +1249,12 @@ function renderForecastTabs(forecast, forecastStartIdx, realDayStart, prefixEntr
 
   const bar = document.getElementById('forecastDayTabs');
   if (!bar) return;
-  const b = BREAKS[currentBreak];
-  bar.innerHTML = allTabs.map(({ day, realDayIdx }, tabIdx) => {
-    const fc = {
-      forecasts: [day],
-      _period:   forecast._periodByDay?.[realDayIdx] ?? null,
-      _swellDir: forecast._swellDirByDay?.[realDayIdx] ?? null,
-      _tide:     realDayIdx === 0 ? (forecast._tide ?? null) : null,
-    };
-    // NOW pill uses the live score in day mode so it always matches the live conditions card
-    const score = b ? (realDayIdx === 0 && isActiveHours() ? scoreBreak(b, forecast, true) : scoreBreak(b, fc)) : null;
-    const color = score !== null ? scoreColor(score) : 'var(--muted)';
-    const dow   = ['SUN','MON','TUE','WED','THU','FRI','SAT'][getBrisbaneNow(realDayIdx).getUTCDay()];
-    const label = realDayIdx === 0 ? (isActiveHours() ? 'NOW' : 'TODAY') : realDayIdx === 1 ? 'TMW' : dow;
+  bar.innerHTML = allTabs.map(({ realDayIdx }, tabIdx) => {
+    const d   = getBrisbaneNow(realDayIdx);
+    const dow = ['SUN','MON','TUE','WED','THU','FRI','SAT'][d.getUTCDay()];
     return `<button class="day-tab-btn${tabIdx === 0 ? ' active' : ''}" onclick="selectForecastTab(${tabIdx})">
-      <span class="day-tab-label">${label}</span>
-      <span class="day-tab-score" style="color:${color};">${score ?? '—'}</span>
+      <span class="day-tab-label">${dow}</span>
+      <span class="day-tab-date">${d.getUTCDate()}</span>
     </button>`;
   }).join('');
   selectForecastTab(0);
@@ -1758,20 +1750,9 @@ function setBreak(index) {
       }
     });
 
-    // Refresh day tab bar scores and re-render the active panel
+    // Re-render the active day panel for the newly selected break
     if (_forecastTabState) {
       _extrasCacheByDay = {}; // cached extras belong to the previous break
-      const { forecast: tabFc, allTabs: tabsList } = _forecastTabState;
-      document.querySelectorAll('#forecastDayTabs .day-tab-btn').forEach((btn, tabIdx) => {
-        const entry = tabsList?.[tabIdx];
-        if (!entry) return;
-        const { day: d, realDayIdx } = entry;
-        const fc2 = { forecasts: [d], _period: tabFc._periodByDay?.[realDayIdx] ?? null, _swellDir: tabFc._swellDirByDay?.[realDayIdx] ?? null, _tide: realDayIdx === 0 ? (tabFc._tide ?? null) : null };
-        const s2  = b ? (realDayIdx === 0 && isActiveHours() ? scoreBreak(b, tabFc, true) : scoreBreak(b, fc2)) : null;
-        const col = s2 !== null ? scoreColor(s2) : 'var(--muted)';
-        const span = btn.querySelector('.day-tab-score');
-        if (span) { span.textContent = s2 ?? '—'; span.style.color = col; }
-      });
       const activeIdx = [...document.querySelectorAll('#forecastDayTabs .day-tab-btn')].findIndex(btn => btn.classList.contains('active'));
       if (activeIdx >= 0) selectForecastTab(activeIdx);
     }
