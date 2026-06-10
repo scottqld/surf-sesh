@@ -1083,7 +1083,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.8';
+const APP_VERSION = '3.9';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3473,7 +3473,9 @@ function renderForecast(forecast, tideData, swellData) {
       const ampm = h < 12 ? 'am' : 'pm';
       return `${(h % 12) || 12}:${String(m).padStart(2,'0')}${ampm}`;
     })() : '';
-    const nextStr = nextType && nextTime ? ` · ${nextType} ${nextTime}` : '';
+    const nextStr = nextType && nextTime
+      ? ` · <span style="color:var(--muted);font-size:11px;">next:</span> ${nextType} ${nextTime}`
+      : '';
     return t.current.toFixed(1) + 'm ' + dir + nextStr;
   })();
 
