@@ -1082,7 +1082,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.7';
+const APP_VERSION = '2.8';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1291,7 +1291,8 @@ function selectForecastTab(tabIdx) {
   const windDir   = extractDir(shortDir(day.winds || ''));
   const windSpeed = extractWindSpeed(day.winds || '');
   const b  = BREAKS[currentBreak];
-  const fc = { forecasts: [day], _period: period, _swellDir: omDir, _tide: null };
+  // Must mirror the tab-pill fc exactly (incl. today's tide) or the panel score diverges from the pill
+  const fc = { forecasts: [day], _period: period, _swellDir: omDir, _tide: realDayIdx === 0 ? (forecast._tide ?? null) : null };
   const score = b ? scoreBreak(b, fc) : null;
   const dow   = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][getBrisbaneNow(realDayIdx).getUTCDay()];
   const labelStr   = realDayIdx === 0 ? 'TODAY' : realDayIdx === 1 ? 'TOMORROW' : dow;
