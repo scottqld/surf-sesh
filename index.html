@@ -20,7 +20,7 @@
     --surface2: #181c22;
     --border: #1e242c;
     --text: #c8d0db;
-    --muted: #e8a83a;
+    --muted: #7e8c9d;
     --accent: #00d4ff;
     --accent2: #ff6b35;
     --high: #00e5a0;
@@ -169,6 +169,17 @@
     color: var(--muted);
     font-size: 16px;
     line-height: 1;
+  }
+
+  .station-toggle-fade-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    border-radius: 8px 0 0 8px;
+    pointer-events: none;
+    transition: opacity 0.2s;
   }
 
   .station-btn {
@@ -650,8 +661,8 @@
   /* REFRESH BTN */
   .refresh-btn {
     position: fixed;
-    bottom: 24px;
-    right: 20px;
+    bottom: 72px; /* clear of the 56px tab bar so it can't swallow Settings taps */
+    right: 16px;
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -836,7 +847,7 @@
     <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(6,8,16,0.55) 0%, transparent 40%, transparent 45%, rgba(6,8,16,0.85) 100%);pointer-events:none;"></div>
     <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
     <!-- Score badge top-left -->
-    <div id="photoScoreBadge" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;">
+    <div id="photoScoreBadge" onclick="openScoreExplain()" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;cursor:pointer;">
       <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
       <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
     </div>
@@ -857,6 +868,7 @@
         <button class="station-btn-photo" id="btn6" onclick="setBreak(6)">D.I.</button>
       </div>
       <div class="station-toggle-fade" style="background:linear-gradient(to right,transparent,rgba(6,8,16,0.85) 70%);"></div>
+      <div class="station-toggle-fade-left" id="stFadeLeft" style="background:linear-gradient(to left,transparent,rgba(6,8,16,0.85) 70%);opacity:0;"></div>
       <button class="scroll-arrow scroll-arrow-left" id="scrollLeft" onclick="scrollBreaks(-120)" style="display:none;">‹</button>
       <button class="scroll-arrow scroll-arrow-right" id="scrollRight" onclick="scrollBreaks(120)">›</button>
     </div>
@@ -958,9 +970,9 @@
         <div style="margin-bottom:14px;">
           <div class="condition-label" style="margin-bottom:8px;">TIME OF DAY</div>
           <div style="display:flex;gap:6px;">
-            <button class="log-tod-btn" id="logTodDawn"    onclick="selectLogTod('dawn')"      style="flex:1;">🌅 Dawn</button>
-            <button class="log-tod-btn" id="logTodMorning" onclick="selectLogTod('morning')"   style="flex:1;">☀️ Morning</button>
-            <button class="log-tod-btn" id="logTodAfternoon" onclick="selectLogTod('afternoon')" style="flex:1;">🌤️ Arvo</button>
+            <button class="log-tod-btn" id="logTodDawn"    onclick="selectLogTod('dawn')"      style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>Dawn</button>
+            <button class="log-tod-btn" id="logTodMorning" onclick="selectLogTod('morning')"   style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>Morning</button>
+            <button class="log-tod-btn" id="logTodAfternoon" onclick="selectLogTod('afternoon')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="2.8"/><line x1="7.5" y1="1.5" x2="7.5" y2="3"/><line x1="1.5" y1="7.5" x2="3" y2="7.5"/><line x1="3.3" y1="3.3" x2="4.3" y2="4.3"/><line x1="11.7" y1="3.3" x2="10.7" y2="4.3"/><path d="M11 20h7a4 4 0 0 0 .8-7.9A5 5 0 0 0 9.3 13 3.5 3.5 0 0 0 11 20z"/></svg>Arvo</button>
           </div>
         </div>
         <div style="margin-bottom:14px;">
@@ -981,29 +993,6 @@
       <div class="section-label">CALIBRATION</div>
       <div id="calibrationPanel" style="padding:0 20px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log 3+ sessions per break to see accuracy stats.</div>
 
-      <div class="section-label">SWELL ALERTS</div>
-      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <div>
-            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);">Alert when score reaches</div>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">Notifies once per 2 hours while app is open</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span id="alertThresholdLabel" style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--accent);">7</span>
-            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">/10</span>
-          </div>
-        </div>
-        <input type="range" id="alertThreshold" min="5" max="10" value="7" step="1"
-          oninput="document.getElementById('alertThresholdLabel').textContent=this.value;saveAlertSettings()"
-          style="width:100%;accent-color:var(--accent);margin-bottom:14px;">
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE BREAKS</div>
-        <div id="alertBreakList"></div>
-        <button onclick="requestAlertPermission()" id="alertPermBtn"
-          style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;cursor:pointer;display:none;">
-          ENABLE NOTIFICATIONS
-        </button>
-        <div id="alertPermStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:8px;text-align:center;"></div>
-      </div>
     </div>
 
     <!-- TAB: SETTINGS -->
@@ -1027,6 +1016,30 @@
           </select>
         </div>
         <div id="notifStatus" style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-height:36px;"></div>
+      </div>
+
+      <div class="section-label">SWELL ALERTS</div>
+      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);">Alert when score reaches</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">Notifies once per 2 hours while app is open</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="alertThresholdLabel" style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--accent);">7</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">/10</span>
+          </div>
+        </div>
+        <input type="range" id="alertThreshold" min="5" max="10" value="7" step="1"
+          oninput="document.getElementById('alertThresholdLabel').textContent=this.value;saveAlertSettings()"
+          style="width:100%;accent-color:var(--accent);margin-bottom:14px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE BREAKS</div>
+        <div id="alertBreakList"></div>
+        <button onclick="requestAlertPermission()" id="alertPermBtn"
+          style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;cursor:pointer;display:none;">
+          ENABLE NOTIFICATIONS
+        </button>
+        <div id="alertPermStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:8px;text-align:center;"></div>
       </div>
     </div>
 
@@ -1057,7 +1070,7 @@
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     SETTINGS
   </button>
-  <button id="installBtn" onclick="installPWA()" style="display:none;position:fixed;bottom:80px;right:16px;z-index:999;background:var(--accent);color:#000;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;font-weight:700;border:none;border-radius:20px;padding:10px 16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,218,216,0.4);">⊕ ADD TO HOME</button>
+  <button id="installBtn" onclick="installPWA()" style="display:none;position:fixed;bottom:132px;right:16px;z-index:999;background:var(--accent);color:#000;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;font-weight:700;border:none;border-radius:20px;padding:10px 16px;cursor:pointer;box-shadow:0 4px 16px rgba(0,218,216,0.4);">⊕ ADD TO HOME</button>
 </nav>
 
 <button class="refresh-btn" id="refreshBtn" onclick="isActiveHours() ? loadData(true) : loadNightMode()" title="Refresh">
@@ -1069,7 +1082,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '2.6';
+const APP_VERSION = '2.7';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1282,7 +1295,10 @@ function selectForecastTab(tabIdx) {
   const score = b ? scoreBreak(b, fc) : null;
   const dow   = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][getBrisbaneNow(realDayIdx).getUTCDay()];
   const labelStr   = realDayIdx === 0 ? 'TODAY' : realDayIdx === 1 ? 'TOMORROW' : dow;
-  const sublabelStr = (day.day || '').toUpperCase();
+  const sublabelStr = (day.day || '')
+    .replace(/^forecast for /i, '')
+    .replace(/\s+until midnight\.?$/i, '')
+    .toUpperCase();
   // Map score/surf IDs by realDayIdx — consistent across day and night modes
   const scoreId = realDayIdx === 0 ? 'todayFcScore'   : realDayIdx === 1 ? 'tmrwFcScore'    : realDayIdx === 2 ? 'dayAfterFcScore' : `dayTabScore${realDayIdx}`;
   const surfId  = realDayIdx === 0 ? 'fcTodaySurf'    : realDayIdx === 1 ? 'fcTmrwSurf'     : realDayIdx === 2 ? 'fcDayAfterSurf'  : `dayTabSurf${realDayIdx}`;
@@ -1339,6 +1355,17 @@ function selectForecastTab(tabIdx) {
  *   sublabel   {string}  - secondary label shown under label (or '')
  *   extraPanels{string}  - additional HTML appended inside the card (e.g. bestWindowPanel)
  */
+/**
+ * Compact BOM issued string: "Forecast issued at 9:00 am EST on Wednesday 10 June 2026."
+ * → "Issued 9:00am AEST · Wed 10 Jun". BOM's "EST" is Australian Eastern Standard Time.
+ */
+function formatIssued(issuedAt) {
+  const raw = (issuedAt || '').replace('Forecast issued at ', '');
+  const m = raw.match(/(\d{1,2}):(\d{2})\s*(am|pm)\s*\w*\s*on\s+(\w+)\s+(\d{1,2})\s+(\w+)/i);
+  if (!m) return raw.replace(/\bEST\b/, 'AEST');
+  return `Issued ${m[1]}:${m[2]}${m[3].toLowerCase()} AEST · ${m[4].slice(0,3)} ${m[5]} ${m[6].slice(0,3)}`;
+}
+
 function buildForecastPanelBlock(day, opts = {}) {
   const {
     scoreId    = '',
@@ -1380,7 +1407,7 @@ function buildForecastPanelBlock(day, opts = {}) {
       </div>
       <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
         <div class="condition-label">Surf</div>
-        <div class="condition-value highlight" id="${surfId}"><span style="color:var(--muted);letter-spacing:2px;">···</span></div>
+        <div class="condition-value highlight" id="${surfId}"><span style="color:var(--muted);">—</span></div>
       </div>
       <div style="padding:11px 12px;border-top:1px solid var(--border);">
         <div class="condition-label">Weather</div>
@@ -1585,7 +1612,7 @@ function setBreak(index) {
     const lbl = scoreLabel(score);
     const sv = document.getElementById('cardScoreValue');
     const sl = document.getElementById('cardScoreLabel');
-    if (sv) { sv.style.color = c; sv.innerHTML = `${score}<span style="font-size:18px;color:var(--muted);"> /10</span>`; }
+    if (sv) { sv.style.color = c; sv.innerHTML = `${score}<span style="font-size:13px;color:var(--muted);">/10</span>`; }
     if (sl) { sl.style.color = c; sl.textContent = lbl; }
 
     // Photo score badge — only in day mode (live conditions)
@@ -3401,18 +3428,21 @@ function renderForecast(forecast, tideData, swellData) {
                   : wp?.kmh ?? null;
     const windGust = (obsWind && !obsWind.error && obsWind.gust_kmh != null) ? obsWind.gust_kmh : null;
 
+    const compactDay = (current.day || '')
+      .replace(/^forecast for /i, '')
+      .replace(/\s+until midnight\.?$/i, '')
+      .toUpperCase();
+    const compactIssued = formatIssued(forecast.issuedAt);
     currentCard.innerHTML = `
-      <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-        <div>
-          <div style="display:flex;align-items:baseline;gap:6px;">
-            <div id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:${currentScoreColor};">${currentScore ?? '—'}<span style="font-size:18px;color:var(--muted);"> /10</span></div>
-            <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;margin-bottom:4px;">?</button>
-          </div>
-          <div id="cardScoreLabel" style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${currentScoreColor};">${currentScoreLabel}</div>
+      <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:1;color:${currentScoreColor};">${currentScore ?? '—'}<span style="font-size:13px;color:var(--muted);">/10</span></span>
+          <span id="cardScoreLabel" style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:${currentScoreColor};">${currentScoreLabel}</span>
+          <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;">?</button>
         </div>
         <div style="text-align:right;">
-          <div class="current-day">${current.day.toUpperCase()}</div>
-          <div class="current-issued">${(forecast.issuedAt || '').replace('Forecast issued at ', '')}</div>
+          <div class="current-day">${compactDay}</div>
+          <div class="current-issued">${compactIssued}</div>
         </div>
       </div>
 
@@ -3624,8 +3654,8 @@ function renderSwellChart(swellData) {
     ctx.stroke();
   });
 
-  // Y-axis labels
-  ctx.font = `${9 * dpr}px DM Mono, monospace`;
+  // Y-axis labels (ctx is already dpr-scaled — font sizes are in CSS px)
+  ctx.font = '9px DM Mono, monospace';
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.textAlign = 'left';
   [0.25, 0.5, 0.75, 1].forEach(t => {
@@ -3636,6 +3666,7 @@ function renderSwellChart(swellData) {
 
   // Period dots — colour coded: green ≥12s, amber 8–11s, red <8s
   // Period dots — draw every 2nd sample (6h intervals) to reduce clutter at 3h resolution
+  let lastPeriodLabelX = -Infinity;
   sampledPeriod.forEach((p, i) => {
     if (p === null || i % 2 !== 0) return;
     const x = xPos(i);
@@ -3645,22 +3676,25 @@ function renderSwellChart(swellData) {
     ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    // Period label at peaks only (comparing to 6h neighbours)
+    // Period label at peaks only (comparing to 6h neighbours), with min spacing so equal runs don't stack
     const prevP = sampledPeriod[i-2] ?? 0;
     const nextP = sampledPeriod[i+2] ?? 0;
-    if (p >= prevP && p >= nextP) {
-      ctx.font = `${8 * dpr}px DM Mono, monospace`;
+    if (p >= prevP && p >= nextP && x - lastPeriodLabelX >= 24) {
+      ctx.font = '8px DM Mono, monospace';
       ctx.fillStyle = color;
       ctx.textAlign = 'center';
       ctx.fillText(Math.round(p) + 's', x, H - 14);
+      lastPeriodLabelX = x;
     }
   });
 
   // "Now" marker — Open-Meteo times are UTC, so compare to current UTC hour
   const nowUtcStr = new Date().toISOString().slice(0, 13);
   const nowIdx = sampledTimes.findIndex(t => t >= nowUtcStr);
+  let chartNowX = -Infinity;
   if (nowIdx > 0) {
     const nowX = xPos(nowIdx);
+    chartNowX = nowX;
     ctx.beginPath();
     ctx.moveTo(nowX, pad.top);
     ctx.lineTo(nowX, H - pad.bottom);
@@ -3669,7 +3703,7 @@ function renderSwellChart(swellData) {
     ctx.setLineDash([3, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.font = `${8 * dpr}px DM Mono, monospace`;
+    ctx.font = '8px DM Mono, monospace';
     ctx.fillStyle = 'rgba(0,212,255,0.6)';
     ctx.textAlign = 'center';
 
@@ -3689,7 +3723,7 @@ function renderSwellChart(swellData) {
       if (rawDir !== null) {
         const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
         const compass = dirs[Math.round(rawDir / 22.5) % 16];
-        ctx.font = `${7 * dpr}px DM Mono, monospace`;
+        ctx.font = '7px DM Mono, monospace';
         ctx.fillStyle = 'rgba(0,212,255,0.5)';
         ctx.textAlign = nowAlign;
         ctx.fillText(compass, nowLabelX, pad.top - 4);
@@ -3705,13 +3739,13 @@ function renderSwellChart(swellData) {
       const diff = avg24 - avg12;
       const trendLabel = diff > 0.1 ? '↑ building' : diff < -0.1 ? '↓ fading' : '→ holding';
       const trendColor = diff > 0.1 ? 'rgba(0,229,160,0.8)' : diff < -0.1 ? 'rgba(255,100,100,0.8)' : 'rgba(255,255,255,0.4)';
-      ctx.font = `${8 * dpr}px DM Mono, monospace`;
+      ctx.font = '8px DM Mono, monospace';
       ctx.fillStyle = trendColor;
-      // Place trend label on opposite side if NOW is near right edge
+      // Place trend label on opposite side if NOW is near right edge, below the NOW label so they never collide
       const trendAlign = nowAlign === 'right' ? 'right' : 'left';
       const trendX = trendAlign === 'right' ? nowX - 4 : nowX + 4;
       ctx.textAlign = trendAlign;
-      ctx.fillText(trendLabel, trendX, pad.top + 8);
+      ctx.fillText(trendLabel, trendX, pad.top + 18);
     }
   }
 
@@ -3725,11 +3759,11 @@ function renderSwellChart(swellData) {
   ).join('');
 
   // Swell size labels — significant peaks only, with minimum spacing to avoid crowding
-  ctx.font = `${10 * dpr}px DM Mono, monospace`;
+  ctx.font = '10px DM Mono, monospace';
   ctx.fillStyle = 'rgba(0,212,255,0.8)';
   ctx.textAlign = 'center';
   let lastLabelX = -Infinity;
-  const minLabelSpacing = 40 * dpr;
+  const minLabelSpacing = 40;
 
   sampledWave.forEach((v, i) => {
     const prev = sampledWave[i - 1] ?? -Infinity;
@@ -3738,9 +3772,9 @@ function renderSwellChart(swellData) {
     const isSignificantPeak = v >= prev * 1.1 && v >= next * 1.1;
     const isEdge = i === 0 || i === sampledWave.length - 1;
     const x = xPos(i);
-    if ((isSignificantPeak || isEdge) && x - lastLabelX >= minLabelSpacing) {
+    if ((isSignificantPeak || isEdge) && x - lastLabelX >= minLabelSpacing && Math.abs(x - chartNowX) >= 28) {
       const y = yPos(v) - 5;
-      ctx.fillText(v.toFixed(1) + 'm', Math.max(x, pad.left + 10), y);
+      ctx.fillText(v.toFixed(1) + 'm', Math.min(Math.max(x, pad.left + 10), W - pad.right - 12), y);
       lastLabelX = x;
     }
   });
@@ -4324,6 +4358,8 @@ function switchTab(tab) {
     initLogTab();
     renderSessionLog();
     renderCalibration();
+  }
+  if (tab === 'settings') {
     initAlertSettings();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4342,6 +4378,8 @@ if (stToggle && stFade) {
     const atEnd = stToggle.scrollLeft + stToggle.clientWidth >= stToggle.scrollWidth - 4;
     const atStart = stToggle.scrollLeft <= 4;
     stFade.style.opacity = atEnd ? '0' : '1';
+    const leftFade = document.getElementById('stFadeLeft');
+    if (leftFade) leftFade.style.opacity = atStart ? '0' : '1';
     const leftArrow = document.getElementById('scrollLeft');
     const rightArrow = document.getElementById('scrollRight');
     if (leftArrow) leftArrow.style.display = atStart ? 'none' : 'flex';
