@@ -1083,7 +1083,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '3.7';
+const APP_VERSION = '3.8';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1337,7 +1337,7 @@ function selectForecastTab(tabIdx) {
         </div>
         <div style="padding:11px 12px;border-top:1px solid var(--border);">
           <div class="condition-label">Tides</div>
-          <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
+          ${tides?.length ? tidesGridHTML(tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
         </div>
         ${extraPanels}
       </div>`;
@@ -1346,6 +1346,7 @@ function selectForecastTab(tabIdx) {
     panel.innerHTML = buildForecastPanelBlock(day, {
       scoreId,
       surfId,
+      tides,
       tidesStr,
       swellStr,
       swellDir,
@@ -1420,6 +1421,21 @@ function formatIssued(issuedAt) {
 }
 
 /**
+ * Compact tide grid for forecast panels — one column per tide, colour-coded
+ * HIGH/LOW with time and height. Far easier to scan than the inline string.
+ */
+function tidesGridHTML(tides) {
+  if (!tides || !tides.length) return '<div class="condition-value">—</div>';
+  const cols = tides.slice(0, 4);
+  return `<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:4px;margin-top:4px;">` +
+    cols.map(t => `<div style="text-align:center;">
+      <div class="tide-type ${String(t.type).toLowerCase() === 'high' ? 'high' : 'low'}">${t.type}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text);">${formatTideTime(t.time)}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${parseFloat(t.height).toFixed(1)}m</div>
+    </div>`).join('') + '</div>';
+}
+
+/**
  * Canonical scoring aux inputs for a given real day (0 = today). Every per-day
  * scoreBreak call must use this so the same day never scores differently in
  * different panels (tide/swell-dir inputs drifting apart caused exactly that).
@@ -1489,7 +1505,7 @@ function buildForecastPanelBlock(day, opts = {}) {
         </div>
         <div style="padding:11px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
           <div class="condition-label">Tides</div>
-          <div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>
+          ${opts.tides?.length ? tidesGridHTML(opts.tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
         </div>
       </div>
       ${extraPanels}
@@ -3577,6 +3593,7 @@ function renderForecast(forecast, tideData, swellData) {
         sideMargin: '0', // #tomorrowPlannerCard already has 20px side margins
         scoreId:  'tmrwFcScore',
         surfId:   'fcTmrwSurf',
+        tides:    tmrwTides,
         tidesStr: tmrwTidesStr,
         swellStr: tmrwSwellStr,
         swellDir: tmrwSwellDir,
@@ -3991,6 +4008,7 @@ async function loadNightMode() {
         sideMargin: '0', // #tomorrowPlannerCard already has 20px side margins
         scoreId:  'tmrwFcScore',
         surfId:   'fcTmrwSurf',
+        tides:    tmrwTidesNm,
         tidesStr: tmrwTidesStrNm,
         swellStr: tmrwSwellStrNm,
         swellDir: tmrwSwellDirNm,
