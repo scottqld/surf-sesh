@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.5';
+const APP_VERSION = '4.6';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -4779,7 +4779,12 @@ async function enableNotifications() {
   } catch (e) {
     document.getElementById('notifToggle').checked = false;
     document.getElementById('notifTimeRow').style.display = 'none';
-    document.getElementById('notifStatus').textContent = 'Push subscription failed: ' + e.message;
+    // "push service error" = the browser couldn't reach its push relay (FCM/WNS),
+    // not an app fault — most commonly Brave with Google push services disabled.
+    const hint = /push service error/i.test(e.message)
+      ? ' — your browser couldn\'t reach its push service. On Brave: Settings → Privacy → enable "Use Google services for push messaging", then restart. On Chrome: check VPN/firewall isn\'t blocking fcm.googleapis.com.'
+      : '';
+    document.getElementById('notifStatus').textContent = 'Push subscription failed: ' + e.message + hint;
     return;
   }
 
