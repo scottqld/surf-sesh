@@ -1000,7 +1000,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <div>
             <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);">Alert when score reaches</div>
-            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">Notifies once per 2 hours while app is open</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">Pushed to this device, even with the app closed · max one per break per 6h</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span id="alertThresholdLabel" style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--accent);">7</span>
@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.6';
+const APP_VERSION = '4.7';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -2859,7 +2859,6 @@ async function loadData(forceRefresh = false) {
     cachedData = data;
 
     renderAll(data);
-    checkSwellAlerts(data);
 
     const brisbaneTime = getBrisbaneNow();
     const hours = brisbaneTime.getUTCHours();
@@ -4311,13 +4310,13 @@ function renderSessionLog() {
 // ─── SWELL ALERTS ────────────────────────────────────────────────────────────
 
 const ALERT_STORE_KEY  = 'surfcall_alerts_v1';
-const ALERT_SENT_KEY   = 'surfcall_alert_sent_v1';
-const ALERT_COOLDOWN   = 2 * 60 * 60 * 1000;
 
 function getAlertSettings() {
   try { return JSON.parse(localStorage.getItem(ALERT_STORE_KEY) || '{}'); }
   catch { return {}; }
 }
+
+let _alertSyncTimer = null;
 
 function saveAlertSettings() {
   const threshold = parseInt(document.getElementById('alertThreshold')?.value || '7');
@@ -4327,6 +4326,29 @@ function saveAlertSettings() {
     if (cb) breaks[b.name] = cb.checked;
   });
   localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, breaks }));
+  // Debounced server sync — alerts are checked hourly by the worker cron and
+  // pushed to this device, so the settings must live server-side.
+  clearTimeout(_alertSyncTimer);
+  _alertSyncTimer = setTimeout(syncAlertsToServer, 800);
+}
+
+async function syncAlertsToServer() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const sub = await ensurePushSubscription();
+    const { threshold, breaks } = getAlertSettings();
+    await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, breaks: breaks || {} } }),
+    });
+    const stat = document.getElementById('alertPermStatus');
+    if (stat) { stat.textContent = '✓ Alerts synced — pushed to this device when a break hits your threshold'; stat.style.color = 'var(--high)'; }
+  } catch (e) {
+    const stat = document.getElementById('alertPermStatus');
+    if (stat) { stat.textContent = 'Alert sync failed: ' + e.message; stat.style.color = 'var(--muted)'; }
+  }
 }
 
 function initAlertSettings() {
@@ -4375,35 +4397,11 @@ async function requestAlertPermission() {
   if (!('Notification' in window)) return;
   await Notification.requestPermission();
   updateAlertPermStatus();
-  saveAlertSettings();
+  saveAlertSettings(); // persists + syncs the subscription/settings to the worker
 }
 
-function checkSwellAlerts(data) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  if (!data?.forecast) return;
-  const settings = getAlertSettings();
-  const threshold = settings.threshold ?? 7;
-  const now = Date.now();
-  let sent;
-  try { sent = JSON.parse(localStorage.getItem(ALERT_SENT_KEY) || '{}'); }
-  catch { sent = {}; }
-  data.forecast._swellDir = data.forecast._currentSwellDir ?? null;
-  BREAKS.forEach(b => {
-    if (settings.breaks?.[b.name] === false) return;
-    const score = scoreBreak(b, data.forecast);
-    if (score < threshold) return;
-    const lastSent = sent[b.name] || 0;
-    if (now - lastSent < ALERT_COOLDOWN) return;
-    sent[b.name] = now;
-    const swellText = [data.forecast._currentSwellDir, data.forecast._currentWaveHeight?.toFixed(1) + 'm'].filter(Boolean).join(' ');
-    new Notification(`🏄 ${b.name} — ${score}/10`, {
-      body: `${score >= 9 ? 'Epic' : score >= 7 ? 'Firing' : 'Good'} conditions${swellText ? ' · ' + swellText : ''}`,
-      icon: 'icon-192.png',
-      tag: `surfcall_${b.name}`,
-    });
-  });
-  localStorage.setItem(ALERT_SENT_KEY, JSON.stringify(sent));
-}
+// Swell alerts are now checked server-side by the worker cron (hourly, daylight
+// hours) and delivered as real push — they arrive with the app closed.
 
 // ─── CALIBRATION INSIGHTS ────────────────────────────────────────────────────
 
@@ -4757,6 +4755,21 @@ async function handleNotifToggle(checkbox) {
   }
 }
 
+// Reuse the existing push subscription or create one (shared by the daily
+// report toggle and the swell-alert settings).
+async function ensurePushSubscription() {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  _pushSub = sub;
+  return sub;
+}
+
 async function enableNotifications() {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') {
@@ -4771,11 +4784,7 @@ async function enableNotifications() {
 
   let sub;
   try {
-    const reg = await navigator.serviceWorker.ready;
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    });
+    sub = await ensurePushSubscription();
   } catch (e) {
     document.getElementById('notifToggle').checked = false;
     document.getElementById('notifTimeRow').style.display = 'none';
@@ -4808,13 +4817,26 @@ async function enableNotifications() {
 
 async function disableNotifications() {
   if (_pushSub) {
-    await fetch(`${WORKER_URL}/subscribe`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: _pushSub.endpoint }),
-    }).catch(() => {});
-    await _pushSub.unsubscribe();
-    _pushSub = null;
+    // If swell alerts are configured on this device, keep the subscription
+    // alive and just turn the daily report off server-side.
+    const s = getAlertSettings();
+    const alertsActive = Notification.permission === 'granted' &&
+      (s.threshold || s.breaks) && Object.values(s.breaks || {}).some(v => v !== false);
+    if (alertsActive) {
+      await fetch(`${WORKER_URL}/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: _pushSub.toJSON(), preferredHour: null }),
+      }).catch(() => {});
+    } else {
+      await fetch(`${WORKER_URL}/subscribe`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: _pushSub.endpoint }),
+      }).catch(() => {});
+      await _pushSub.unsubscribe();
+      _pushSub = null;
+    }
   }
   document.getElementById('notifTimeRow').style.display = 'none';
   document.getElementById('notifStatus').textContent = '';

@@ -1,5 +1,496 @@
 const CACHE_TTL = 1800; // 30 minutes in seconds
 
+// ─── BREAKS (mirrors index.html — keep in sync) ───────────────────────────────
+const BREAKS = [
+  {
+    name: 'The Groyne', exposure: 0.50, maxScore: 6, sizeCap: 8, bankPenalty: 3,
+    tide: { ideal: 'mid-high', avoid: 'low' },
+    ideal:      { swellDirs: ['NE','ENE','E'],       windDirs: ['S','SSW','SW','WSW'],           periodMin: 8  },
+    acceptable: { swellDirs: ['NNE','ESE','SE'],     windDirs: ['W','SSE','SE'],                 periodMin: 6  },
+    avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E'],       windPenalty: 2 },
+  },
+  {
+    name: 'First Point', exposure: 0.32, pointBreak: true,
+    tide: { ideal: 'low-mid', avoid: 'high' },
+    ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['S','SSW','SW'],                 periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSE','SE','WSW','W'],           periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E'],       windPenalty: 3 },
+  },
+  {
+    name: 'Nationals', exposure: 0.58, pointBreak: true,
+    tide: { ideal: 'low-mid', avoid: 'high' },
+    ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['SE','SSE','S'],                 periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSW','SW','ESE'],               periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E','W'],  windPenalty: 2 },
+  },
+  {
+    name: 'Tea Tree', exposure: 0.55, pointBreak: true,
+    tide: { ideal: 'low-mid', avoid: 'high' },
+    ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['SE','SSE','S'],                 periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSW','SW','ESE'],               periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E','W'],  windPenalty: 2 },
+  },
+  {
+    name: 'Granite Bay', exposure: 0.65, pointBreak: true,
+    tide: { ideal: 'low-mid', avoid: 'high' },
+    ideal:      { swellDirs: ['ENE','E','NE','NNE'], windDirs: ['S','SSE','SE','SSW'],           periodMin: 9  },
+    acceptable: { swellDirs: ['ESE','N','NNW','SE'], windDirs: ['SW','W','ESE'],                 periodMin: 7  },
+    avoid:      { swellDirs: ['S','NW'],             windDirs: ['N','NE','ENE','E'],             windPenalty: 1 },
+  },
+  {
+    name: 'Sunshine Beach', exposure: 0.90, sizeCap: 9, benefitsFromPeriod: true,
+    tide: { ideal: 'mid-high', avoid: 'low' },
+    ideal:      { swellDirs: ['E','ESE','ENE'],      windDirs: ['W','WSW','WNW','SW'],           periodMin: 8  },
+    acceptable: { swellDirs: ['SE','NE'],            windDirs: ['NW','SSW'],                     periodMin: 6  },
+    avoid:      { swellDirs: ['N','NW','S','SW'],   windDirs: ['NE','ENE','E','ESE','SE','N','S'], windPenalty: 3 },
+  },
+  {
+    name: 'Double Island', exposure: 0.42, pointBreak: true,
+    tide: { ideal: 'low-mid', avoid: 'high' },
+    ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['W','WSW','SW','SSW'],           periodMin: 10 },
+    acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['NW','WNW','S'],                 periodMin: 8  },
+    avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['NE','ENE','E','ESE','SE','N'], windPenalty: 2 },
+  },
+];
+
+// ─── SCORING (mirrors index.html) ────────────────────────────────────────────
+const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function degToCompass(deg) { return COMPASS[Math.round(deg / 22.5) % 16] ?? null; }
+function dirDistance(a, b) {
+  const ia = COMPASS.indexOf(a), ib = COMPASS.indexOf(b);
+  if (ia < 0 || ib < 0) return 99;
+  const d = Math.abs(ia - ib);
+  return Math.min(d, COMPASS.length - d);
+}
+function scoreFactor(dir, ideal, acceptable, avoid, pts) {
+  if (!dir) return Math.round(pts * 0.5);
+  if (ideal.includes(dir)) return pts;
+  if (acceptable.includes(dir)) return Math.round(pts * 0.5);
+  if (avoid.length && avoid.includes(dir)) return 0;
+  const dist = Math.min(...ideal.map(d => dirDistance(dir, d)));
+  return dist <= 1 ? Math.round(pts * 0.75) : Math.round(pts * 0.25);
+}
+function scoreTide(tide, breakTide) {
+  if (!tide || !breakTide || breakTide.ideal === 'all') return 0;
+  const h = tide.current, isLow = h < 0.5, isMid = h >= 0.5 && h < 1.2, isHigh = h >= 1.2;
+  if (breakTide.ideal === 'low-mid') return (isLow || isMid) ? 1 : (breakTide.avoid === 'high' && isHigh) ? -1 : 0;
+  if (breakTide.ideal === 'mid-high') return (isMid || isHigh) ? 1 : (breakTide.avoid === 'low' && isLow) ? -1 : 0;
+  return 0;
+}
+function shortDir(text) {
+  const map = {
+    'north-northeasterly':'NNE','north-northwesterly':'NNW','south-southeasterly':'SSE','south-southwesterly':'SSW',
+    'east-northeasterly':'ENE','east-southeasterly':'ESE','west-northwesterly':'WNW','west-southwesterly':'WSW',
+    'northeasterly':'NE','northwesterly':'NW','southeasterly':'SE','southwesterly':'SW',
+    'northerly':'N','southerly':'S','easterly':'E','westerly':'W',
+    'north-northeast':'NNE','north-northwest':'NNW','south-southeast':'SSE','south-southwest':'SSW',
+    'northeast':'NE','northwest':'NW','southeast':'SE','southwest':'SW',
+    'north':'N','south':'S','east':'E','west':'W',
+  };
+  text = (text||'').replace(/\bmetres\b/gi,'m')
+    .replace(/(\d+)\s*to\s*(\d+)\s*knots?/gi, (_,a,b) => `${Math.round(a*1.852)}-${Math.round(b*1.852)} km/h`)
+    .replace(/(\d+)\s*knots?/gi, (_,k) => `${Math.round(k*1.852)} km/h`);
+  return text.replace(/\b(north-northeasterly|north-northwesterly|south-southeasterly|south-southwesterly|east-northeasterly|east-southeasterly|west-northwesterly|west-southwesterly|northeasterly|northwesterly|southeasterly|southwesterly|northerly|southerly|easterly|westerly|north-northeast|north-northwest|south-southeast|south-southwest|northeast|northwest|southeast|southwest|north|south|east|west)\b/gi,
+    m => map[m.toLowerCase()] || m);
+}
+function extractDir(text) {
+  const dirs = ['NNE','NNW','SSE','SSW','ENE','ESE','WNW','WSW','NE','NW','SE','SW','N','S','E','W'];
+  const s = shortDir(text);
+  for (const d of dirs) if (s.startsWith(d+' ')||s.includes(' '+d+' ')||s===d) return d;
+  return null;
+}
+function extractHeight(text) {
+  if (!text) return null;
+  const t = text.replace(/(?:with|and)\s+(?:moderate\s+)?cross[\s-]?swell[^.]*\.?/gi,'');
+  const m = t.match(/(\d+\.?\d*)\s*(?:to|-)\s*(\d+\.?\d*)\s*m/i)||t.match(/around\s+(\d+\.?\d*)\s*m/i)||t.match(/(\d+\.?\d*)\s*m/i);
+  if (!m) return null;
+  return m[2] !== undefined ? (parseFloat(m[1])+parseFloat(m[2]))/2 : parseFloat(m[1]);
+}
+function extractWindSpeedKts(text) {
+  const s = shortDir(text);
+  const r = s.match(/(\d+)[–-](\d+)\s*km\/h/);
+  if (r) return ((parseInt(r[1])+parseInt(r[2]))/2)/1.852;
+  const s2 = s.match(/(\d+)\s*km\/h/);
+  if (s2) return parseInt(s2[1])/1.852;
+  return null;
+}
+function scoreBreak(br, fc) {
+  if (!fc?.forecasts?.length) return 0;
+  const cur = fc.forecasts[0];
+  const swellText = shortDir(cur.swell||''), windText = shortDir(cur.winds||'');
+  const swellDir = fc._swellDir ?? extractDir(swellText);
+  const swellH   = extractHeight(swellText);
+  let windDir  = extractDir(windText);
+  const period   = fc._period ?? null;
+  const tide     = fc._tide   ?? null;
+  let windKts  = extractWindSpeedKts(cur.winds||'');
+  // Prefer the live Tewantin observation over BOM's all-day forecast text
+  // (mirrors index.html scoreBreak isCurrent behaviour — keep in sync)
+  if (fc._obsWindDir) {
+    windDir = fc._obsWindDir;
+    if (fc._obsWindKmh != null) windKts = fc._obsWindKmh / 1.852;
+  }
+
+  let scoringH = swellH;
+  if (swellH !== null && br.exposure) {
+    let dm = 1.0;
+    if (swellDir) {
+      if (br.ideal.swellDirs.includes(swellDir)) dm = 1.0;
+      else if (br.acceptable.swellDirs.includes(swellDir)) dm = 0.8;
+      else { const md = Math.min(...br.ideal.swellDirs.map(d => dirDistance(swellDir,d))); dm = md<=2?0.6:0.4; }
+    }
+    scoringH = swellH * br.exposure * dm;
+  }
+
+  const swellPts = scoreFactor(swellDir, br.ideal.swellDirs, br.acceptable.swellDirs, br.avoid.swellDirs||[], 3);
+  const windPts  = scoreFactor(windDir,  br.ideal.windDirs,  br.acceptable.windDirs,  br.avoid.windDirs||[],  3);
+  let windPenalty = (windDir && (br.avoid.windDirs||[]).includes(windDir) && br.avoid.windPenalty) ? br.avoid.windPenalty : 0;
+  // Light onshore barely hurts surface quality — scale the penalty by speed (mirrors index.html)
+  if (windPenalty > 0 && windKts !== null) {
+    const kmh = windKts * 1.852;
+    if (kmh < 8) windPenalty = 0;
+    else if (kmh < 12) windPenalty = Math.ceil(windPenalty / 2);
+  }
+  const windIsIdeal = windDir && br.ideal.windDirs.includes(windDir);
+  let windSpeedPenalty = 0;
+  if (!windIsIdeal && windKts !== null) windSpeedPenalty = windKts > 30 ? 2 : windKts > 20 ? 1 : 0;
+  const crossPenalty = /cross.?swell|moderate cross|secondary swell|confused/i.test(cur.swell||'') ? 1 : 0;
+  let periodPts = 0;
+  if (period !== null) periodPts = period >= br.ideal.periodMin ? 1 : period >= (br.acceptable.periodMin||0) ? 0.5 : 0;
+  const tidePts = scoreTide(tide, br.tide);
+  const raw = swellPts + windPts + periodPts + tidePts - windPenalty - windSpeedPenalty - crossPenalty - (br.bankPenalty||0);
+
+  let sizeCap = 10;
+  if (scoringH !== null) {
+    if (scoringH < 0.3) sizeCap=2; else if (scoringH < 0.45) sizeCap=4; else if (scoringH < 0.6) sizeCap=5;
+    else if (scoringH < 0.75) sizeCap=6; else if (scoringH < 0.9) sizeCap=7; else if (scoringH < 1.2) sizeCap=8;
+    else if (scoringH < 1.6) sizeCap=9;
+  }
+  if (br.sizeCap !== undefined) sizeCap = Math.min(sizeCap, br.sizeCap);
+  return Math.min(Math.max(0, Math.round(raw)), sizeCap, br.maxScore ?? 10);
+}
+
+// ─── FORECAST ENRICHMENT FOR SCORING ─────────────────────────────────────────
+function getBrisbaneDate(offsetHours = 0) {
+  return new Date(Date.now() + (10 + offsetHours) * 3600000);
+}
+function enrichForecast(allData) {
+  const fc = allData.forecast;
+  if (!fc) return fc;
+
+  // Open-Meteo swell data — prefer buoy when available
+  if (allData.swell?.hourly) {
+    const times = allData.swell.hourly.time;
+    const now = getBrisbaneDate();
+    const hourStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}T${String(now.getUTCHours()).padStart(2,'0')}`;
+    const idx = times.findIndex(t => t.startsWith(hourStr));
+    const perArr  = allData.swell.hourly.swell_wave_period || allData.swell.hourly.wave_period || null;
+    const dirArr  = allData.swell.hourly.swell_wave_direction || null;
+    const hArr    = allData.swell.hourly.swell_wave_height || allData.swell.hourly.wave_height || null;
+    fc._period   = perArr && idx > -1 ? perArr[idx] : null;
+    fc._swellDir = dirArr && idx > -1 ? degToCompass(dirArr[idx]) : null;
+    fc._swellH   = hArr   && idx > -1 ? hArr[idx]   : null;
+  }
+
+  // Buoy overrides Open-Meteo
+  const buoy = allData.buoy;
+  if (buoy && !buoy.error && buoy.Hsig > 0) {
+    fc._swellH = buoy.Hsig;
+    if (buoy.Tp > 0) fc._period = buoy.Tp;
+    if (buoy.Direction >= 0) fc._swellDir = degToCompass(buoy.Direction);
+  }
+
+  // Live observed wind (Tewantin AWS) — used by scoreBreak instead of BOM text
+  const obs = allData.wind;
+  if (obs && !obs.error && obs.wind_dir) {
+    fc._obsWindDir = obs.wind_dir;
+    fc._obsWindKmh = obs.wind_kmh ?? null;
+  }
+
+  // Tide interpolation
+  fc._tide = getTideNow(allData.tides?.noosa);
+  return fc;
+}
+
+// ─── BEST WINDOW (mirrors index.html computeBestWindow) ──────────────────────
+function estimateSurfHeight(offshoreH, exposure, swellDir, br, period) {
+  if (offshoreH === null || offshoreH === undefined || !exposure) return null;
+  let dm = 1.0;
+  if (swellDir && br) {
+    const ideal = br.ideal?.swellDirs || [];
+    const acceptable = br.acceptable?.swellDirs || [];
+    if (ideal.includes(swellDir)) dm = 1.0;
+    else if (acceptable.includes(swellDir)) dm = 0.8;
+    else { const md = Math.min(...ideal.map(d => dirDistance(swellDir, d))); dm = md <= 2 ? 0.6 : 0.4; }
+  }
+  let pm = 1.0;
+  if (period !== null && period !== undefined && (br?.pointBreak || br?.benefitsFromPeriod)) {
+    if (period >= 14) pm = 1.15; else if (period >= 11) pm = 1.05; else if (period <= 8) pm = 0.85;
+  }
+  return Math.round(offshoreH * exposure * dm * pm * 10) / 10;
+}
+
+function bestWindowForBreak(swellHourly, br, dayOffset = 0) {
+  if (!swellHourly || !br?.exposure) return null;
+  const times = swellHourly.time;
+  const waveH = swellHourly.wave_height || swellHourly.swell_wave_height || null;
+  const waveP = swellHourly.swell_wave_period || swellHourly.wave_period || null;
+  const waveD = swellHourly.wave_direction || swellHourly.swell_wave_direction || null;
+  const d = getBrisbaneDate(dayOffset * 24);
+  const dayStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+  const hourScores = [];
+  (times || []).forEach((t, i) => {
+    if (!t.startsWith(dayStr)) return;
+    const hr = parseInt(t.split('T')[1]);
+    if (hr < 5 || hr > 17) return;
+    const h = waveH ? waveH[i] : null;
+    const p = waveP ? waveP[i] : null;
+    const dir = waveD ? degToCompass(waveD[i]) : null;
+    const sH = h !== null ? estimateSurfHeight(h, br.exposure, dir, br, p) : null;
+    if (sH === null) return;
+    const pBonus = p !== null ? (p >= 14 ? 1.3 : p >= 10 ? 1.1 : 1.0) : 1.0;
+    hourScores.push({ hr, score: sH * pBonus });
+  });
+  if (hourScores.length < 3) return null;
+  let bestSum = -1, bestStart = null;
+  for (let i = 0; i < hourScores.length - 2; i++) {
+    const s = hourScores[i].score + hourScores[i+1].score + hourScores[i+2].score;
+    if (s > bestSum) { bestSum = s; bestStart = hourScores[i].hr; }
+  }
+  return bestStart !== null ? { start: bestStart, end: bestStart + 3 } : null;
+}
+
+function fmtHour(h) { return h === 12 ? '12pm' : h > 12 ? (h - 12) + 'pm' : h + 'am'; }
+
+function getTideNow(tidesData) {
+  if (!tidesData?.tides?.length) return null;
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0'), mm = String(now.getMonth()+1).padStart(2,'0'), yyyy = now.getFullYear();
+  const todayStr = `${dd}/${mm}/${yyyy}`;
+  const todayTides = tidesData.tides.filter(t => t.date === todayStr);
+  if (!todayTides.length) return null;
+  const withDates = todayTides.map(t => {
+    const [h, m] = t.time.split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0);
+    return { ...t, d };
+  });
+  const prev = [...withDates].filter(t => t.d <= now).pop();
+  const next = withDates.find(t => t.d > now);
+  if (!prev || !next) return null;
+  const elapsed = (now - prev.d) / (next.d - prev.d);
+  return { current: parseFloat(prev.height) + (parseFloat(next.height) - parseFloat(prev.height)) * elapsed, rising: next.type === 'High' };
+}
+
+// ─── WEB PUSH ─────────────────────────────────────────────────────────────────
+function b64u(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+function b64uDec(s) {
+  const b = s.replace(/-/g,'+').replace(/_/g,'/');
+  const raw = atob(b + '='.repeat((4 - b.length % 4) % 4));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function hkdf(salt, ikm, info, len) {
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name:'HKDF', hash:'SHA-256', salt, info }, key, len * 8);
+  return new Uint8Array(bits);
+}
+async function buildVapidJwt(audience, env) {
+  const header  = b64u(new TextEncoder().encode(JSON.stringify({typ:'JWT',alg:'ES256'})));
+  const payload = b64u(new TextEncoder().encode(JSON.stringify({
+    aud: audience, exp: Math.floor(Date.now()/1000) + 43200, sub: 'mailto:sallyscott@gmail.com',
+  })));
+  const msg = `${header}.${payload}`;
+  const jwk = JSON.parse(env.VAPID_PRIVATE_KEY_JWK);
+  const key = await crypto.subtle.importKey('jwk', jwk, {name:'ECDSA',namedCurve:'P-256'}, false, ['sign']);
+  const sig = await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'}, key, new TextEncoder().encode(msg));
+  return `${msg}.${b64u(sig)}`;
+}
+async function encryptPushPayload(subscription, data) {
+  const p256dh = b64uDec(subscription.keys.p256dh);
+  const auth   = b64uDec(subscription.keys.auth);
+  const plain  = new TextEncoder().encode(JSON.stringify(data));
+
+  const eph    = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'}, true, ['deriveBits']);
+  const ephPub = new Uint8Array(await crypto.subtle.exportKey('raw', eph.publicKey));
+  const bKey   = await crypto.subtle.importKey('raw', p256dh, {name:'ECDH',namedCurve:'P-256'}, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({name:'ECDH',public:bKey}, eph.privateKey, 256));
+
+  // RFC 8291: IKM
+  const keyInfo = new Uint8Array([...new TextEncoder().encode('WebPush: info\0'), ...p256dh, ...ephPub]);
+  const ikm = await hkdf(auth, shared, keyInfo, 32);
+
+  // RFC 8188: AES128GCM record
+  const salt  = crypto.getRandomValues(new Uint8Array(16));
+  const cek   = await hkdf(salt, ikm, new Uint8Array([...new TextEncoder().encode('Content-Encoding: aes128gcm'), 0]), 16);
+  const nonce = await hkdf(salt, ikm, new Uint8Array([...new TextEncoder().encode('Content-Encoding: nonce'), 0]), 12);
+
+  const cekKey     = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:nonce}, cekKey, new Uint8Array([...plain, 2])));
+
+  const body = new Uint8Array(86 + ciphertext.length);
+  body.set(salt, 0); body.set([0,0,16,0], 16); body.set([65], 20); body.set(ephPub, 21); body.set(ciphertext, 86);
+  return body;
+}
+async function sendPush(subscription, payload, env) {
+  const endpoint = subscription.endpoint;
+  const jwt  = await buildVapidJwt(new URL(endpoint).origin, env);
+  const body = await encryptPushPayload(subscription, payload);
+  const res  = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`,
+      'Content-Encoding': 'aes128gcm',
+      'Content-Type': 'application/octet-stream',
+      TTL: '43200',
+    },
+    body,
+  });
+  // 201 = Created, 200 = OK — both are success. 410/404 = expired subscription.
+  if (res.status === 410 || res.status === 404) throw new Error('subscription_expired');
+  if (!res.ok && res.status !== 201) throw new Error(`push_failed:${res.status}`);
+}
+
+// ─── KV HELPERS ──────────────────────────────────────────────────────────────
+async function subKey(endpoint) {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return Array.from(new Uint8Array(hash)).slice(0,8).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+// Merge-update so the daily report (preferredHour) and swell alerts (alerts)
+// can be set independently without wiping each other.
+async function storeSubscription(env, subscription, fields = {}) {
+  const key = await subKey(subscription.endpoint);
+  const existing = await env.PUSH_SUBSCRIPTIONS.get(key, 'json') || {};
+  await env.PUSH_SUBSCRIPTIONS.put(key, JSON.stringify({ ...existing, subscription, ...fields }));
+}
+async function deleteSubscription(env, endpoint) {
+  const key = await subKey(endpoint);
+  await env.PUSH_SUBSCRIPTIONS.delete(key);
+}
+
+// ─── CRON: best break scoring + push send ────────────────────────────────────
+async function buildAll() {
+  const [forecast, tidesNoosa, tidesMooloolaba, swell, buoy, wind] = await Promise.all([
+    fetchBOM(),
+    fetchTides(MSQ_NOOSA_URL, 'noosa'),
+    fetchTides(MSQ_MOOLOOLABA_URL, 'mooloolaba'),
+    fetchSwell(),
+    fetchWaveBuoy().catch(e => ({ error: e.message })),
+    fetchWindObs().catch(e => ({ error: e.message })),
+  ]);
+  return { forecast, tides: { noosa: tidesNoosa, mooloolaba: tidesMooloolaba }, swell, buoy, wind };
+}
+
+const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000; // one alert per break per 6h per device
+const APP_URL = 'https://scottqld.github.io/surf-sesh/';
+const ICON = '/surf-sesh/icon-192.png';
+
+async function handleCron(env) {
+  const brisbaneHour = getBrisbaneDate().getUTCHours();
+
+  // List all subscriptions
+  const list = await env.PUSH_SUBSCRIPTIONS.list();
+  const subs = [];
+  for (const kv of list.keys) {
+    const rec = await env.PUSH_SUBSCRIPTIONS.get(kv.name, 'json');
+    if (rec) subs.push({ key: kv.name, ...rec });
+  }
+
+  const morningDue = subs.filter(r => r.preferredHour === brisbaneHour);
+  // Swell alerts only fire during daylight surf hours
+  const daylight  = brisbaneHour >= 5 && brisbaneHour <= 17;
+  const alertSubs = daylight
+    ? subs.filter(r => r.alerts?.threshold && Object.values(r.alerts.breaks || {}).some(v => v !== false))
+    : [];
+  if (!morningDue.length && !alertSubs.length) return;
+
+  // Fetch + enrich surf data once for everyone
+  const allData = await buildAll();
+  const fc = enrichForecast(allData);
+  const scored = BREAKS.map(br => ({ br, score: scoreBreak(br, fc) }));
+
+  const swellDir = fc._swellDir ?? 'unknown';
+  const period   = fc._period   ? `${Math.round(fc._period)}s` : '';
+  const swellH   = fc._swellH   ? `${fc._swellH.toFixed(1)}m`  : (extractHeight(fc.forecasts?.[0]?.swell||'') ? `${extractHeight(fc.forecasts[0].swell).toFixed(1)}m` : '');
+  const windText = shortDir(fc.forecasts?.[0]?.winds||'');
+
+  // ── Daily morning report ──
+  if (morningDue.length) {
+    const best = scored.reduce((a, b) => b.score > a.score ? b : a);
+
+    // AI one-liner if available
+    let body = `${swellDir} ${swellH}${period?' at '+period:''} · ${windText.split(' ').slice(0,3).join(' ')}`;
+    if (env.ANTHROPIC_API_KEY) {
+      try {
+        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'x-api-key':env.ANTHROPIC_API_KEY, 'anthropic-version':'2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 60,
+            messages: [{ role:'user', content:`One casual sentence (max 12 words) surf summary for a push notification. ${best.br.name} Noosa, score ${best.score}/10. Swell: ${swellDir} ${swellH} ${period}. Wind: ${windText}. No hashtags. If the score is 3 or less, be honest that it's not worth it.` }],
+          }),
+        });
+        const aiJson = await aiRes.json();
+        const text = aiJson?.content?.[0]?.text?.trim();
+        if (text) body = text;
+      } catch { /* fallback to manual summary */ }
+    }
+
+    // Append today's best 3-hour window when it hasn't already passed
+    const win = bestWindowForBreak(allData.swell?.hourly, best.br);
+    if (win && brisbaneHour < win.end) body += ` · Best ${fmtHour(win.start)}–${fmtHour(win.end)}`;
+
+    const payload = {
+      title: `🏄 ${best.br.name} — ${best.score}/10`,
+      body,
+      icon: ICON,
+      badge: ICON,
+      url: APP_URL,
+    };
+
+    await Promise.allSettled(morningDue.map(async rec => {
+      try {
+        await sendPush(rec.subscription, payload, env);
+      } catch (e) {
+        if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
+      }
+    }));
+  }
+
+  // ── Swell alerts: push when a monitored break reaches the device threshold ──
+  for (const rec of alertSubs) {
+    const sent = rec.alertsSent || {};
+    const now  = Date.now();
+    const hits = scored.filter(({ br, score }) =>
+      score >= rec.alerts.threshold &&
+      rec.alerts.breaks?.[br.name] !== false &&
+      now - (sent[br.name] || 0) >= ALERT_COOLDOWN_MS);
+    if (!hits.length) continue;
+
+    const top    = hits.reduce((a, b) => b.score > a.score ? b : a);
+    const others = hits.filter(h => h !== top).map(h => `${h.br.name} ${h.score}`).join(', ');
+    const win    = bestWindowForBreak(allData.swell?.hourly, top.br);
+    const winStr = win && brisbaneHour < win.end ? ` · Best ${fmtHour(win.start)}–${fmtHour(win.end)}` : '';
+    const payload = {
+      title: `🔔 ${top.br.name} just hit ${top.score}/10`,
+      body: `${swellDir} ${swellH}${period ? ' at ' + period : ''}${winStr}${others ? ' · Also: ' + others : ''}`,
+      icon: ICON,
+      badge: ICON,
+      url: APP_URL,
+    };
+
+    try {
+      await sendPush(rec.subscription, payload, env);
+      hits.forEach(h => { sent[h.br.name] = now; });
+      const { key, ...stored } = rec;
+      await env.PUSH_SUBSCRIPTIONS.put(key, JSON.stringify({ ...stored, alertsSent: sent }));
+    } catch (e) {
+      if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
+    }
+  }
+}
+
 const OPEN_METEO_URL = 'https://marine-api.open-meteo.com/v1/marine' +
   '?latitude=-26.4&longitude=153.1' +
   '&hourly=wave_height,wave_direction,wave_period,sea_surface_temperature' +
@@ -211,10 +702,9 @@ export default {
     const url = new URL(request.url);
     const cache = caches.default;
 
-    // CORS headers for browser requests
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json',
     };
@@ -245,17 +735,6 @@ export default {
 
       } else if (path === '/all') {
         const cacheKey = new Request('https://cache.surf/all');
-        const buildAll = async () => {
-          const [forecast, tidesNoosa, tidesMooloolaba, swell, buoy, wind] = await Promise.all([
-            fetchBOM(),
-            fetchTides(MSQ_NOOSA_URL, 'noosa'),
-            fetchTides(MSQ_MOOLOOLABA_URL, 'mooloolaba'),
-            fetchSwell(),
-            fetchWaveBuoy().catch(e => ({ error: e.message })),
-            fetchWindObs().catch(e => ({ error: e.message })),
-          ]);
-          return { forecast, tides: { noosa: tidesNoosa, mooloolaba: tidesMooloolaba }, swell, buoy, wind };
-        };
         data = noCache ? await buildAll() : await fetchWithCache(cache, cacheKey, buildAll);
 
       } else if (path === '/ai' && request.method === 'POST') {
@@ -275,6 +754,25 @@ export default {
         const aiData = await aiRes.json();
         return new Response(JSON.stringify(aiData), { headers: corsHeaders });
 
+      } else if (path === '/subscribe' && request.method === 'POST') {
+        if (!env.PUSH_SUBSCRIPTIONS) {
+          return new Response(JSON.stringify({ error: 'Push not configured' }), { status: 503, headers: corsHeaders });
+        }
+        const { subscription, preferredHour, alerts } = await request.json();
+        const fields = {};
+        if (preferredHour !== undefined) fields.preferredHour = preferredHour; // null = daily report off
+        if (alerts !== undefined) fields.alerts = alerts; // { threshold, breaks: { name: bool } }
+        await storeSubscription(env, subscription, fields);
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+
+      } else if (path === '/subscribe' && request.method === 'DELETE') {
+        if (!env.PUSH_SUBSCRIPTIONS) {
+          return new Response(JSON.stringify({ error: 'Push not configured' }), { status: 503, headers: corsHeaders });
+        }
+        const { endpoint } = await request.json();
+        await deleteSubscription(env, endpoint);
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+
       } else {
         return new Response(JSON.stringify({ error: 'Unknown endpoint' }), {
           status: 404,
@@ -290,5 +788,9 @@ export default {
         headers: corsHeaders,
       });
     }
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleCron(env));
   },
 };
