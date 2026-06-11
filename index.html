@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.2';
+const APP_VERSION = '4.3';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1173,6 +1173,7 @@ let _userPickedBreak = false; // once the user picks a break manually, auto-sele
 let _wasNightLoad = false;    // true while the last data load was night mode
 let _bestPick = null;         // { idx, score, name, adv } from updateBreakIndicators
 let _windOutlook = null;      // Open-Meteo hourly wind forecast (Brisbane-local times)
+let _lastLoadAt = 0;          // epoch ms of the last successful data load
 
 // ─── SHARED HELPERS ─────────────────────────────────────────────────────────
 
@@ -3311,6 +3312,7 @@ function renderAll(data) {
   const bestIdx = updateBreakIndicators(data.forecast);
   const initialBreak = (!_userPickedBreak && (!_hasLoaded || _wasNightLoad)) ? bestIdx : currentBreak;
   _hasLoaded = true;
+  _lastLoadAt = Date.now();
   _wasNightLoad = false;
 
   document.getElementById('loadingEl').style.display = 'none';
@@ -3588,7 +3590,6 @@ function renderForecast(forecast, tideData, swellData) {
       .replace(/^forecast for /i, '')
       .replace(/\s+until midnight\.?$/i, '')
       .toUpperCase();
-    const compactIssued = formatIssued(forecast.issuedAt);
     currentCard.innerHTML = `
       <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -3598,7 +3599,7 @@ function renderForecast(forecast, tideData, swellData) {
         </div>
         <div style="text-align:right;">
           <div class="current-day">${compactDay}</div>
-          <div class="current-issued">${compactIssued}</div>
+          <div class="current-issued">Live · updated ${nowTime}</div>
         </div>
       </div>
 
@@ -4103,6 +4104,7 @@ async function loadNightMode() {
     const bestIdxNm = updateBreakIndicators(data.forecast);
     const initialBreakNm = (_hasLoaded || _userPickedBreak) ? currentBreak : bestIdxNm;
     _hasLoaded = true;
+    _lastLoadAt = Date.now();
 
     requestAnimationFrame(() => {
       setBreak(initialBreakNm || 0);
@@ -4616,6 +4618,21 @@ if (isActiveHours()) {
 }
 
 scheduleNextLoad();
+
+// Refresh when the app is brought back to the foreground — the hourly timer is
+// throttled/suspended while backgrounded, so a resumed PWA could show old data.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - _lastLoadAt < 15 * 60 * 1000) return; // recent enough
+  if (isActiveHours()) {
+    document.body.classList.remove('night-mode');
+    const lbl = document.getElementById('currentConditionsLabel');
+    if (lbl) lbl.textContent = 'CURRENT CONDITIONS';
+    loadData(false);
+  } else {
+    loadNightMode();
+  }
+});
 
 // ─── PWA: SERVICE WORKER ──────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
