@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.1';
+const APP_VERSION = '4.2';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -2157,10 +2157,20 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
   // Keep BOM text for height — Open-Meteo swell_wave_height is swell-component only and can be tiny
   const swellDir    = forecast._swellDir ?? extractDir(swellText);
   const swellHeight = extractHeight(swellText);
-  const windDir     = extractDir(windText);
+  let windDir      = extractDir(windText);
   const period      = forecast._period ?? null;
   const tide        = forecast._tide   ?? null;
-  const windSpeedKts = extractWindSpeedKts(current.winds || '');
+  let windSpeedKts = extractWindSpeedKts(current.winds || '');
+  // Live scoring: prefer the observed wind (what the NOW card displays) over
+  // BOM's all-day forecast text — e.g. a light morning ESE shouldn't score as
+  // the afternoon's forecast E 19-28 km/h onshore.
+  if (isCurrent && isActiveHours()) {
+    const obs = cachedData?.wind;
+    if (obs && !obs.error && obs.wind_dir) {
+      windDir = obs.wind_dir;
+      if (obs.wind_kmh != null) windSpeedKts = obs.wind_kmh / 1.852;
+    }
+  }
 
   // Convert offshore height to estimated surf height using exposure + direction multiplier
   // This means swellMin/swellMax thresholds are in surf height terms, not offshore metres
@@ -2195,8 +2205,14 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
 
   // Wind direction — up to 3 pts
   const windPts = scoreFactor(windDir, ideal.windDirs, acceptable.windDirs, avoid.windDirs, 3);
-  const windPenalty = (windDir && avoid.windDirs.includes(windDir) && avoid.windPenalty)
+  let windPenalty = (windDir && avoid.windDirs.includes(windDir) && avoid.windPenalty)
     ? avoid.windPenalty : 0;
+  // Light onshore barely hurts surface quality — scale the penalty by speed
+  if (windPenalty > 0 && windSpeedKts !== null) {
+    const kmh = windSpeedKts * 1.852;
+    if (kmh < 8) windPenalty = 0;
+    else if (kmh < 12) windPenalty = Math.ceil(windPenalty / 2);
+  }
 
   // Wind speed penalty — only applies when wind is not comfortably offshore
   const windIsIdeal = windDir && ideal.windDirs.includes(windDir);
@@ -2256,10 +2272,20 @@ function scoreBreakExplain(breakData, forecast) {
   const windText     = shortDir(current.winds  || '');
   const swellDir     = forecast._swellDir ?? extractDir(swellText);
   const swellHeight  = extractHeight(swellText);
-  const windDir      = extractDir(windText);
+  let windDir      = extractDir(windText);
   const period       = forecast._period ?? null;
   const tide         = forecast._tide   ?? null;
-  const windSpeedKts = extractWindSpeedKts(current.winds || '');
+  let windSpeedKts = extractWindSpeedKts(current.winds || '');
+  // Mirror scoreBreak's live-wind preference so the breakdown matches the score
+  let windIsLiveObs = false;
+  if (isActiveHours()) {
+    const obs = cachedData?.wind;
+    if (obs && !obs.error && obs.wind_dir) {
+      windDir = obs.wind_dir;
+      if (obs.wind_kmh != null) windSpeedKts = obs.wind_kmh / 1.852;
+      windIsLiveObs = true;
+    }
+  }
   const { ideal, acceptable, avoid } = breakData;
 
   // Scoring height
@@ -2274,7 +2300,12 @@ function scoreBreakExplain(breakData, forecast) {
 
   const swellPts        = scoreFactor(swellDir, ideal.swellDirs, acceptable.swellDirs, avoid.swellDirs, 3);
   const windPts         = scoreFactor(windDir,  ideal.windDirs,  acceptable.windDirs,  avoid.windDirs,  3);
-  const windPenalty     = (windDir && avoid.windDirs.includes(windDir) && avoid.windPenalty) ? avoid.windPenalty : 0;
+  let windPenalty     = (windDir && avoid.windDirs.includes(windDir) && avoid.windPenalty) ? avoid.windPenalty : 0;
+  if (windPenalty > 0 && windSpeedKts !== null) {
+    const kmh = windSpeedKts * 1.852;
+    if (kmh < 8) windPenalty = 0;
+    else if (kmh < 12) windPenalty = Math.ceil(windPenalty / 2);
+  }
   const windIsIdeal     = windDir && ideal.windDirs.includes(windDir);
   const windSpeedPenalty = (!windIsIdeal && windSpeedKts !== null) ? (windSpeedKts > 30 ? 2 : windSpeedKts > 20 ? 1 : 0) : 0;
   const hasCrossSwell   = /cross.?swell|moderate cross|secondary swell|confused/i.test(current.swell || '');
@@ -2312,16 +2343,17 @@ function scoreBreakExplain(breakData, forecast) {
     factors.push({ label: 'Swell direction', pts: swellPts, max: 3, status: 'neutral', note: 'unknown — neutral score applied' });
   }
 
+  const windSrc = windIsLiveObs ? ' · live obs' : '';
   if (windDir) {
-    if      (ideal.windDirs.includes(windDir))      factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'good', note: 'offshore' });
-    else if (acceptable.windDirs.includes(windDir)) factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'ok',   note: 'manageable' });
-    else if (avoid.windDirs.includes(windDir))      factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'bad',  note: 'onshore' });
-    else factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'ok', note: 'cross-shore' });
+    if      (ideal.windDirs.includes(windDir))      factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'good', note: 'offshore' + windSrc });
+    else if (acceptable.windDirs.includes(windDir)) factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'ok',   note: 'manageable' + windSrc });
+    else if (avoid.windDirs.includes(windDir))      factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'bad',  note: 'onshore' + windSrc });
+    else factors.push({ label: `Wind direction (${windDir})`, pts: windPts, max: 3, status: 'ok', note: 'cross-shore' + windSrc });
   } else {
     factors.push({ label: 'Wind direction', pts: windPts, max: 3, status: 'neutral', note: 'unknown — neutral score applied' });
   }
 
-  if (windPenalty > 0)      factors.push({ label: 'Onshore wind penalty', pts: -windPenalty, max: 0, status: 'bad', note: '' });
+  if (windPenalty > 0)      factors.push({ label: 'Onshore wind penalty', pts: -windPenalty, max: 0, status: 'bad', note: windSpeedKts !== null && windSpeedKts * 1.852 < 12 ? 'reduced — light wind' : '' });
   if (windSpeedPenalty > 0) factors.push({ label: `Wind strength (${windSpeedKts ? Math.round(windSpeedKts * 1.852) : '?'} km/h)`, pts: -windSpeedPenalty, max: 0, status: 'bad', note: 'strong winds hurt surface quality' });
   if (crossSwellPenalty > 0) factors.push({ label: 'Cross-swell / confused seas', pts: -1, max: 0, status: 'bad', note: 'lumpy conditions' });
   if (bankPenalty > 0)       factors.push({ label: 'Sandbank condition', pts: -bankPenalty, max: 0, status: 'bad', note: '' });
