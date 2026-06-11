@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.3';
+const APP_VERSION = '4.4';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -2737,7 +2737,7 @@ function renderBestBreakBanner() {
   }
   const { idx, score, name, adv } = _bestPick;
   const label = score >= 8 ? '🔥 Firing' : score >= 5 ? '✓ Best option' : '★ Best break';
-  banner.innerHTML = `<span>${label}: ${name} ${score}/10${adv ? ' · advanced' : ''}</span><span style="float:right;opacity:0.8;">Go →</span>`;
+  banner.innerHTML = `<span>${label}: ${name}${adv ? ' · advanced' : ''}</span><span style="float:right;opacity:0.8;">Go →</span>`;
   banner.style.cursor = 'pointer';
   banner.onclick = () => {
     setBreak(idx, true);
