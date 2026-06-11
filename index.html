@@ -827,7 +827,7 @@
   input:checked + .toggle-slider:before { transform:translateX(20px); }
 </style>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "973be145b9d84f478f21eb5a635fc5dc"}'></script><!-- End Cloudflare Web Analytics -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+  <link rel="icon" type="image/png" href="icon-192.png">
 </head>
 <body>
 <div id="ptrIndicator" style="position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-40px);z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;opacity:0;pointer-events:none;">
@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.4';
+const APP_VERSION = '4.5';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1809,7 +1809,7 @@ function setBreak(index, fromUser = false) {
     condLabel.textContent = condLabel.textContent.replace(/\s*—.*$/, '') + ` — ${breakBtnLabel(b).toUpperCase()}`;
   }
   // Update browser tab title with current score
-  if (score !== null) document.title = `${score}/10 ${b.name} · SurfSesh`;
+  if (score !== null) document.title = `${b.name} · SurfSesh`;
   // Attach the first morning tide (before noon today) so conditionNote can show it
   if (cachedData?.forecast) {
     const todayTides = getTidesForDay(0);
@@ -4398,7 +4398,7 @@ function checkSwellAlerts(data) {
     const swellText = [data.forecast._currentSwellDir, data.forecast._currentWaveHeight?.toFixed(1) + 'm'].filter(Boolean).join(' ');
     new Notification(`🏄 ${b.name} — ${score}/10`, {
       body: `${score >= 9 ? 'Epic' : score >= 7 ? 'Firing' : 'Good'} conditions${swellText ? ' · ' + swellText : ''}`,
-      icon: '/favicon.ico',
+      icon: 'icon-192.png',
       tag: `surfcall_${b.name}`,
     });
   });
