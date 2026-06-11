@@ -1086,7 +1086,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.0';
+const APP_VERSION = '4.1';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1278,7 +1278,7 @@ function selectForecastTab(tabIdx) {
   const prevIdx = _forecastTabState.activeIdx;
   if (prevIdx != null && allTabs?.[prevIdx]) {
     const cache = {};
-    ['bestWindowPanel', 'offshoreWindowPanel', 'morningAfternoonPanel'].forEach(id => {
+    ['offshoreWindowPanel', 'morningAfternoonPanel'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.innerHTML) cache[id] = el.innerHTML;
     });
@@ -1315,10 +1315,11 @@ function selectForecastTab(tabIdx) {
   // Map score/surf IDs by realDayIdx — consistent across day and night modes
   const scoreId = realDayIdx === 0 ? 'todayFcScore'   : realDayIdx === 1 ? 'tmrwFcScore'    : realDayIdx === 2 ? 'dayAfterFcScore' : `dayTabScore${realDayIdx}`;
   const surfId  = realDayIdx === 0 ? 'fcTodaySurf'    : realDayIdx === 1 ? 'fcTmrwSurf'     : realDayIdx === 2 ? 'fcDayAfterSurf'  : `dayTabSurf${realDayIdx}`;
-  // TODAY gets best-window + morning/afternoon panels; TOMORROW gets best-window only
+  // TODAY keeps the offshore-change + morning/afternoon panels; the best window
+  // is now a per-day line under the header (bestWindowLineHTML)
   const extraPanels = realDayIdx === 0
-    ? '<div id="bestWindowPanel"></div><div id="offshoreWindowPanel"></div><div id="morningAfternoonPanel"></div>'
-    : realDayIdx === 1 ? '<div id="bestWindowPanel"></div>' : '';
+    ? '<div id="offshoreWindowPanel"></div><div id="morningAfternoonPanel"></div>'
+    : '';
 
   // NOW tab in day mode: the live conditions card carries swell/wind/surf/score,
   // so the panel only adds what the card doesn't have — weather, day tides, windows.
@@ -1330,6 +1331,8 @@ function selectForecastTab(tabIdx) {
     // Render the day-level info (weather, full tides, windows) inside the live
     // card itself so the NOW tab is a single panel, like the other day tabs.
     panel.innerHTML = '';
+    const bwHost = document.getElementById('bestWindowNow');
+    if (bwHost) bwHost.innerHTML = bestWindowLineHTML(0);
     const extrasHost = document.getElementById('nowDayExtras');
     if (extrasHost) {
       const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
@@ -1349,6 +1352,7 @@ function selectForecastTab(tabIdx) {
     panel.innerHTML = buildForecastPanelBlock(day, {
       scoreId,
       surfId,
+      bestWindowHtml: bestWindowLineHTML(realDayIdx),
       tides,
       tidesStr,
       swellStr,
@@ -1439,6 +1443,67 @@ function tidesGridHTML(tides) {
 }
 
 /**
+ * Best 3-hour surf window for a given real day (0 = today), from Open-Meteo
+ * hourly data. Returns { start, end } in Brisbane hours, or null.
+ */
+function computeBestWindow(realDayIdx, b) {
+  const swHourly = cachedData?.swell?.hourly;
+  if (!swHourly || !b) return null;
+  const times = swHourly.time;
+  const waveH = swHourly.wave_height || swHourly.swell_wave_height || null;
+  const waveP = swHourly.swell_wave_period || swHourly.wave_period || null;
+  const waveD = swHourly.wave_direction || swHourly.swell_wave_direction || null;
+  const dayStr = getBrisbaneDateStr(realDayIdx);
+  const hourScores = [];
+  times.forEach((t, i) => {
+    if (!t.startsWith(dayStr)) return;
+    const hr = parseInt(t.split('T')[1]);
+    if (hr < 5 || hr > 17) return;
+    const h = waveH ? waveH[i] : null;
+    const p = waveP ? waveP[i] : null;
+    const dir = waveD ? degToCompass(waveD[i]) : null;
+    const sH = h !== null ? estimateSurfHeight(h, b.exposure, dir, b, p) : null;
+    if (sH === null) return;
+    const pBonus = p !== null ? (p >= 14 ? 1.3 : p >= 10 ? 1.1 : 1.0) : 1.0;
+    hourScores.push({ hr, score: sH * pBonus });
+  });
+  if (hourScores.length < 3) return null;
+  let bestSum = -1, bestStart = null;
+  for (let i = 0; i < hourScores.length - 2; i++) {
+    const sum = hourScores[i].score + hourScores[i + 1].score + hourScores[i + 2].score;
+    if (sum > bestSum) { bestSum = sum; bestStart = hourScores[i].hr; }
+  }
+  return bestStart !== null ? { start: bestStart, end: bestStart + 3 } : null;
+}
+
+/**
+ * BEST WINDOW line for a day panel header. For today it is time-aware:
+ * highlights when we're inside the window, and greys it out once passed
+ * (suggesting tomorrow's window instead).
+ */
+function bestWindowLineHTML(realDayIdx) {
+  const b = BREAKS[currentBreak];
+  const w = computeBestWindow(realDayIdx, b);
+  if (!w) return '';
+  const fmt = h => h === 12 ? '12pm' : h > 12 ? (h - 12) + 'pm' : h + 'am';
+  let valueHtml = `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);">${fmt(w.start)}–${fmt(w.end)}</span>`;
+  if (realDayIdx === 0) {
+    const nowHr = getBrisbaneHour();
+    if (nowHr >= w.start && nowHr < w.end) {
+      valueHtml = `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--high);">${fmt(w.start)}–${fmt(w.end)} · in the window now</span>`;
+    } else if (nowHr >= w.end) {
+      const tmw = computeBestWindow(1, b);
+      valueHtml = `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);text-decoration:line-through;">${fmt(w.start)}–${fmt(w.end)}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">passed${tmw ? ` · tomorrow ${fmt(tmw.start)}–${fmt(tmw.end)}` : ''}</span>`;
+    }
+  }
+  return `<div style="padding:0 16px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">BEST WINDOW</span>
+    ${valueHtml}
+  </div>`;
+}
+
+/**
  * Canonical scoring aux inputs for a given real day (0 = today). Every per-day
  * scoreBreak call must use this so the same day never scores differently in
  * different panels (tide/swell-dir inputs drifting apart caused exactly that).
@@ -1484,6 +1549,7 @@ function buildForecastPanelBlock(day, opts = {}) {
         ${sublabel ? `<div class="current-issued">${sublabel}</div>` : ''}
       </div>
     </div>
+    ${opts.bestWindowHtml || ''}
     <div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
         <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">● FORECAST</span>
@@ -1886,47 +1952,8 @@ function setBreak(index, fromUser = false) {
       </div>` : '';
   }
 
-  // Best session window using Open-Meteo hourly data
-  const bwEl = document.getElementById('bestWindowPanel');
-  if (bwEl && cachedData?.swell?.hourly) {
-    const swHourly = cachedData.swell.hourly;
-    const times = swHourly.time;
-    const waveH = swHourly.wave_height || swHourly.swell_wave_height || null;
-    const waveP = swHourly.swell_wave_period || swHourly.wave_period || null;
-    const waveD = swHourly.swell_wave_direction || null;
-    // In night mode the panel shows tomorrow's forecast, so target tomorrow's date
-    const targetDayOffset = isActiveHours() ? 0 : 1;
-    const todayStr = getBrisbaneDateStr(targetDayOffset);
-    // Score each hour 5am–7pm
-    const hourScores = [];
-    times.forEach((t, i) => {
-      if (!t.startsWith(todayStr)) return;
-      const hr = parseInt(t.split('T')[1]);
-      if (hr < 5 || hr > 17) return;
-      const h = waveH ? waveH[i] : null;
-      const p = waveP ? waveP[i] : null;
-      const dir = waveD ? degToCompass(waveD[i]) : null;
-      const sH = h !== null ? estimateSurfHeight(h, b.exposure, dir, b, p) : null;
-      if (sH === null) return;
-      const pBonus = p !== null ? (p >= 14 ? 1.3 : p >= 10 ? 1.1 : 1.0) : 1.0;
-      hourScores.push({ hr, score: sH * pBonus });
-    });
-    if (hourScores.length >= 2) {
-      // Find best 3-hour window
-      let bestSum = -1, bestStart = null;
-      for (let i = 0; i < hourScores.length - 2; i++) {
-        const sum = hourScores[i].score + hourScores[i+1].score + hourScores[i+2].score;
-        if (sum > bestSum) { bestSum = sum; bestStart = hourScores[i].hr; }
-      }
-      if (bestStart !== null) {
-        const fmt = h => h === 12 ? '12pm' : h > 12 ? (h-12) + 'pm' : h + 'am';
-        bwEl.innerHTML = `<div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-          <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--muted);">BEST WINDOW</span>
-          <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);">${fmt(bestStart)}–${fmt(bestStart+3)}</span>
-        </div>`;
-      } else { bwEl.innerHTML = ''; }
-    } else { bwEl.innerHTML = ''; }
-  }
+  // Best session window now renders per-day via bestWindowLineHTML in
+  // selectForecastTab (NOW card header + each forecast panel header).
 
   document.getElementById('breakNotes').innerHTML =
     `${contextStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">${contextStr.replace(/^ · /, '')}</div>` : ''}
@@ -3542,6 +3569,8 @@ function renderForecast(forecast, tideData, swellData) {
           <div class="current-issued">${compactIssued}</div>
         </div>
       </div>
+
+      <div id="bestWindowNow"></div>
 
       <div style="margin:0 12px 10px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;overflow:hidden;">
         <div style="padding:7px 12px;background:rgba(0,229,160,0.08);border-bottom:1px solid rgba(0,229,160,0.15);display:flex;align-items:center;gap:8px;">
