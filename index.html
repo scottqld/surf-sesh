@@ -1094,7 +1094,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.9';
+const APP_VERSION = '5.0';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1119,7 +1119,7 @@ function getBreakImg(index) {
 // Fallback hardcoded array used if worker doesn't return breaks yet
 let BREAKS = [
   {
-    name: 'The Groyne', subtitle: 'Groyne',
+    name: 'The Groyne', subtitle: 'Groyne', region: 'Noosa National Park',
     notes: 'Beach break at the river mouth groyne. Best NE swell with S–SW offshore wind. Works at most tides but tends to be fast on low tide. Good learner wave on smaller days. Note: banks currently running very straight — waves closing out rather than peeling. Score penalised until banks improve.',
     maxScore: 6, sizeCap: 8, bankPenalty: 3, tide: { ideal: 'mid-high', avoid: 'low' }, exposure: 0.50,
     ideal:      { swellDirs: ['NE','ENE','E'],        windDirs: ['S','SSW','SW','WSW'],            swellMin: 0.8, swellMax: 1.2, periodMin: 8 },
@@ -1127,7 +1127,7 @@ let BREAKS = [
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E'],        swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
   },
   {
-    name: 'First Point', subtitle: 'First Point',
+    name: 'First Point', subtitle: 'First Point', region: 'Noosa National Park',
     notes: 'Classic longboard right-hander at the end of Hastings St. Ideal ENE–E swell with S–SSW offshore wind. Needs size to wrap around the point. Sensitive to NE wind — anything from north quarters will ruin it.',
     tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.32,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['S','SSW','SW'],                  swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
@@ -1135,7 +1135,7 @@ let BREAKS = [
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E'],        swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3 },
   },
   {
-    name: 'Nationals', subtitle: 'Nationals',
+    name: 'Nationals', subtitle: 'Nationals', region: 'Noosa National Park',
     notes: 'Heavy right-hand point at the very tip of the Noosa headland, known locally as Nationals or Boiling Pot. Swell refracts around the point and stands up fast over a shallow rocky ledge. More exposed than Tea Tree and picks up more size. Needs solid ENE–E groundswell with 10s+ period to wrap the point properly; short-period windswell won\'t do much. SE–S wind is offshore. Low to mid tide critical — very low can be dangerously shallow on the ledge, high tide kills the shape. Advanced surfers only.',
     tide: { ideal: 'low-mid', avoid: 'high' }, advanced: true, pointBreak: true, exposure: 0.58,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['SE','SSE','S'],                  swellMin: 0.8, swellMax: 1.3, periodMin: 10 },
@@ -1143,7 +1143,7 @@ let BREAKS = [
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E','W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
   },
   {
-    name: 'Tea Tree', subtitle: 'Tea Tree',
+    name: 'Tea Tree', subtitle: 'Tea Tree', region: 'Noosa National Park',
     notes: 'The jewel of the Noosa points. Long, fast rights off a bouldery headland — can barrel on lower tides. Best ENE–E swell with SE–S offshore wind. Low to mid tide. NE seabreezes kill it.',
     tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.55,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['SE','SSE','S'],                  swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
@@ -1151,7 +1151,7 @@ let BREAKS = [
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E','W'],   swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
   },
   {
-    name: 'Granite Bay', subtitle: 'Granite',
+    name: 'Granite Bay', subtitle: 'Granite', region: 'Noosa National Park',
     notes: 'Most exposed of the Noosa points — picks up the most swell and the most wind. Works with most swell directions and S winds. Good option when everywhere else is too small. Punchier but less perfect than Tea Tree.',
     tide: { ideal: 'low-mid', avoid: 'high' }, intermediateAdvanced: true, pointBreak: true, exposure: 0.65,
     ideal:      { swellDirs: ['ENE','E','NE','NNE'],  windDirs: ['S','SSE','SE','SSW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 9  },
@@ -1159,7 +1159,7 @@ let BREAKS = [
     avoid:      { swellDirs: ['S','NW'],              windDirs: ['N','NE','ENE','E'],              swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 1 },
   },
   {
-    name: 'Sunshine Beach', subtitle: 'Sunshine',
+    name: 'Sunshine Beach', subtitle: 'Sunshine', region: 'Sunshine Beach',
     notes: 'Open beach break facing east. Best E swell with W offshore wind. Works across most sizes and tides. Good alternative when the points are too small or too crowded.',
     tide: { ideal: 'mid-high', avoid: 'low' }, sizeCap: 9, exposure: 0.90, benefitsFromPeriod: true,
     ideal:      { swellDirs: ['E','ESE','ENE'],       windDirs: ['W','WSW','WNW','SW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
@@ -1167,7 +1167,7 @@ let BREAKS = [
     avoid:      { swellDirs: ['N','NW','S','SW'],     windDirs: ['NE','ENE','E','ESE','SE','N','S'], swellMin: 0, swellMax: 9,   periodMin: 0, windPenalty: 3 },
   },
   {
-    name: 'Double Island', subtitle: 'Double Is.',
+    name: 'Double Island', subtitle: 'Double Is.', region: 'Double Island',
     notes: 'Long right-hand point at Double Island Point — accessed via 4WD along the beach from Rainbow Beach or Noosa. Needs solid ENE-E swell and W-SW offshore to fire. More exposed than Noosa points, picks up more size. Worth the drive on the right day.',
     tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.42,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['W','WSW','SW','SSW'],            swellMin: 0.8, swellMax: 1.5, periodMin: 10 },
@@ -4319,13 +4319,28 @@ function renderSessionLog() {
 
 const ALERT_STORE_KEY  = 'surfcall_alerts_v1';
 
-// Alert breaks grouped by area — the 5 Noosa points move together, Sunshine
-// and Double Island are the genuine outliers.
-const ALERT_GROUPS = [
-  { label: 'Noosa National Park', sub: '5 points · move together', names: ['The Groyne','First Point','Nationals','Tea Tree','Granite Bay'] },
-  { label: 'Sunshine Beach',      sub: 'beach break · wants a westerly', names: ['Sunshine Beach'] },
-  { label: 'Double Island',       sub: '4WD · ~1.5hr drive', names: ['Double Island'] },
-];
+// Per-region descriptive subtitle for the alert list (the region itself lives
+// on each break via its `region` field; this is just display text).
+const REGION_META = {
+  'Noosa National Park': 'move together',
+  'Sunshine Beach':      'beach break · wants a westerly',
+  'Double Island':       '4WD · ~1.5hr drive',
+};
+// Group breaks by their region field, preserving BREAKS order.
+function alertGroups() {
+  const order = [], byRegion = {};
+  BREAKS.forEach(b => {
+    const r = b.region || 'Other';
+    if (!byRegion[r]) { byRegion[r] = []; order.push(r); }
+    byRegion[r].push(b.name);
+  });
+  return order.map(r => {
+    const names = byRegion[r];
+    const meta = REGION_META[r] || '';
+    const sub = names.length > 1 ? `${names.length} points${meta ? ' · ' + meta : ''}` : meta;
+    return { label: r, sub, names };
+  });
+}
 // Fresh-install default: watch everything local, skip the Double Island trip.
 function alertBreakDefault(name) { return name !== 'Double Island'; }
 function alertBreakOn(settings, name) {
@@ -4388,7 +4403,7 @@ function initAlertSettings() {
 
   const list = document.getElementById('alertBreakList');
   if (!list) return;
-  list.innerHTML = ALERT_GROUPS.map((g, gi) => {
+  list.innerHTML = alertGroups().map((g, gi) => {
     const rows = g.names.map(name => {
       if (!BREAKS.some(b => b.name === name)) return '';
       const key = name.replace(/\s+/g,'_');
@@ -4417,7 +4432,7 @@ function initAlertSettings() {
 
 // Toggle every break in an area group on/off together.
 function toggleAlertGroup(gi) {
-  const g = ALERT_GROUPS[gi];
+  const g = alertGroups()[gi];
   if (!g) return;
   const settings = getAlertSettings();
   const newState = !g.names.every(name => alertBreakOn(settings, name));
