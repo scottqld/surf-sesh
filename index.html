@@ -1094,7 +1094,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.8';
+const APP_VERSION = '4.9';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -4319,6 +4319,20 @@ function renderSessionLog() {
 
 const ALERT_STORE_KEY  = 'surfcall_alerts_v1';
 
+// Alert breaks grouped by area — the 5 Noosa points move together, Sunshine
+// and Double Island are the genuine outliers.
+const ALERT_GROUPS = [
+  { label: 'Noosa National Park', sub: '5 points · move together', names: ['The Groyne','First Point','Nationals','Tea Tree','Granite Bay'] },
+  { label: 'Sunshine Beach',      sub: 'beach break · wants a westerly', names: ['Sunshine Beach'] },
+  { label: 'Double Island',       sub: '4WD · ~1.5hr drive', names: ['Double Island'] },
+];
+// Fresh-install default: watch everything local, skip the Double Island trip.
+function alertBreakDefault(name) { return name !== 'Double Island'; }
+function alertBreakOn(settings, name) {
+  const s = settings.breaks?.[name];
+  return s === undefined ? alertBreakDefault(name) : s !== false;
+}
+
 function getAlertSettings() {
   try { return JSON.parse(localStorage.getItem(ALERT_STORE_KEY) || '{}'); }
   catch { return {}; }
@@ -4374,17 +4388,45 @@ function initAlertSettings() {
 
   const list = document.getElementById('alertBreakList');
   if (!list) return;
-  list.innerHTML = BREAKS.map(b => {
-    const key = b.name.replace(/\s+/g,'_');
-    const checked = settings.breaks?.[b.name] !== false;
-    return `<label class="alert-toggle">
-      <span>${b.name}</span>
-      <input type="checkbox" class="alert-check" id="alertCb_${key}"
-        ${checked ? 'checked' : ''} onchange="saveAlertSettings()">
-    </label>`;
+  list.innerHTML = ALERT_GROUPS.map((g, gi) => {
+    const rows = g.names.map(name => {
+      if (!BREAKS.some(b => b.name === name)) return '';
+      const key = name.replace(/\s+/g,'_');
+      return `<label class="alert-toggle">
+        <span>${name}</span>
+        <input type="checkbox" class="alert-check" id="alertCb_${key}"
+          ${alertBreakOn(settings, name) ? 'checked' : ''} onchange="saveAlertSettings()">
+      </label>`;
+    }).join('');
+    const multi = g.names.length > 1;
+    const allOn = g.names.every(name => alertBreakOn(settings, name));
+    const toggleBtn = multi
+      ? `<button onclick="toggleAlertGroup(${gi})" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.5px;padding:3px 8px;cursor:pointer;">${allOn ? 'None' : 'All'}</button>`
+      : '';
+    return `<div style="display:flex;align-items:flex-end;justify-content:space-between;margin:${gi ? '16px' : '2px'} 0 4px;">
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--accent);">${g.label.toUpperCase()}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-top:1px;">${g.sub}</div>
+        </div>
+        ${toggleBtn}
+      </div>${rows}`;
   }).join('');
 
   updateAlertPermStatus();
+}
+
+// Toggle every break in an area group on/off together.
+function toggleAlertGroup(gi) {
+  const g = ALERT_GROUPS[gi];
+  if (!g) return;
+  const settings = getAlertSettings();
+  const newState = !g.names.every(name => alertBreakOn(settings, name));
+  g.names.forEach(name => {
+    const cb = document.getElementById(`alertCb_${name.replace(/\s+/g,'_')}`);
+    if (cb) cb.checked = newState;
+  });
+  saveAlertSettings();   // persist from checkbox states
+  initAlertSettings();   // re-render so the All/None label updates
 }
 
 function updateAlertPermStatus() {
