@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'worker/**'
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -19,6 +20,12 @@ jobs:
 
       - name: Deploy
         working-directory: worker
-        run: npx wrangler deploy
+        run: |
+          # Strip a leading UTF-8 BOM if the secret was saved with one
+          TOKEN="${CLOUDFLARE_API_TOKEN#$'\xEF\xBB\xBF'}"
+          CLOUDFLARE_API_TOKEN="$TOKEN" npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # wrangler 4.86.0 telemetry throws a BOM ByteString error in CI;
+          # disabling it is the same fix that works locally.
+          WRANGLER_SEND_METRICS: "false"
