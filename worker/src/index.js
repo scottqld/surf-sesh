@@ -413,17 +413,29 @@ async function handleCron(env) {
   const fc = enrichForecast(allData);
   const scored = BREAKS.map(br => ({ br, score: scoreBreak(br, fc) }));
 
-  const swellDir = fc._swellDir ?? 'unknown';
+  const swellDir = (fc._swellDir && fc._swellDir !== 'unknown') ? fc._swellDir : '';
   const period   = fc._period   ? `${Math.round(fc._period)}s` : '';
   const swellH   = fc._swellH   ? `${fc._swellH.toFixed(1)}m`  : (extractHeight(fc.forecasts?.[0]?.swell||'') ? `${extractHeight(fc.forecasts[0].swell).toFixed(1)}m` : '');
-  const windText = shortDir(fc.forecasts?.[0]?.winds||'');
+  const windShort = shortDir(fc.forecasts?.[0]?.winds||'').split(' ').slice(0, 3).join(' ');
+
+  // Clean one-line conditions summary, e.g. "1.2m ENE @ 10s · wind S 9 km/h"
+  // (each part omitted when missing, so no "unknown"/empty fragments).
+  const condSummary = [
+    [swellH, swellDir].filter(Boolean).join(' '),
+    period ? `@ ${period}` : '',
+  ].filter(Boolean).join(' ') + (windShort ? ` · wind ${windShort}` : '');
+
+  const windowLabel = (br) => {
+    const win = bestWindowForBreak(allData.swell?.hourly, br);
+    return win && brisbaneHour < win.end ? `Best window ${fmtHour(win.start)}–${fmtHour(win.end)}` : '';
+  };
 
   // ── Daily morning report ──
   if (morningDue.length) {
     const best = scored.reduce((a, b) => b.score > a.score ? b : a);
 
-    // AI one-liner if available
-    let body = `${swellDir} ${swellH}${period?' at '+period:''} · ${windText.split(' ').slice(0,3).join(' ')}`;
+    // AI one-liner (conditions/advice only — title already has break + score)
+    let line1 = condSummary || 'Conditions unavailable';
     if (env.ANTHROPIC_API_KEY) {
       try {
         const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -432,22 +444,19 @@ async function handleCron(env) {
           body: JSON.stringify({
             model: 'claude-haiku-4-5',
             max_tokens: 60,
-            messages: [{ role:'user', content:`One casual sentence (max 12 words) surf summary for a push notification. ${best.br.name} Noosa, score ${best.score}/10. Swell: ${swellDir} ${swellH} ${period}. Wind: ${windText}. No hashtags. If the score is 3 or less, be honest that it's not worth it.` }],
+            messages: [{ role:'user', content:`Write one casual sentence (max 12 words) describing today's surf for a push notification. Conditions at ${best.br.name}, Noosa: ${condSummary || 'small/unknown'}, rated ${best.score}/10. Do NOT repeat the break name or the score. No hashtags, no emoji. If ${best.score} is 3 or less, say plainly it's not worth a surf.` }],
           }),
         });
         const aiJson = await aiRes.json();
         const text = aiJson?.content?.[0]?.text?.trim();
-        if (text) body = text;
-      } catch { /* fallback to manual summary */ }
+        if (text) line1 = text;
+      } catch { /* fallback to condSummary */ }
     }
 
-    // Append today's best 3-hour window when it hasn't already passed
-    const win = bestWindowForBreak(allData.swell?.hourly, best.br);
-    if (win && brisbaneHour < win.end) body += ` · Best ${fmtHour(win.start)}–${fmtHour(win.end)}`;
-
+    const win = windowLabel(best.br);
     const payload = {
-      title: `🏄 ${best.br.name} — ${best.score}/10`,
-      body,
+      title: `🏄 Best today: ${best.br.name} ${best.score}/10`,
+      body: win ? `${line1}\n⏱ ${win}` : line1,
       icon: ICON,
       badge: ICON,
       url: APP_URL,
@@ -473,12 +482,12 @@ async function handleCron(env) {
     if (!hits.length) continue;
 
     const top    = hits.reduce((a, b) => b.score > a.score ? b : a);
-    const others = hits.filter(h => h !== top).map(h => `${h.br.name} ${h.score}`).join(', ');
-    const win    = bestWindowForBreak(allData.swell?.hourly, top.br);
-    const winStr = win && brisbaneHour < win.end ? ` · Best ${fmtHour(win.start)}–${fmtHour(win.end)}` : '';
+    const others = hits.filter(h => h !== top).map(h => `${h.br.name} ${h.score}/10`).join(', ');
+    const win    = windowLabel(top.br);
+    const line2  = [win ? `⏱ ${win}` : '', others ? `Also firing: ${others}` : ''].filter(Boolean).join(' · ');
     const payload = {
-      title: `🔔 ${top.br.name} just hit ${top.score}/10`,
-      body: `${swellDir} ${swellH}${period ? ' at ' + period : ''}${winStr}${others ? ' · Also: ' + others : ''}`,
+      title: `🔔 ${top.br.name} is firing — ${top.score}/10`,
+      body: [condSummary, line2].filter(Boolean).join('\n'),
       icon: ICON,
       badge: ICON,
       url: APP_URL,
