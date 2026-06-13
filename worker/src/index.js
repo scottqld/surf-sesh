@@ -397,11 +397,15 @@ async function handleCron(env) {
   }
 
   const morningDue = subs.filter(r => r.preferredHour === brisbaneHour);
-  // Swell alerts only fire during daylight surf hours
-  const daylight  = brisbaneHour >= 5 && brisbaneHour <= 17;
-  const alertSubs = daylight
-    ? subs.filter(r => r.alerts?.threshold && Object.values(r.alerts.breaks || {}).some(v => v !== false))
-    : [];
+  // Swell alerts fire within each device's chosen window (default 5am–5pm),
+  // always clamped to daylight surf hours.
+  const alertSubs = subs.filter(r => {
+    if (!r.alerts?.threshold) return false;
+    if (!Object.values(r.alerts.breaks || {}).some(v => v !== false)) return false;
+    const from = Math.max(5,  r.alerts.fromHour ?? 5);
+    const to   = Math.min(17, r.alerts.toHour   ?? 17);
+    return brisbaneHour >= from && brisbaneHour <= to;
+  });
   if (!morningDue.length && !alertSubs.length) return;
 
   // Fetch + enrich surf data once for everyone

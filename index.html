@@ -1010,6 +1010,14 @@
         <input type="range" id="alertThreshold" min="5" max="10" value="7" step="1"
           oninput="document.getElementById('alertThresholdLabel').textContent=this.value;saveAlertSettings()"
           style="width:100%;accent-color:var(--accent);margin-bottom:14px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">ONLY ALERT BETWEEN</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <select id="alertFromHour" onchange="saveAlertSettings()"
+            style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;appearance:none;"></select>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">to</span>
+          <select id="alertToHour" onchange="saveAlertSettings()"
+            style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;appearance:none;"></select>
+        </div>
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE BREAKS</div>
         <div id="alertBreakList"></div>
         <button onclick="requestAlertPermission()" id="alertPermBtn"
@@ -1086,7 +1094,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '4.7';
+const APP_VERSION = '4.8';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -4320,12 +4328,14 @@ let _alertSyncTimer = null;
 
 function saveAlertSettings() {
   const threshold = parseInt(document.getElementById('alertThreshold')?.value || '7');
+  const fromHour = parseInt(document.getElementById('alertFromHour')?.value ?? '5');
+  const toHour   = parseInt(document.getElementById('alertToHour')?.value ?? '17');
   const breaks = {};
   BREAKS.forEach(b => {
     const cb = document.getElementById(`alertCb_${b.name.replace(/\s+/g,'_')}`);
     if (cb) breaks[b.name] = cb.checked;
   });
-  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, breaks }));
+  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, breaks, fromHour, toHour }));
   // Debounced server sync — alerts are checked hourly by the worker cron and
   // pushed to this device, so the settings must live server-side.
   clearTimeout(_alertSyncTimer);
@@ -4337,11 +4347,11 @@ async function syncAlertsToServer() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try {
     const sub = await ensurePushSubscription();
-    const { threshold, breaks } = getAlertSettings();
+    const { threshold, breaks, fromHour, toHour } = getAlertSettings();
     await fetch(`${WORKER_URL}/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, breaks: breaks || {} } }),
+      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, breaks: breaks || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17 } }),
     });
     const stat = document.getElementById('alertPermStatus');
     if (stat) { stat.textContent = '✓ Alerts synced — pushed to this device when a break hits your threshold'; stat.style.color = 'var(--high)'; }
@@ -4358,6 +4368,9 @@ function initAlertSettings() {
   const threshLabel = document.getElementById('alertThresholdLabel');
   if (threshEl) threshEl.value = threshold;
   if (threshLabel) threshLabel.textContent = threshold;
+
+  fillHourSelect(document.getElementById('alertFromHour'), settings.fromHour ?? 5);
+  fillHourSelect(document.getElementById('alertToHour'),   settings.toHour   ?? 17);
 
   const list = document.getElementById('alertBreakList');
   if (!list) return;
@@ -4706,6 +4719,21 @@ function urlBase64ToUint8Array(b64) {
   const pad = '='.repeat((4 - b64.length % 4) % 4);
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+// Populate an hour <select> (0–23) once, and set its value.
+function fillHourSelect(sel, value) {
+  if (!sel) return;
+  if (!sel.options.length) {
+    for (let h = 0; h < 24; h++) {
+      const opt = document.createElement('option');
+      opt.value = h;
+      const ampm = h < 12 ? 'am' : 'pm';
+      opt.textContent = `${h % 12 || 12}:00 ${ampm}`;
+      sel.appendChild(opt);
+    }
+  }
+  sel.value = value;
 }
 
 function buildHourOptions() {
