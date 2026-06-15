@@ -1018,7 +1018,7 @@
           <select id="alertToHour" onchange="saveAlertSettings()"
             style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;appearance:none;"></select>
         </div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE BREAKS</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE AREAS</div>
         <div id="alertBreakList"></div>
         <button onclick="requestAlertPermission()" id="alertPermBtn"
           style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;cursor:pointer;display:none;">
@@ -1094,7 +1094,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.1';
+const APP_VERSION = '5.2';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -4341,11 +4341,11 @@ function alertGroups() {
     return { label: r, sub, names };
   });
 }
-// Fresh-install default: watch everything local, skip the Double Island trip.
-function alertBreakDefault(name) { return name !== 'Double Island'; }
-function alertBreakOn(settings, name) {
-  const s = settings.breaks?.[name];
-  return s === undefined ? alertBreakDefault(name) : s !== false;
+// Fresh-install default: watch local regions, skip the Double Island trip.
+function alertRegionDefault(region) { return region !== 'Double Island'; }
+function alertRegionOn(settings, region) {
+  const r = settings.regions?.[region];
+  return r === undefined ? alertRegionDefault(region) : r !== false;
 }
 
 function getAlertSettings() {
@@ -4359,12 +4359,12 @@ function saveAlertSettings() {
   const threshold = parseInt(document.getElementById('alertThreshold')?.value || '7');
   const fromHour = parseInt(document.getElementById('alertFromHour')?.value ?? '5');
   const toHour   = parseInt(document.getElementById('alertToHour')?.value ?? '17');
-  const breaks = {};
-  BREAKS.forEach(b => {
-    const cb = document.getElementById(`alertCb_${b.name.replace(/\s+/g,'_')}`);
-    if (cb) breaks[b.name] = cb.checked;
+  const regions = {};
+  alertGroups().forEach(g => {
+    const cb = document.getElementById(`alertRegion_${g.label.replace(/\s+/g,'_')}`);
+    if (cb) regions[g.label] = cb.checked;
   });
-  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, breaks, fromHour, toHour }));
+  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, regions, fromHour, toHour }));
   // Immediate confirmation; the debounced sync below replaces it with the
   // synced/needs-permission result.
   const stat = document.getElementById('alertPermStatus');
@@ -4384,11 +4384,11 @@ async function syncAlertsToServer() {
   }
   try {
     const sub = await ensurePushSubscription();
-    const { threshold, breaks, fromHour, toHour } = getAlertSettings();
+    const { threshold, regions, fromHour, toHour } = getAlertSettings();
     await fetch(`${WORKER_URL}/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, breaks: breaks || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17 } }),
+      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, regions: regions || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17 } }),
     });
     if (stat) { stat.textContent = '✓ Saved & synced — alerts active on this device'; stat.style.color = 'var(--high)'; }
   } catch (e) {
@@ -4409,45 +4409,21 @@ function initAlertSettings() {
 
   const list = document.getElementById('alertBreakList');
   if (!list) return;
-  list.innerHTML = alertGroups().map((g, gi) => {
-    const rows = g.names.map(name => {
-      if (!BREAKS.some(b => b.name === name)) return '';
-      const key = name.replace(/\s+/g,'_');
-      return `<label class="alert-toggle">
-        <span>${name}</span>
-        <input type="checkbox" class="alert-check" id="alertCb_${key}"
-          ${alertBreakOn(settings, name) ? 'checked' : ''} onchange="saveAlertSettings()">
-      </label>`;
-    }).join('');
-    const multi = g.names.length > 1;
-    const allOn = g.names.every(name => alertBreakOn(settings, name));
-    const toggleBtn = multi
-      ? `<button onclick="toggleAlertGroup(${gi})" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--accent);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.5px;padding:3px 8px;cursor:pointer;">${allOn ? 'None' : 'All'}</button>`
-      : '';
-    return `<div style="display:flex;align-items:flex-end;justify-content:space-between;margin:${gi ? '16px' : '2px'} 0 4px;">
-        <div>
-          <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--accent);">${g.label.toUpperCase()}</div>
-          <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-top:1px;">${g.sub}</div>
-        </div>
-        ${toggleBtn}
-      </div>${rows}`;
+  // One toggle per region — a region alerts when any of its breaks hits the
+  // threshold, so per-break selection isn't needed.
+  list.innerHTML = alertGroups().map(g => {
+    const key = g.label.replace(/\s+/g,'_');
+    return `<label class="alert-toggle" style="align-items:center;">
+      <span style="display:flex;flex-direction:column;gap:2px;">
+        <span>${g.label}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);">${g.sub}</span>
+      </span>
+      <input type="checkbox" class="alert-check" id="alertRegion_${key}"
+        ${alertRegionOn(settings, g.label) ? 'checked' : ''} onchange="saveAlertSettings()">
+    </label>`;
   }).join('');
 
   updateAlertPermStatus();
-}
-
-// Toggle every break in an area group on/off together.
-function toggleAlertGroup(gi) {
-  const g = alertGroups()[gi];
-  if (!g) return;
-  const settings = getAlertSettings();
-  const newState = !g.names.every(name => alertBreakOn(settings, name));
-  g.names.forEach(name => {
-    const cb = document.getElementById(`alertCb_${name.replace(/\s+/g,'_')}`);
-    if (cb) cb.checked = newState;
-  });
-  saveAlertSettings();   // persist from checkbox states
-  initAlertSettings();   // re-render so the All/None label updates
 }
 
 function updateAlertPermStatus() {

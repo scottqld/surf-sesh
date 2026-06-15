@@ -3,49 +3,49 @@ const CACHE_TTL = 1800; // 30 minutes in seconds
 // ─── BREAKS (mirrors index.html — keep in sync) ───────────────────────────────
 const BREAKS = [
   {
-    name: 'The Groyne', exposure: 0.50, maxScore: 6, sizeCap: 8, bankPenalty: 3,
+    name: 'The Groyne', region: 'Noosa National Park', exposure: 0.50, maxScore: 6, sizeCap: 8, bankPenalty: 3,
     tide: { ideal: 'mid-high', avoid: 'low' },
     ideal:      { swellDirs: ['NE','ENE','E'],       windDirs: ['S','SSW','SW','WSW'],           periodMin: 8  },
     acceptable: { swellDirs: ['NNE','ESE','SE'],     windDirs: ['W','SSE','SE'],                 periodMin: 6  },
     avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E'],       windPenalty: 2 },
   },
   {
-    name: 'First Point', exposure: 0.32, pointBreak: true,
+    name: 'First Point', region: 'Noosa National Park', exposure: 0.32, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['S','SSW','SW'],                 periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSE','SE','WSW','W'],           periodMin: 8  },
     avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E'],       windPenalty: 3 },
   },
   {
-    name: 'Nationals', exposure: 0.58, pointBreak: true,
+    name: 'Nationals', region: 'Noosa National Park', exposure: 0.58, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['SE','SSE','S'],                 periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSW','SW','ESE'],               periodMin: 8  },
     avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E','W'],  windPenalty: 2 },
   },
   {
-    name: 'Tea Tree', exposure: 0.55, pointBreak: true,
+    name: 'Tea Tree', region: 'Noosa National Park', exposure: 0.55, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['SE','SSE','S'],                 periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSW','SW','ESE'],               periodMin: 8  },
     avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E','W'],  windPenalty: 2 },
   },
   {
-    name: 'Granite Bay', exposure: 0.65, pointBreak: true,
+    name: 'Granite Bay', region: 'Noosa National Park', exposure: 0.65, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE','NNE'], windDirs: ['S','SSE','SE','SSW'],           periodMin: 9  },
     acceptable: { swellDirs: ['ESE','N','NNW','SE'], windDirs: ['SW','W','ESE'],                 periodMin: 7  },
     avoid:      { swellDirs: ['S','NW'],             windDirs: ['N','NE','ENE','E'],             windPenalty: 1 },
   },
   {
-    name: 'Sunshine Beach', exposure: 0.90, sizeCap: 9, benefitsFromPeriod: true,
+    name: 'Sunshine Beach', region: 'Sunshine Beach', exposure: 0.90, sizeCap: 9, benefitsFromPeriod: true,
     tide: { ideal: 'mid-high', avoid: 'low' },
     ideal:      { swellDirs: ['E','ESE','ENE'],      windDirs: ['W','WSW','WNW','SW'],           periodMin: 8  },
     acceptable: { swellDirs: ['SE','NE'],            windDirs: ['NW','SSW'],                     periodMin: 6  },
     avoid:      { swellDirs: ['N','NW','S','SW'],   windDirs: ['NE','ENE','E','ESE','SE','N','S'], windPenalty: 3 },
   },
   {
-    name: 'Double Island', exposure: 0.42, pointBreak: true,
+    name: 'Double Island', region: 'Double Island', exposure: 0.42, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['W','WSW','SW','SSW'],           periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['NW','WNW','S'],                 periodMin: 8  },
@@ -401,9 +401,14 @@ async function handleCron(env) {
   // always clamped to daylight surf hours.
   const alertSubs = subs.filter(r => {
     if (!r.alerts?.threshold) return false;
-    if (!Object.values(r.alerts.breaks || {}).some(v => v !== false)) return false;
-    const from = Math.max(5,  r.alerts.fromHour ?? 5);
-    const to   = Math.min(17, r.alerts.toHour   ?? 17);
+    const a = r.alerts;
+    // New model selects whole regions; fall back to the legacy per-break map.
+    const enabled = a.regions
+      ? Object.values(a.regions).some(v => v !== false)
+      : (a.breaks ? Object.values(a.breaks).some(v => v !== false) : true);
+    if (!enabled) return false;
+    const from = Math.max(5,  a.fromHour ?? 5);
+    const to   = Math.min(17, a.toHour   ?? 17);
     return brisbaneHour >= from && brisbaneHour <= to;
   });
   if (!morningDue.length && !alertSubs.length) return;
@@ -471,17 +476,28 @@ async function handleCron(env) {
     }));
   }
 
-  // ── Swell alerts: push when a monitored break reaches the device threshold ──
+  // ── Swell alerts: one per enabled region when its best break hits threshold ──
   for (const rec of alertSubs) {
-    const sent = rec.alertsSent || {};
+    const sent = rec.alertsSent || {};   // keyed by region; cooldown is per-region
     const now  = Date.now();
-    const hits = scored.filter(({ br, score }) =>
-      score >= rec.alerts.threshold &&
-      rec.alerts.breaks?.[br.name] !== false &&
-      now - (sent[br.name] || 0) >= ALERT_COOLDOWN_MS);
+    const a    = rec.alerts;
+    const regionEnabled = (region) => a.regions
+      ? a.regions[region] !== false
+      : BREAKS.some(b => (b.region || 'Other') === region && a.breaks?.[b.name] !== false);
+
+    // Best qualifying break per enabled region, respecting the per-region cooldown
+    const regionHits = {};
+    for (const { br, score } of scored) {
+      if (score < a.threshold) continue;
+      const region = br.region || 'Other';
+      if (!regionEnabled(region)) continue;
+      if (now - (sent[region] || 0) < ALERT_COOLDOWN_MS) continue;
+      if (!regionHits[region] || score > regionHits[region].score) regionHits[region] = { br, score };
+    }
+    const hits = Object.values(regionHits);
     if (!hits.length) continue;
 
-    const top    = hits.reduce((a, b) => b.score > a.score ? b : a);
+    const top    = hits.reduce((x, y) => y.score > x.score ? y : x);
     const others = hits.filter(h => h !== top).map(h => `${h.br.name} ${h.score}/10`).join(', ');
     const win    = windowLabel(top.br);
     const line2  = [win ? `⏱ ${win}` : '', others ? `Also firing: ${others}` : ''].filter(Boolean).join(' · ');
@@ -495,7 +511,7 @@ async function handleCron(env) {
 
     try {
       await sendPush(rec.subscription, payload, env);
-      hits.forEach(h => { sent[h.br.name] = now; });
+      hits.forEach(h => { sent[h.br.region || 'Other'] = now; });
       const { key, ...stored } = rec;
       await env.PUSH_SUBSCRIPTIONS.put(key, JSON.stringify({ ...stored, alertsSent: sent }));
     } catch (e) {
