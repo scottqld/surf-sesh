@@ -1094,7 +1094,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.0';
+const APP_VERSION = '5.1';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -4365,6 +4365,10 @@ function saveAlertSettings() {
     if (cb) breaks[b.name] = cb.checked;
   });
   localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, breaks, fromHour, toHour }));
+  // Immediate confirmation; the debounced sync below replaces it with the
+  // synced/needs-permission result.
+  const stat = document.getElementById('alertPermStatus');
+  if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
   // Debounced server sync — alerts are checked hourly by the worker cron and
   // pushed to this device, so the settings must live server-side.
   clearTimeout(_alertSyncTimer);
@@ -4372,8 +4376,12 @@ function saveAlertSettings() {
 }
 
 async function syncAlertsToServer() {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  const stat = document.getElementById('alertPermStatus');
+  if (!('Notification' in window) || Notification.permission !== 'granted' ||
+      !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (stat) { stat.textContent = '✓ Saved on this device — enable notifications above to receive alerts'; stat.style.color = 'var(--muted)'; }
+    return;
+  }
   try {
     const sub = await ensurePushSubscription();
     const { threshold, breaks, fromHour, toHour } = getAlertSettings();
@@ -4382,11 +4390,9 @@ async function syncAlertsToServer() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, breaks: breaks || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17 } }),
     });
-    const stat = document.getElementById('alertPermStatus');
-    if (stat) { stat.textContent = '✓ Alerts synced — pushed to this device when a break hits your threshold'; stat.style.color = 'var(--high)'; }
+    if (stat) { stat.textContent = '✓ Saved & synced — alerts active on this device'; stat.style.color = 'var(--high)'; }
   } catch (e) {
-    const stat = document.getElementById('alertPermStatus');
-    if (stat) { stat.textContent = 'Alert sync failed: ' + e.message; stat.style.color = 'var(--muted)'; }
+    if (stat) { stat.textContent = '✓ Saved locally · sync failed: ' + e.message; stat.style.color = 'var(--muted)'; }
   }
 }
 
@@ -4928,14 +4934,23 @@ async function disableNotifications() {
 }
 
 async function updateNotifHour() {
-  if (!_pushSub) return;
-  const hour = parseInt(document.getElementById('notifHourSelect').value);
+  const sel = document.getElementById('notifHourSelect');
+  const hour = parseInt(sel.value);
+  const label = sel.selectedOptions[0]?.textContent.trim() || `${hour}:00`;
   localStorage.setItem('notifHour', hour);
-  await fetch(`${WORKER_URL}/subscribe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscription: _pushSub.toJSON(), preferredHour: hour }),
-  }).catch(() => {});
+  const stat = document.getElementById('notifStatus');
+  if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
+  if (!_pushSub) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: _pushSub.toJSON(), preferredHour: hour }),
+    });
+    if (stat) { stat.textContent = res.ok ? `✓ Saved — morning report at ${label}` : '✓ Saved locally · server sync failed'; }
+  } catch {
+    if (stat) stat.textContent = '✓ Saved locally · server sync failed';
+  }
 }
 
 // Init when the settings tab becomes active
