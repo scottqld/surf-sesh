@@ -776,6 +776,31 @@
     color: var(--text);
   }
   .day-tab-btn.active .day-tab-date { color: var(--accent); }
+
+  /* INTRADAY 2-HOURLY TIMELINE */
+  .intraday-wrap { margin: 0 12px 10px; }
+  .intraday-head {
+    display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px;
+  }
+  .intraday-label {
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.5px; color: #b9c6d4;
+  }
+  .intraday-legend { font-family: 'DM Mono', monospace; font-size: 7px; color: var(--muted); }
+  .intraday-scroll {
+    display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .intraday-scroll::-webkit-scrollbar { display: none; }
+  .intraday-slot {
+    flex: 0 0 auto; min-width: 48px; text-align: center;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .intraday-time { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
+  .intraday-wind { font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1; }
+  .intraday-kmh { font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted); }
+  .intraday-surf { font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: var(--accent); line-height: 1; margin-top: 1px; }
+
   /* TAB BAR */
   .tab-bar {
     position: fixed;
@@ -1094,7 +1119,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.2';
+const APP_VERSION = '5.3';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1355,7 +1380,8 @@ function selectForecastTab(tabIdx) {
           ${tides?.length ? tidesGridHTML(tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
         </div>
         ${extraPanels}
-      </div>`;
+      </div>
+      ${intradayTimelineHTML(0)}`;
     }
   } else {
     panel.innerHTML = buildForecastPanelBlock(day, {
@@ -1374,6 +1400,7 @@ function selectForecastTab(tabIdx) {
       label:       labelStr,
       sublabel:    sublabelStr !== labelStr ? sublabelStr : '',
       extraPanels,
+      intradayHtml: intradayTimelineHTML(realDayIdx),
     });
   }
 
@@ -1588,6 +1615,7 @@ function buildForecastPanelBlock(day, opts = {}) {
       </div>
       ${extraPanels}
     </div>
+    ${opts.intradayHtml || ''}
   </div>`;
 }
 
@@ -2700,13 +2728,17 @@ function updateBreakIndicators(forecast, isLive = isActiveHours()) {
  */
 async function fetchWindOutlook() {
   try {
-    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-26.39&longitude=153.09&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=Australia%2FBrisbane&forecast_days=2');
+    // 7 days so the per-day 2-hourly timeline works on every forecast tab
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-26.39&longitude=153.09&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=Australia%2FBrisbane&forecast_days=7');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _windOutlook = (await res.json()).hourly || null;
   } catch (e) {
     _windOutlook = null;
   }
   renderWindOutlook();
+  // Wind arrived after the panel first rendered — repaint the active tab so its
+  // intraday timeline fills in.
+  if (_forecastTabState && _forecastTabState.activeIdx != null) selectForecastTab(_forecastTabState.activeIdx);
 }
 
 function renderWindOutlook() {
@@ -2729,6 +2761,65 @@ function renderWindOutlook() {
   const turning = curDir && compass && curDir !== compass;
   const rangeStr = lo === hi ? `${lo}` : `${lo}–${hi}`;
   el.textContent = `next 2–4h: ${turning ? '↻ turning ' : '→ '}${compass || ''} ${rangeStr} km/h`;
+}
+
+// Wind-quality colour for a break: offshore = good, onshore = bad.
+function windQualityColor(b, dir) {
+  if (!dir || !b) return 'var(--muted)';
+  if (b.ideal?.windDirs?.includes(dir))      return 'var(--high)';
+  if (b.acceptable?.windDirs?.includes(dir)) return 'var(--accent)';
+  if (b.avoid?.windDirs?.includes(dir))      return 'rgba(255,110,110,0.95)';
+  return 'var(--muted)';
+}
+function fmtHourShort(hr) {
+  const ampm = hr < 12 ? 'a' : 'p';
+  const h12 = hr % 12 || 12;
+  return `${h12}${ampm}`;
+}
+
+/**
+ * 2-hourly conditions timeline for one day (wind + surf per slot), so the
+ * single BOM day forecast doesn't hide wind swinging through the day.
+ * Uses Open-Meteo hourly wind (_windOutlook) + marine swell (cachedData.swell).
+ */
+function intradayTimelineHTML(realDayIdx) {
+  const b = BREAKS[currentBreak];
+  const sw = cachedData?.swell?.hourly;
+  const wind = _windOutlook;
+  if (!b || !sw?.time || !wind?.time) return '';
+  const dayStr = getBrisbaneDateStr(realDayIdx);
+  const slots = [6, 8, 10, 12, 14, 16, 18];
+  let any = false;
+  const cells = slots.map(hr => {
+    const tStr = `${dayStr}T${String(hr).padStart(2, '0')}:00`;
+    const si = sw.time.indexOf(tStr);
+    const wi = wind.time.indexOf(tStr);
+    if (si < 0 && wi < 0) return '';
+    any = true;
+    const waveH = si >= 0 ? sw.wave_height?.[si] : null;
+    const per   = si >= 0 ? sw.wave_period?.[si] : null;
+    const swDir = si >= 0 && sw.wave_direction ? degToCompass(sw.wave_direction[si]) : null;
+    const surfM = waveH != null ? estimateSurfHeight(waveH, b.exposure, swDir, b, per) : null;
+    const surfFt = surfM != null ? Math.round(surfM * 3.281 * 2) / 2 : null;
+    const wDir = wi >= 0 && wind.wind_direction_10m ? degToCompass(wind.wind_direction_10m[wi]) : null;
+    const wKmh = wi >= 0 && wind.wind_speed_10m?.[wi] != null ? Math.round(wind.wind_speed_10m[wi]) : null;
+    const color = windQualityColor(b, wDir);
+    return `<div class="intraday-slot">
+      <div class="intraday-time">${fmtHourShort(hr)}</div>
+      <div>${dirArrow(wDir, 15, color) || '<span style="color:var(--muted);font-size:11px;">–</span>'}</div>
+      <div class="intraday-wind" style="color:${color};">${wDir || '—'}</div>
+      <div class="intraday-kmh">${wKmh != null ? wKmh : ''}</div>
+      <div class="intraday-surf">${surfFt != null ? surfFt + 'ft' : '—'}</div>
+    </div>`;
+  }).join('');
+  if (!any) return '';
+  return `<div class="intraday-wrap">
+    <div class="intraday-head">
+      <span class="intraday-label">THROUGH THE DAY</span>
+      <span class="intraday-legend"><span style="color:var(--high);">■</span> offshore <span style="color:rgba(255,110,110,0.95);">■</span> onshore</span>
+    </div>
+    <div class="intraday-scroll">${cells}</div>
+  </div>`;
 }
 
 /**
@@ -4115,6 +4206,7 @@ async function loadNightMode() {
 
     requestAnimationFrame(() => {
       setBreak(initialBreakNm || 0);
+      fetchWindOutlook(); // populates the per-day intraday timeline (future days)
       renderSwellChart(data.swell);
       renderTides(data.tides[currentStation]);
       renderSessionPlanner(data.forecast, data.swell);
