@@ -797,6 +797,7 @@
     padding: 7px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px;
   }
   .intraday-time { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
+  .intraday-score { font-family: 'Bebas Neue', sans-serif; font-size: 20px; line-height: 1; }
   .intraday-wind { font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1; }
   .intraday-kmh { font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted); }
   .intraday-surf { font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: var(--accent); line-height: 1; margin-top: 1px; }
@@ -1119,7 +1120,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.6';
+const APP_VERSION = '5.7';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -2775,10 +2776,32 @@ function fmtHourShort(hr) {
   return `${h12}${ampm}`;
 }
 
+// Interpolated tide (Brisbane wall-clock) at a given day/hour, for per-slot
+// scoring. Returns { current, rising } or null if it can't bound the hour.
+function tideAtHour(realDayIdx, hr) {
+  const tides = cachedData?.tides?.noosa?.tides;
+  if (!tides?.length) return null;
+  const bd = getBrisbaneNow(realDayIdx);
+  const dateStr = `${String(bd.getUTCDate()).padStart(2,'0')}/${String(bd.getUTCMonth()+1).padStart(2,'0')}/${bd.getUTCFullYear()}`;
+  const day = tides.filter(t => t.date === dateStr).map(t => {
+    const [h, m] = t.time.split(':').map(Number);
+    return { min: h * 60 + m, height: parseFloat(t.height), type: t.type };
+  }).sort((a, b) => a.min - b.min);
+  if (day.length < 2) return null;
+  const slotMin = hr * 60;
+  let prev = null, next = null;
+  for (const t of day) { if (t.min <= slotMin) prev = t; else { next = t; break; } }
+  if (!prev || !next) return null;
+  const span = next.min - prev.min;
+  const cosT = span > 0 ? (1 - Math.cos(Math.PI * (slotMin - prev.min) / span)) / 2 : 0;
+  return { current: prev.height + (next.height - prev.height) * cosT, rising: next.type === 'High' };
+}
+
 /**
- * 2-hourly conditions timeline for one day (wind + surf per slot), so the
- * single BOM day forecast doesn't hide wind swinging through the day.
- * Uses Open-Meteo hourly wind (_windOutlook) + marine swell (cachedData.swell).
+ * 2-hourly conditions timeline for one day (score + wind + surf per slot), so
+ * the single BOM day forecast doesn't hide conditions swinging through the day.
+ * Uses Open-Meteo hourly wind (_windOutlook) + marine swell (cachedData.swell),
+ * and reuses scoreBreak on a synthetic per-hour forecast for the slot score.
  */
 function intradayTimelineHTML(realDayIdx) {
   const b = BREAKS[currentBreak];
@@ -2802,8 +2825,22 @@ function intradayTimelineHTML(realDayIdx) {
     const wDir = wi >= 0 && wind.wind_direction_10m ? degToCompass(wind.wind_direction_10m[wi]) : null;
     const wKmh = wi >= 0 && wind.wind_speed_10m?.[wi] != null ? Math.round(wind.wind_speed_10m[wi]) : null;
     const color = windQualityColor(b, wDir);
+    // Per-slot score: reuse scoreBreak with a synthetic forecast built from this
+    // hour's swell + wind + tide, so slot scores stay consistent with the app.
+    let score = null;
+    if (waveH != null && wDir) {
+      const fc = {
+        forecasts: [{ swell: `${waveH.toFixed(1)}m`, winds: `${wDir} ${wKmh != null ? wKmh + ' km/h' : ''}`, seas: '' }],
+        _swellDir: swDir, _period: per, _tide: tideAtHour(realDayIdx, hr),
+      };
+      score = scoreBreak(b, fc);
+    }
+    const scoreHtml = score != null
+      ? `<div class="intraday-score" style="color:${scoreColor(score)};">${score}</div>`
+      : `<div class="intraday-score" style="color:var(--muted);">–</div>`;
     return `<div class="intraday-slot">
       <div class="intraday-time">${fmtHourShort(hr)}</div>
+      ${scoreHtml}
       <div>${dirArrow(wDir, 15, color) || '<span style="color:var(--muted);font-size:11px;">–</span>'}</div>
       <div class="intraday-wind" style="color:${color};">${wDir || '—'}</div>
       <div class="intraday-kmh">${wKmh != null ? wKmh : ''}</div>
