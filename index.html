@@ -1119,7 +1119,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.4';
+const APP_VERSION = '5.5';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3706,34 +3706,29 @@ function renderForecast(forecast, tideData, swellData) {
           <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">${nowTime} · Open-Meteo</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;">
-          <div style="padding:11px 12px;border-right:1px solid rgba(0,229,160,0.15);">
-            <div class="condition-label">Swell</div>
-            <div class="condition-value" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-              ${dirArrow(rtDir, 18, 'var(--accent)')}
-              <span>${rtDir || '—'}${swellDetails ? ' · ' + swellDetails : ''}</span>
+          <div style="padding:10px 12px;border-right:1px solid rgba(0,229,160,0.15);">
+            <div class="condition-label">Surf</div>
+            <div class="condition-value highlight" id="surfHeightValue">—</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:3px;flex-wrap:wrap;">
+              ${dirArrow(rtDir, 12, 'var(--muted)')}<span>${rtDir || '—'}${swellDetails ? ' · ' + swellDetails : ''}</span>
             </div>
             ${trendHtml}
           </div>
-          <div style="padding:11px 12px;">
+          <div style="padding:10px 12px;">
             <div class="condition-label">Wind</div>
             <div class="condition-value" style="display:flex;align-items:center;gap:4px;">
-              ${dirArrow(windDir, 18, 'var(--text)')}
+              ${dirArrow(windDir, 16, 'var(--text)')}
               <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}${windGust ? ' · ' + windGust + ' gust' : ''}</span>
             </div>
             <div class="condition-sub" id="windOutlook"></div>
           </div>
-          <div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
-            <div class="condition-label">Surf</div>
-            <div class="condition-value highlight" id="surfHeightValue">—</div>
-          </div>
-          <div style="padding:11px 12px;border-top:1px solid rgba(0,229,160,0.15);">
+          <div style="padding:10px 12px;border-top:1px solid rgba(0,229,160,0.15);border-right:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Water</div>
             <div class="condition-value">${waterTemp !== null ? Math.round(waterTemp) + '°C' : '—'}</div>
           </div>
-
-          <div style="padding:11px 12px;grid-column:1/-1;border-top:1px solid rgba(0,229,160,0.15);">
+          <div style="padding:10px 12px;border-top:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Tide</div>
-            <div class="condition-value">${tideStr}</div>
+            <div class="condition-value" style="font-size:12px;">${tideStr}</div>
           </div>
         </div>
       </div>
