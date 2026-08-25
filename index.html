@@ -1119,7 +1119,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.3';
+const APP_VERSION = '5.4';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1592,23 +1592,20 @@ function buildForecastPanelBlock(day, opts = {}) {
         <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">BOM</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;">
-        <div style="padding:11px 12px;border-right:1px solid var(--border);">
-          <div class="condition-label">Swell</div>
-          <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(swellDir, 18, 'var(--accent)')}<span>${swellStr}</span></div>
-        </div>
-        <div style="padding:11px 12px;">
-          <div class="condition-label">Wind</div>
-          <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(windDir, 18, 'var(--text)')}<span>${windStr}</span></div>
-        </div>
-        <div style="padding:11px 12px;border-top:1px solid var(--border);border-right:1px solid var(--border);">
+        <div style="padding:10px 12px;border-right:1px solid var(--border);">
           <div class="condition-label">Surf</div>
           <div class="condition-value highlight" id="${surfId}"><span style="color:var(--muted);">—</span></div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:3px;">${dirArrow(swellDir, 12, 'var(--muted)')}<span>${swellStr}</span></div>
         </div>
-        <div style="padding:11px 12px;border-top:1px solid var(--border);">
+        <div style="padding:10px 12px;">
+          <div class="condition-label">Wind</div>
+          <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(windDir, 16, 'var(--text)')}<span>${windStr}</span></div>
+        </div>
+        <div style="padding:10px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
           <div class="condition-label">Weather</div>
           <div class="condition-value">${weather || '—'}${sstHtml}</div>
         </div>
-        <div style="padding:11px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
+        <div style="padding:10px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
           <div class="condition-label">Tides</div>
           ${opts.tides?.length ? tidesGridHTML(opts.tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
         </div>
