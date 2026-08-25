@@ -1119,7 +1119,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.5';
+const APP_VERSION = '5.6';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1367,6 +1367,8 @@ function selectForecastTab(tabIdx) {
     panel.innerHTML = '';
     const bwHost = document.getElementById('bestWindowNow');
     if (bwHost) bwHost.innerHTML = bestWindowLineHTML(0);
+    const idHost = document.getElementById('intradayNow');
+    if (idHost) idHost.innerHTML = intradayTimelineHTML(0);
     const extrasHost = document.getElementById('nowDayExtras');
     if (extrasHost) {
       const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
@@ -1380,8 +1382,7 @@ function selectForecastTab(tabIdx) {
           ${tides?.length ? tidesGridHTML(tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
         </div>
         ${extraPanels}
-      </div>
-      ${intradayTimelineHTML(0)}`;
+      </div>`;
     }
   } else {
     panel.innerHTML = buildForecastPanelBlock(day, {
@@ -1586,6 +1587,7 @@ function buildForecastPanelBlock(day, opts = {}) {
       </div>
     </div>
     ${opts.bestWindowHtml || ''}
+    ${opts.intradayHtml || ''}
     <div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
         <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">● FORECAST</span>
@@ -1612,7 +1614,6 @@ function buildForecastPanelBlock(day, opts = {}) {
       </div>
       ${extraPanels}
     </div>
-    ${opts.intradayHtml || ''}
   </div>`;
 }
 
@@ -3699,6 +3700,7 @@ function renderForecast(forecast, tideData, swellData) {
       </div>
 
       <div id="bestWindowNow"></div>
+      <div id="intradayNow"></div>
 
       <div style="margin:0 12px 10px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;overflow:hidden;">
         <div style="padding:7px 12px;background:rgba(0,229,160,0.08);border-bottom:1px solid rgba(0,229,160,0.15);display:flex;align-items:center;gap:8px;">
