@@ -1120,7 +1120,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.7';
+const APP_VERSION = '5.8';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -2810,8 +2810,11 @@ function intradayTimelineHTML(realDayIdx) {
   if (!b || !sw?.time || !wind?.time) return '';
   const dayStr = getBrisbaneDateStr(realDayIdx);
   const slots = [6, 8, 10, 12, 14, 16, 18];
+  const nowHr = getBrisbaneHour();
   let any = false;
   const cells = slots.map(hr => {
+    // Today only: drop 2-hour slots that have already fully passed
+    if (realDayIdx === 0 && nowHr >= hr + 2) return '';
     const tStr = `${dayStr}T${String(hr).padStart(2, '0')}:00`;
     const si = sw.time.indexOf(tStr);
     const wi = wind.time.indexOf(tStr);
