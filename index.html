@@ -1120,7 +1120,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.8';
+const APP_VERSION = '5.9';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1313,7 +1313,7 @@ function selectForecastTab(tabIdx) {
   const prevIdx = _forecastTabState.activeIdx;
   if (prevIdx != null && allTabs?.[prevIdx]) {
     const cache = {};
-    ['offshoreWindowPanel', 'morningAfternoonPanel'].forEach(id => {
+    ['offshoreWindowPanel'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.innerHTML) cache[id] = el.innerHTML;
     });
@@ -1353,7 +1353,7 @@ function selectForecastTab(tabIdx) {
   // TODAY keeps the offshore-change + morning/afternoon panels; the best window
   // is now a per-day line under the header (bestWindowLineHTML)
   const extraPanels = realDayIdx === 0
-    ? '<div id="offshoreWindowPanel"></div><div id="morningAfternoonPanel"></div>'
+    ? '<div id="offshoreWindowPanel"></div>'
     : '';
 
   // NOW tab in day mode: the live conditions card carries swell/wind/surf/score,
@@ -1970,22 +1970,6 @@ function setBreak(index, fromUser = false) {
       }
     }
     owPanel.innerHTML = owHtml;
-  }
-
-  // Populate morning/afternoon inside the FORECAST card
-  const mapEl = document.getElementById('morningAfternoonPanel');
-  if (mapEl) {
-    mapEl.innerHTML = (morningNote || afternoonNote) && score >= 4 ? `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px;border-top:1px solid var(--border);">
-        ${morningNote ? `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
-          <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--muted);margin-bottom:4px;">MORNING</div>
-          ${morningNote.split('\n').map((l,i) => `<div style="font-size:11px;color:${i===0?'#fff':'var(--accent)'};">${l}</div>`).join('')}
-        </div>` : '<div></div>'}
-        ${afternoonNote ? `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
-          <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;color:var(--muted);margin-bottom:4px;">AFTERNOON</div>
-          ${afternoonNote.split('\n').map((l,i) => `<div style="font-size:11px;color:${i===0?'#fff':'var(--accent)'};">${l}</div>`).join('')}
-        </div>` : '<div></div>'}
-      </div>` : '';
   }
 
   // Best session window now renders per-day via bestWindowLineHTML in
