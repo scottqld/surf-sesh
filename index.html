@@ -799,6 +799,8 @@
   .intraday-time { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
   .intraday-score { font-family: 'Bebas Neue', sans-serif; font-size: 20px; line-height: 1; }
   .intraday-wind { font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1; }
+  .intraday-line { display: flex; align-items: center; justify-content: center; gap: 1px; font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1; }
+  .intraday-tag { font-size: 7px; color: var(--muted); opacity: 0.7; margin-right: 1px; }
   .intraday-kmh { font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted); }
   .intraday-surf { font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: var(--accent); line-height: 1; margin-top: 1px; }
 
@@ -1120,7 +1122,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '5.9';
+const APP_VERSION = '6.0';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1598,7 +1600,7 @@ function buildForecastPanelBlock(day, opts = {}) {
         <div style="padding:10px 12px;border-right:1px solid var(--border);">
           <div class="condition-label">Surf</div>
           <div class="condition-value highlight" id="${surfId}"><span style="color:var(--muted);">—</span></div>
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:3px;">${dirArrow(swellDir, 12, 'var(--muted)')}<span>${swellStr}</span></div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:4px;"><span style="font-size:8px;letter-spacing:0.5px;text-transform:uppercase;">Swell</span>${dirArrow(swellDir, 14, 'var(--accent)')}<span>${swellStr}</span></div>
         </div>
         <div style="padding:10px 12px;">
           <div class="condition-label">Wind</div>
@@ -2828,9 +2830,9 @@ function intradayTimelineHTML(realDayIdx) {
     return `<div class="intraday-slot">
       <div class="intraday-time">${fmtHourShort(hr)}</div>
       ${scoreHtml}
-      <div>${dirArrow(wDir, 15, color) || '<span style="color:var(--muted);font-size:11px;">–</span>'}</div>
-      <div class="intraday-wind" style="color:${color};">${wDir || '—'}</div>
+      <div class="intraday-line" style="color:${color};"><span class="intraday-tag">W</span>${dirArrow(wDir, 13, color) || '·'}<span>${wDir || '—'}</span></div>
       <div class="intraday-kmh">${wKmh != null ? wKmh : ''}</div>
+      <div class="intraday-line" style="color:var(--muted);"><span class="intraday-tag">S</span>${dirArrow(swDir, 13, 'var(--accent)') || '·'}<span>${swDir || '—'}</span></div>
       <div class="intraday-surf">${surfFt != null ? surfFt + 'ft' : '—'}</div>
     </div>`;
   }).join('');
@@ -3735,8 +3737,8 @@ function renderForecast(forecast, tideData, swellData) {
           <div style="padding:10px 12px;border-right:1px solid rgba(0,229,160,0.15);">
             <div class="condition-label">Surf</div>
             <div class="condition-value highlight" id="surfHeightValue">—</div>
-            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:3px;flex-wrap:wrap;">
-              ${dirArrow(rtDir, 12, 'var(--muted)')}<span>${rtDir || '—'}${swellDetails ? ' · ' + swellDetails : ''}</span>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+              <span style="font-size:8px;letter-spacing:0.5px;text-transform:uppercase;">Swell</span>${dirArrow(rtDir, 14, 'var(--accent)')}<span>${rtDir || '—'}${swellDetails ? ' · ' + swellDetails : ''}</span>
             </div>
             ${trendHtml}
           </div>
