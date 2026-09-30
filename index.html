@@ -905,22 +905,22 @@
   <!-- Break photo + selector combined -->
   <div id="breakPhotoWrap" style="margin: 0 20px; height: 180px; border-radius: 10px; overflow: hidden; position: relative;">
     <div id="breakImg" style="position:absolute;inset:0;background-size:cover;background-position:center;transition:filter 0.4s;"></div>
-    <!-- Gradient: dark at top for score badge, dark at bottom for selector -->
-    <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(6,8,16,0.55) 0%, transparent 40%, transparent 45%, rgba(6,8,16,0.85) 100%);pointer-events:none;"></div>
+    <!-- Gradient: dark at top for the selector, dark at bottom for score + buttons -->
+    <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(6,8,16,0.85) 0%, transparent 40%, transparent 55%, rgba(6,8,16,0.85) 100%);pointer-events:none;"></div>
     <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
-    <!-- Score badge top-left -->
-    <div id="photoScoreBadge" onclick="openScoreExplain()" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;cursor:pointer;">
+    <!-- Score badge bottom-left -->
+    <div id="photoScoreBadge" onclick="openScoreExplain()" style="position:absolute;bottom:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;cursor:pointer;">
       <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
       <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
     </div>
-    <!-- Live cam + About buttons top-right -->
-    <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;align-items:center;">
+    <!-- Live cam + About buttons bottom-right -->
+    <div style="position:absolute;bottom:10px;right:8px;display:flex;gap:6px;align-items:center;">
       <button id="liveCamBtn" onclick="toggleLiveCam()" style="display:none;background:rgba(6,8,16,0.65);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;padding:4px 8px;cursor:pointer;">↗ CAM</button>
       <button id="aboutBreakBtn" onclick="openAboutBreak()" style="background:rgba(6,8,16,0.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.18);border-radius:6px;color:rgba(255,255,255,0.85);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.2px;padding:4px 9px;cursor:pointer;text-transform:uppercase;">About ↗</button>
     </div>
-    <!-- Break selector overlaid at bottom of photo -->
-    <div class="station-toggle-wrap" style="position:absolute;bottom:0;left:0;right:0;">
-      <div class="station-toggle" style="margin:0;background:transparent;border:none;border-radius:0;padding:6px 8px 10px;">
+    <!-- Break selector overlaid at top of photo -->
+    <div class="station-toggle-wrap" style="position:absolute;top:0;left:0;right:0;">
+      <div class="station-toggle" style="margin:0;background:transparent;border:none;border-radius:0;padding:8px 8px 6px;">
         <button class="station-btn-photo active" id="btn0" onclick="setBreak(0, true)">Groyne</button>
         <button class="station-btn-photo" id="btn1" onclick="setBreak(1, true)">First Pt.</button>
         <button class="station-btn-photo" id="btn2" onclick="setBreak(2, true)">Nationals</button>
@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.4';
+const APP_VERSION = '6.5';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
