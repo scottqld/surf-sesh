@@ -877,8 +877,10 @@
     <!-- Gradient: dark at top for score badge, dark at bottom for selector -->
     <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(6,8,16,0.55) 0%, transparent 40%, transparent 45%, rgba(6,8,16,0.85) 100%);pointer-events:none;"></div>
     <div id="scoreOverlay" style="position:absolute;inset:0;transition:background 0.4s;pointer-events:none;"></div>
-    <!-- Score badge top-left -->
-    <div id="photoScoreBadge" onclick="openScoreExplain()" style="position:absolute;top:10px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;cursor:pointer;">
+    <!-- Current break name — always shown so it's clear which break is displayed -->
+    <div id="photoBreakName" style="position:absolute;top:10px;left:14px;font-family:'Bebas Neue',sans-serif;font-size:23px;letter-spacing:1px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.75);z-index:2;line-height:1;">—</div>
+    <!-- Score badge top-left, below the name -->
+    <div id="photoScoreBadge" onclick="openScoreExplain()" style="position:absolute;top:40px;left:12px;display:none;flex-direction:column;align-items:flex-start;line-height:1;cursor:pointer;">
       <div id="photoScoreNum" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.6);"></div>
       <div id="photoScoreLabel" style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.75);text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-top:-4px;"></div>
     </div>
@@ -1122,7 +1124,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.0';
+const APP_VERSION = '6.1';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1738,6 +1740,8 @@ function setBreak(index, fromUser = false) {
   const b = BREAKS[index];
   _currentBreakName = b.name;
   _currentBreakNotes = b.notes || '';
+  const nameEl = document.getElementById('photoBreakName');
+  if (nameEl) nameEl.textContent = b.name;
   const imgEl = document.getElementById('breakImg');
   const _imgSrc = getBreakImg(index);
   if (imgEl) { imgEl.style.backgroundImage = `url("${_imgSrc}")`; }
