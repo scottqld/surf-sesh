@@ -842,24 +842,28 @@
     border-bottom: 1px solid var(--border);
     z-index: 100;
     padding-top: env(safe-area-inset-top);
+    overflow: hidden; /* never let the tabs scroll sideways */
   }
   .tab-btn {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0; /* allow shrink below label width so 4 tabs always fit */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 8px 4px;
+    padding: 8px 2px;
     background: none;
     border: none;
     cursor: pointer;
     color: var(--muted);
     font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.5px;
+    font-size: 8px;
+    letter-spacing: 0.3px;
     gap: 3px;
+    white-space: nowrap;
     transition: color 0.2s;
   }
+  .tab-btn svg { width: 18px; height: 18px; }
   .tab-btn.active { color: var(--accent); }
   .tab-section { display: none; }
   .tab-section.active { display: block; }
@@ -1155,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.3';
+const APP_VERSION = '6.4';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
