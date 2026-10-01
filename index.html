@@ -819,9 +819,9 @@
   }
   .intraday-scroll::-webkit-scrollbar { display: none; }
   .intraday-slot {
-    flex: 0 0 auto; min-width: 48px; text-align: center;
+    flex: 0 0 auto; min-width: 46px; text-align: center;
     background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 7px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 5px 4px; display: flex; flex-direction: column; align-items: center; gap: 1px;
   }
   .intraday-time { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
   .intraday-score { font-family: 'Bebas Neue', sans-serif; font-size: 20px; line-height: 1; }
@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.8';
+const APP_VERSION = '6.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1412,18 +1412,14 @@ function selectForecastTab(tabIdx) {
     if (idHost) idHost.innerHTML = intradayTimelineHTML(0);
     const extrasHost = document.getElementById('nowDayExtras');
     if (extrasHost) {
+      // Current tide + water live in the NOW block; the full day's tides are on
+      // the Planner — so the NOW card no longer repeats a full tides grid.
       const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
-      extrasHost.innerHTML = `<div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-        ${SHOW_WEATHER ? `<div style="padding:11px 12px;">
+      const weatherBox = SHOW_WEATHER ? `<div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;padding:11px 12px;">
           <div class="condition-label">Weather</div>
           <div class="condition-value">${day.weather || '—'}${sstHtml}</div>
-        </div>` : ''}
-        <div style="padding:11px 12px;${SHOW_WEATHER ? 'border-top:1px solid var(--border);' : ''}">
-          <div class="condition-label">Tides</div>
-          ${tides?.length ? tidesGridHTML(tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
-        </div>
-        ${extraPanels}
-      </div>`;
+        </div>` : '';
+      extrasHost.innerHTML = weatherBox + `${extraPanels}`;
     }
   } else {
     panel.innerHTML = buildForecastPanelBlock(day, {
@@ -1634,6 +1630,7 @@ function buildForecastPanelBlock(day, opts = {}) {
       <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
         <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">● FORECAST</span>
         <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">BOM</span>
+        ${sst ? `<span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">${sst} water</span>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;">
         <div style="padding:10px 12px;border-right:1px solid var(--border);">
