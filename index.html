@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.6';
+const APP_VERSION = '6.7';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -3755,18 +3755,14 @@ function renderForecast(forecast, tideData, swellData) {
       .replace(/\s+until midnight\.?$/i, '')
       .toUpperCase();
     currentCard.innerHTML = `
-      <div class="current-header" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:10px 16px 8px;">
-        <div class="current-issued">Live · updated ${nowTime}</div>
-        <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;">?</button>
-      </div>
-
-      <div id="bestWindowNow"></div>
+      <div id="bestWindowNow" style="margin-top:12px;"></div>
       <div id="intradayNow"></div>
 
       <div style="margin:0 12px 10px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;overflow:hidden;">
         <div style="padding:7px 12px;background:rgba(0,229,160,0.08);border-bottom:1px solid rgba(0,229,160,0.15);display:flex;align-items:center;gap:8px;">
           <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--high);">● NOW</span>
           <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">Open-Meteo</span>
+          <button onclick="openScoreExplain()" title="How was this scored?" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;">?</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;">
           <div style="padding:10px 12px;border-right:1px solid rgba(0,229,160,0.15);">
