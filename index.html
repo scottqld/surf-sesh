@@ -1159,7 +1159,8 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.7';
+const APP_VERSION = '6.8';
+const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1413,11 +1414,11 @@ function selectForecastTab(tabIdx) {
     if (extrasHost) {
       const sstHtml = sst ? `<span style="color:var(--muted);font-size:10px;"> · ${sst}</span>` : '';
       extrasHost.innerHTML = `<div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-        <div style="padding:11px 12px;">
+        ${SHOW_WEATHER ? `<div style="padding:11px 12px;">
           <div class="condition-label">Weather</div>
           <div class="condition-value">${day.weather || '—'}${sstHtml}</div>
-        </div>
-        <div style="padding:11px 12px;border-top:1px solid var(--border);">
+        </div>` : ''}
+        <div style="padding:11px 12px;${SHOW_WEATHER ? 'border-top:1px solid var(--border);' : ''}">
           <div class="condition-label">Tides</div>
           ${tides?.length ? tidesGridHTML(tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
         </div>
@@ -1644,10 +1645,10 @@ function buildForecastPanelBlock(day, opts = {}) {
           <div class="condition-label">Wind</div>
           <div class="condition-value" style="display:flex;align-items:center;gap:4px;">${dirArrow(windDir, 16, 'var(--text)')}<span>${windStr}</span></div>
         </div>
-        <div style="padding:10px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
+        ${SHOW_WEATHER ? `<div style="padding:10px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
           <div class="condition-label">Weather</div>
           <div class="condition-value">${weather || '—'}${sstHtml}</div>
-        </div>
+        </div>` : ''}
         <div style="padding:10px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
           <div class="condition-label">Tides</div>
           ${opts.tides?.length ? tidesGridHTML(opts.tides) : `<div class="condition-value" style="font-size:12px;">${tidesStr || '—'}</div>`}
