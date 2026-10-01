@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '6.5';
+const APP_VERSION = '6.6';
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
@@ -1440,6 +1440,7 @@ function selectForecastTab(tabIdx) {
       topMargin:   '12px',
       label:       labelStr,
       sublabel:    sublabelStr !== labelStr ? sublabelStr : '',
+      hideDayLabel: true,  // the day tab above already names the day
       extraPanels,
       intradayHtml: intradayTimelineHTML(realDayIdx),
     });
@@ -1621,10 +1622,10 @@ function buildForecastPanelBlock(day, opts = {}) {
   return `<div style="margin:${topMargin} ${sideMargin} 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;">
       ${scoreBadge}
-      <div style="text-align:right;">
+      ${opts.hideDayLabel ? '' : `<div style="text-align:right;">
         <div class="current-day">${label}</div>
         ${sublabel ? `<div class="current-issued">${sublabel}</div>` : ''}
-      </div>
+      </div>`}
     </div>
     ${opts.bestWindowHtml || ''}
     ${opts.intradayHtml || ''}
@@ -3754,16 +3755,9 @@ function renderForecast(forecast, tideData, swellData) {
       .replace(/\s+until midnight\.?$/i, '')
       .toUpperCase();
     currentCard.innerHTML = `
-      <div class="current-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span id="cardScoreValue" style="font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:1;color:${currentScoreColor};">${currentScore ?? '—'}<span style="font-size:13px;color:var(--muted);">/10</span></span>
-          <span id="cardScoreLabel" style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:${currentScoreColor};">${currentScoreLabel}</span>
-          <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;">?</button>
-        </div>
-        <div style="text-align:right;">
-          <div class="current-day">${compactDay}</div>
-          <div class="current-issued">Live · updated ${nowTime}</div>
-        </div>
+      <div class="current-header" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:10px 16px 8px;">
+        <div class="current-issued">Live · updated ${nowTime}</div>
+        <button onclick="openScoreExplain()" title="How was this scored?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:0;flex-shrink:0;">?</button>
       </div>
 
       <div id="bestWindowNow"></div>
@@ -3772,7 +3766,7 @@ function renderForecast(forecast, tideData, swellData) {
       <div style="margin:0 12px 10px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;overflow:hidden;">
         <div style="padding:7px 12px;background:rgba(0,229,160,0.08);border-bottom:1px solid rgba(0,229,160,0.15);display:flex;align-items:center;gap:8px;">
           <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--high);">● NOW</span>
-          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">${nowTime} · Open-Meteo</span>
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">Open-Meteo</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;">
           <div style="padding:10px 12px;border-right:1px solid rgba(0,229,160,0.15);">
