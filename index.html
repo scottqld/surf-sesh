@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.0';
+const APP_VERSION = '7.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -2870,9 +2870,8 @@ function intradayTimelineHTML(realDayIdx) {
     return `<div class="intraday-slot">
       <div class="intraday-time">${fmtHourShort(hr)}</div>
       ${scoreHtml}
-      <div class="intraday-line" style="color:${color};"><span class="intraday-tag">W</span>${dirArrow(wDir, 13, color) || '·'}<span>${wDir || '—'}</span></div>
+      <div class="intraday-line" style="color:${color};">${dirArrow(wDir, 13, color) || '·'}<span>${wDir || '—'}</span></div>
       <div class="intraday-kmh">${wKmh != null ? wKmh : ''}</div>
-      <div class="intraday-line" style="color:var(--muted);"><span class="intraday-tag">S</span>${dirArrow(swDir, 13, 'var(--accent)') || '·'}<span>${swDir || '—'}</span></div>
       <div class="intraday-surf">${surfFt != null ? surfFt + 'ft' : '—'}</div>
     </div>`;
   }).join('');
