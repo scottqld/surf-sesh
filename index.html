@@ -824,12 +824,12 @@
     padding: 5px 4px; display: flex; flex-direction: column; align-items: center; gap: 1px;
   }
   .intraday-time { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
-  .intraday-score { font-family: 'Bebas Neue', sans-serif; font-size: 20px; line-height: 1; }
+  .intraday-score { font-family: 'Bebas Neue', sans-serif; font-size: 13px; line-height: 1; opacity: 0.9; }
   .intraday-wind { font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1; }
   .intraday-line { display: flex; align-items: center; justify-content: center; gap: 1px; font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1; }
   .intraday-tag { font-size: 7px; color: var(--muted); opacity: 0.7; margin-right: 1px; }
   .intraday-kmh { font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted); }
-  .intraday-surf { font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: var(--accent); line-height: 1; margin-top: 1px; }
+  .intraday-surf { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--accent); line-height: 1; }
 
   /* TAB BAR */
   .tab-bar {
@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.1';
+const APP_VERSION = '7.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -2869,10 +2869,10 @@ function intradayTimelineHTML(realDayIdx) {
       : `<div class="intraday-score" style="color:var(--muted);">–</div>`;
     return `<div class="intraday-slot">
       <div class="intraday-time">${fmtHourShort(hr)}</div>
+      <div class="intraday-surf">${surfFt != null ? surfFt + 'ft' : '—'}</div>
       ${scoreHtml}
       <div class="intraday-line" style="color:${color};">${dirArrow(wDir, 13, color) || '·'}<span>${wDir || '—'}</span></div>
       <div class="intraday-kmh">${wKmh != null ? wKmh : ''}</div>
-      <div class="intraday-surf">${surfFt != null ? surfFt + 'ft' : '—'}</div>
     </div>`;
   }).join('');
   if (!any) return '';
