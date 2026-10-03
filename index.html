@@ -927,7 +927,8 @@
         <button class="station-btn-photo" id="btn3" onclick="setBreak(3, true)">Tea Tree</button>
         <button class="station-btn-photo" id="btn4" onclick="setBreak(4, true)">Granite</button>
         <button class="station-btn-photo" id="btn5" onclick="setBreak(5, true)">Sunshine</button>
-        <button class="station-btn-photo" id="btn6" onclick="setBreak(6, true)">D.I.</button>
+        <button class="station-btn-photo" id="btn6" onclick="setBreak(6, true)">Castaways</button>
+        <button class="station-btn-photo" id="btn7" onclick="setBreak(7, true)">D.I.</button>
       </div>
       <div class="station-toggle-fade" style="background:linear-gradient(to right,transparent,rgba(6,8,16,0.85) 70%);"></div>
       <div class="station-toggle-fade-left" id="stFadeLeft" style="background:linear-gradient(to left,transparent,rgba(6,8,16,0.85) 70%);opacity:0;"></div>
@@ -1010,11 +1011,11 @@
           <div id="logBreakDisplay" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#fff;line-height:1.2;">—</div>
         </div>
         <div style="margin-bottom:14px;">
-          <div class="condition-label" style="margin-bottom:8px;">TIME OF DAY</div>
-          <div style="display:flex;gap:6px;">
-            <button class="log-tod-btn" id="logTodDawn"    onclick="selectLogTod('dawn')"      style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="9" x2="12" y2="2"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>Dawn</button>
-            <button class="log-tod-btn" id="logTodMorning" onclick="selectLogTod('morning')"   style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>Morning</button>
-            <button class="log-tod-btn" id="logTodAfternoon" onclick="selectLogTod('afternoon')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="2.8"/><line x1="7.5" y1="1.5" x2="7.5" y2="3"/><line x1="1.5" y1="7.5" x2="3" y2="7.5"/><line x1="3.3" y1="3.3" x2="4.3" y2="4.3"/><line x1="11.7" y1="3.3" x2="10.7" y2="4.3"/><path d="M11 20h7a4 4 0 0 0 .8-7.9A5 5 0 0 0 9.3 13 3.5 3.5 0 0 0 11 20z"/></svg>Arvo</button>
+          <div class="condition-label" style="margin-bottom:8px;">SESSION TIME</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="time" id="logStartTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
+            <input type="time" id="logEndTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
           </div>
         </div>
         <div style="margin-bottom:14px;">
@@ -1159,7 +1160,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.4';
+const APP_VERSION = '7.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1228,6 +1229,14 @@ let BREAKS = [
     name: 'Sunshine Beach', subtitle: 'Sunshine', region: 'Sunshine Beach',
     notes: 'Open beach break facing east. Best E swell with W offshore wind. Works across most sizes and tides. Good alternative when the points are too small or too crowded.',
     tide: { ideal: 'mid-high', avoid: 'low' }, sizeCap: 9, exposure: 0.90, benefitsFromPeriod: true,
+    ideal:      { swellDirs: ['E','ESE','ENE'],       windDirs: ['W','WSW','WNW','SW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
+    acceptable: { swellDirs: ['SE','NE'],             windDirs: ['NW','SSW'],                      swellMin: 0.3, swellMax: 1.5, periodMin: 6  },
+    avoid:      { swellDirs: ['N','NW','S','SW'],     windDirs: ['NE','ENE','E','ESE','SE','N','S'], swellMin: 0, swellMax: 9,   periodMin: 0, windPenalty: 3 },
+  },
+  {
+    name: 'Castaways Beach', subtitle: 'Castaways', region: 'Castaways Beach',
+    notes: 'Quieter beach break just south of Sunshine Beach. East-facing — best on E–ESE swell with a W offshore wind. Works across most tides and sizes. A less-crowded alternative to Sunshine.',
+    tide: { ideal: 'mid-high', avoid: 'low' }, sizeCap: 9, exposure: 0.88, benefitsFromPeriod: true,
     ideal:      { swellDirs: ['E','ESE','ENE'],       windDirs: ['W','WSW','WNW','SW'],            swellMin: 0.7, swellMax: 1.2, periodMin: 8  },
     acceptable: { swellDirs: ['SE','NE'],             windDirs: ['NW','SSW'],                      swellMin: 0.3, swellMax: 1.5, periodMin: 6  },
     avoid:      { swellDirs: ['N','NW','S','SW'],     windDirs: ['NE','ENE','E','ESE','SE','N','S'], swellMin: 0, swellMax: 9,   periodMin: 0, windPenalty: 3 },
@@ -3353,13 +3362,14 @@ function renderAll(data) {
   // Update BREAKS from worker if provided — allows calibration without app redeployment
   if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
     BREAKS = applyBreakPatches(data.breaks);
-    // Rebuild break selector buttons if count changed
-    const toggle = document.querySelector('.station-toggle');
-    if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn-photo').length) {
-      toggle.innerHTML = BREAKS.map((b, i) =>
-        `<button class="station-btn-photo${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i}, true)">${breakBtnLabel(b)}</button>`
-      ).join('');
-    }
+  }
+  // Keep the photo selector in sync with BREAKS (the static HTML may have fewer
+  // buttons than the frontend defines, e.g. after adding a break)
+  const toggle = document.querySelector('.station-toggle');
+  if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn-photo').length) {
+    toggle.innerHTML = BREAKS.map((b, i) =>
+      `<button class="station-btn-photo${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i}, true)">${breakBtnLabel(b)}</button>`
+    ).join('');
   }
   // Attach current and tomorrow period from Open-Meteo to forecast for scoreBreak
   if (data.swell && data.swell.hourly) {
@@ -4295,6 +4305,16 @@ function getSessions() {
   catch { return []; }
 }
 
+// Pre-fill a plausible session window: ends now, started ~90 min earlier.
+function defaultLogTimes() {
+  const fmt = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const now = new Date();
+  const start = document.getElementById('logStartTime');
+  const end = document.getElementById('logEndTime');
+  if (start) start.value = fmt(new Date(now.getTime() - 90 * 60000));
+  if (end) end.value = fmt(now);
+}
+
 function initLogTab() {
   // Sync break display label with current break selector
   const display = document.getElementById('logBreakDisplay');
@@ -4304,11 +4324,7 @@ function initLogTab() {
   const picker = document.getElementById('logScorePicker');
   if (!picker) return;
   _logScore = null;
-  _logTod   = null;
-  ['dawn','morning','afternoon'].forEach(t => {
-    const b = document.getElementById(`logTod${t.charAt(0).toUpperCase() + t.slice(1)}`);
-    if (b) b.classList.remove('active');
-  });
+  defaultLogTimes();
   picker.innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(n =>
     `<button class="log-score-btn" id="logScore${n}" onclick="selectLogScore(${n})">${n}</button>`
   ).join('');
@@ -4367,7 +4383,8 @@ function commitLogSession() {
     id:         Date.now(),
     ts:         new Date().toISOString(),
     break:      b.name,
-    tod:        _logTod,
+    startTime:  document.getElementById('logStartTime')?.value || '',
+    endTime:    document.getElementById('logEndTime')?.value || '',
     myScore:    _logScore,
     algoScore,
     note,
@@ -4380,11 +4397,7 @@ function commitLogSession() {
 
   // Reset form
   _logScore = null;
-  _logTod   = null;
-  ['dawn','morning','afternoon'].forEach(t => {
-    const b = document.getElementById(`logTod${t.charAt(0).toUpperCase() + t.slice(1)}`);
-    if (b) b.classList.remove('active');
-  });
+  defaultLogTimes();
   for (let i = 1; i <= 10; i++) {
     const btn = document.getElementById(`logScore${i}`);
     if (btn) btn.className = 'log-score-btn';
@@ -4433,7 +4446,11 @@ function renderSessionLog() {
 
   logEl.innerHTML = sessions.map((s, i) => {
     const d        = new Date(s.ts);
-    const todLabel = { dawn: '🌅 Dawn', morning: '☀️ Morning', afternoon: '🌤️ Arvo' }[s.tod] || '';
+    const fmt12    = (hhmm) => { if (!hhmm) return ''; const [h, m] = hhmm.split(':').map(Number); const ampm = h < 12 ? 'am' : 'pm'; return `${(h % 12) || 12}:${String(m).padStart(2,'0')}${ampm}`; };
+    // New records store start/end times; fall back to the old time-of-day label
+    const todLabel = s.startTime
+      ? `${fmt12(s.startTime)}–${fmt12(s.endTime) || '?'}`
+      : ({ dawn: '🌅 Dawn', morning: '☀️ Morning', afternoon: '🌤️ Arvo' }[s.tod] || '');
     const dateStr  = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
     const myColor  = s.myScore >= 7 ? 'var(--high)' : s.myScore >= 5 ? 'var(--accent)' : 'var(--muted)';
     const diff     = s.algoScore !== null ? s.myScore - s.algoScore : null;
@@ -4471,6 +4488,7 @@ const ALERT_STORE_KEY  = 'surfcall_alerts_v1';
 const REGION_META = {
   'Noosa National Park': 'move together',
   'Sunshine Beach':      'beach break · wants a westerly',
+  'Castaways Beach':     'beach break · wants a westerly',
   'Double Island':       '4WD · ~1.5hr drive',
 };
 // Group breaks by their region field, preserving BREAKS order.

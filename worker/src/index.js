@@ -45,6 +45,13 @@ const BREAKS = [
     avoid:      { swellDirs: ['N','NW','S','SW'],   windDirs: ['NE','ENE','E','ESE','SE','N','S'], windPenalty: 3 },
   },
   {
+    name: 'Castaways Beach', region: 'Castaways Beach', exposure: 0.88, sizeCap: 9, benefitsFromPeriod: true,
+    tide: { ideal: 'mid-high', avoid: 'low' },
+    ideal:      { swellDirs: ['E','ESE','ENE'],      windDirs: ['W','WSW','WNW','SW'],           periodMin: 8  },
+    acceptable: { swellDirs: ['SE','NE'],            windDirs: ['NW','SSW'],                     periodMin: 6  },
+    avoid:      { swellDirs: ['N','NW','S','SW'],   windDirs: ['NE','ENE','E','ESE','SE','N','S'], windPenalty: 3 },
+  },
+  {
     name: 'Double Island', region: 'Double Island', exposure: 0.42, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['W','WSW','SW','SSW'],           periodMin: 10 },
