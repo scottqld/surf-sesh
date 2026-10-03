@@ -1160,7 +1160,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.5';
+const APP_VERSION = '7.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1180,6 +1180,11 @@ const BREAK_IMGS = {
 
 function getBreakImg(index) {
   const breakName = BREAKS[index]?.name;
+  // Castaways has no photo of its own yet — reuse the adjacent Sunshine Beach
+  // shot (same beach, ~1km south) as a placeholder until a real one is added.
+  if (breakName === 'Castaways Beach' && !BREAK_IMGS['Castaways Beach']) {
+    return BREAK_IMGS['Sunshine Beach'] || '';
+  }
   return BREAK_IMGS[breakName] || '';
 }
 // BREAKS is populated from the worker /all response (data.breaks)
