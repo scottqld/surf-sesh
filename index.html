@@ -1026,7 +1026,7 @@
           <div class="condition-label" style="margin-bottom:6px;">NOTE <span style="opacity:0.5;">(optional)</span></div>
           <textarea id="logNote" class="log-note" placeholder="Clean 3ft dawn session, light S wind…"></textarea>
         </div>
-        <button class="log-submit-btn" onclick="commitLogSession()">LOG SESSION</button>
+        <button class="log-submit-btn" id="logSubmitBtn" onclick="commitLogSession()">LOG SESSION</button>
       </div>
       <div class="section-label" style="margin-top:4px;">
         PAST SESSIONS <span id="logAccuracy" style="font-size:8px;letter-spacing:1px;opacity:0.55;"></span>
@@ -1160,7 +1160,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.6';
+const APP_VERSION = '7.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -4303,7 +4303,8 @@ async function loadNightMode() {
 
 const SESSION_STORE_KEY = 'surfcall_sessions_v1';
 let _logScore = null;
-let _logTod   = null; // 'dawn' | 'morning' | 'afternoon'
+let _logTod   = null; // legacy — older records only
+let _editingSessionId = null; // set while editing an existing session
 
 function getSessions() {
   try { return JSON.parse(localStorage.getItem(SESSION_STORE_KEY) || '[]'); }
@@ -4352,6 +4353,38 @@ function selectLogTod(tod) {
   });
 }
 
+// Full snapshot of the forecast/conditions valid at session time, saved with
+// the log so a past session can be reviewed with the data it was surfed in.
+function captureConditions(b) {
+  const fc    = cachedData?.forecast;
+  const today = fc?.forecasts?.[0] || {};
+  const swellText  = shortDir(today.swell || '');
+  const swellDir   = fc?._currentSwellDir ?? fc?._swellDir ?? extractDir(swellText);
+  const swellHeight = fc?._currentWaveHeight ?? extractHeight(swellText);
+  const period     = fc?._period ?? extractPeriod(today.swell || '');
+  const obs = cachedData?.wind;
+  const wp  = today.windParsed;
+  const windDir  = (obs && !obs.error && obs.wind_dir) ? obs.wind_dir : (wp?.dir || extractDir(shortDir(today.winds || '')));
+  const windKmh  = (obs && !obs.error && obs.wind_kmh != null) ? obs.wind_kmh : (wp?.kmh ?? null);
+  const windGust = (obs && !obs.error && obs.gust_kmh != null) ? obs.gust_kmh : null;
+  const tide = getCurrentTide(cachedData?.tides?.[currentStation]);
+  const waterTemp = cachedData?.buoy?.SST ?? null;
+  const surfM = (swellHeight != null) ? estimateSurfHeight(swellHeight, b.exposure, swellDir, b, period) : null;
+  const surfFt = surfM != null ? Math.round(surfM * 3.281 * 2) / 2 : null;
+  const windStr  = windDir ? `${windDir}${windKmh != null ? ' ' + windKmh + 'km/h' : ''}${windGust ? ' g' + windGust : ''}` : shortDir(today.winds || '').split('\n')[0];
+  const swellStr = [swellDir, swellHeight != null ? swellHeight.toFixed(1) + 'm' : null, period != null ? Math.round(period) + 's' : null].filter(Boolean).join(' ');
+  return {
+    wind: windStr, swell: swellStr,
+    swellDir, swellHeight, period,
+    windDir, windKmh, windGust,
+    tide: tide ? { current: +tide.current.toFixed(2), rising: tide.rising, next: tide.next?.type, nextTime: tide.next?.time, prev: tide.prev?.type, prevTime: tide.prev?.time } : null,
+    waterTemp, surfFt,
+    weather: today.weather || '',
+    bomDay: today.day || '',
+    station: currentStation,
+  };
+}
+
 function commitLogSession() {
   if (!_logScore) {
     // Briefly flash the picker to prompt the user
@@ -4363,44 +4396,34 @@ function commitLogSession() {
     return;
   }
 
-  const breakIdx = currentBreak;
-  const b        = BREAKS[breakIdx];
-  const note     = document.getElementById('logNote')?.value?.trim() || '';
-
-  // Snapshot algorithm score and conditions at logging time
-  const algoScore = cachedData ? scoreBreak(b, cachedData.forecast) : null;
-  const today     = cachedData?.forecast?.forecasts?.[0] || {};
-
-  const windParsed = today.windParsed;
-  const windStr    = windParsed?.dir
-    ? `${windParsed.dir}${windParsed.kmh ? ' ' + windParsed.kmh + 'km/h' : ''}`
-    : shortDir(today.winds || '').split('\n')[0];
-
-  const swellStr = (() => {
-    const s   = shortDir(today.swell || '');
-    const dir = extractDir(s);
-    const h   = extractHeight(s);
-    const p   = extractPeriod(today.swell || '');
-    return [dir, h ? h.toFixed(1) + 'm' : null, p ? p + 's' : null].filter(Boolean).join(' ');
-  })();
-
-  const session = {
-    id:         Date.now(),
-    ts:         new Date().toISOString(),
-    break:      b.name,
-    startTime:  document.getElementById('logStartTime')?.value || '',
-    endTime:    document.getElementById('logEndTime')?.value || '',
-    myScore:    _logScore,
-    algoScore,
-    note,
-    conditions: { wind: windStr, swell: swellStr },
-  };
+  const b         = BREAKS[currentBreak];
+  const note      = document.getElementById('logNote')?.value?.trim() || '';
+  const startTime = document.getElementById('logStartTime')?.value || '';
+  const endTime   = document.getElementById('logEndTime')?.value || '';
 
   const all = getSessions();
-  all.unshift(session);
+  if (_editingSessionId != null) {
+    // Edit existing — keep original timestamp, algo score, and conditions snapshot
+    const idx = all.findIndex(s => s.id === _editingSessionId);
+    if (idx >= 0) all[idx] = { ...all[idx], break: b.name, startTime, endTime, myScore: _logScore, note };
+  } else {
+    all.unshift({
+      id:         Date.now(),
+      ts:         new Date().toISOString(),
+      break:      b.name,
+      startTime, endTime,
+      myScore:    _logScore,
+      algoScore:  cachedData ? scoreBreak(b, cachedData.forecast) : null,
+      note,
+      conditions: captureConditions(b),
+    });
+  }
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
 
   // Reset form
+  _editingSessionId = null;
+  const submitBtn = document.getElementById('logSubmitBtn');
+  if (submitBtn) submitBtn.textContent = 'LOG SESSION';
   _logScore = null;
   defaultLogTimes();
   for (let i = 1; i <= 10; i++) {
@@ -4414,7 +4437,31 @@ function commitLogSession() {
   renderCalibration();
 }
 
+// Load a logged session into the form for editing (score, times, note).
+// The conditions snapshot and timestamp are preserved on save.
+function editSession(id) {
+  const s = getSessions().find(x => x.id === id);
+  if (!s) return;
+  _editingSessionId = id;
+  // Switch to the session's break so the form + selector match
+  const bi = BREAKS.findIndex(b => b.name === s.break);
+  if (bi >= 0) setBreak(bi, true);
+  const display = document.getElementById('logBreakDisplay');
+  if (display) display.textContent = s.break;
+  const startEl = document.getElementById('logStartTime');
+  const endEl = document.getElementById('logEndTime');
+  if (startEl) startEl.value = s.startTime || '';
+  if (endEl) endEl.value = s.endTime || '';
+  const noteEl = document.getElementById('logNote');
+  if (noteEl) noteEl.value = s.note || '';
+  selectLogScore(s.myScore);
+  const submitBtn = document.getElementById('logSubmitBtn');
+  if (submitBtn) submitBtn.textContent = 'UPDATE SESSION';
+  document.getElementById('tab-log')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function deleteSession(id) {
+  if (_editingSessionId === id) { _editingSessionId = null; const sb = document.getElementById('logSubmitBtn'); if (sb) sb.textContent = 'LOG SESSION'; }
   const sessions = getSessions().filter(s => s.id !== id);
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(sessions));
   renderSessionLog();
@@ -4462,14 +4509,20 @@ function renderSessionLog() {
     const diffStr  = diff !== null ? (diff > 0 ? `+${diff}` : `${diff}`) : null;
     const diffColor = diff > 1 ? 'var(--high)' : diff < -1 ? 'var(--accent2)' : 'var(--muted)';
     const isLast   = i === sessions.length - 1;
+    const c        = s.conditions || {};
+    const condLine = [
+      c.surfFt != null ? `~${c.surfFt}ft` : null,
+      c.swell || null,
+      c.wind ? 'wind ' + c.wind : null,
+      c.waterTemp != null ? Math.round(c.waterTemp) + '°C' : null,
+      c.tide ? `tide ${c.tide.rising ? 'rising' : 'falling'}` : null,
+    ].filter(Boolean).join(' · ');
     return `<div style="padding:12px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div style="flex:1;min-width:0;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fff;line-height:1.15;">${s.break}</div>
-          ${s.conditions?.wind || s.conditions?.swell
-            ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px;">${[s.conditions.wind, s.conditions.swell].filter(Boolean).join(' · ')}</div>`
-            : ''}
+          ${condLine ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px;">${condLine}</div>` : ''}
           ${s.note ? `<div style="font-size:12px;color:var(--text);margin-top:5px;font-style:italic;word-break:break-word;">"${s.note}"</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
@@ -4477,7 +4530,10 @@ function renderSessionLog() {
           ${s.algoScore !== null
             ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">app ${s.algoScore}${diffStr ? ` <span style="color:${diffColor};">${diffStr}</span>` : ''}</div>`
             : ''}
-          <button onclick="deleteSession(${s.id})" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;opacity:0.4;line-height:1;margin-top:2px;" title="Delete">×</button>
+          <div style="display:flex;gap:2px;margin-top:2px;">
+            <button onclick="editSession(${s.id})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px;opacity:0.55;line-height:1;" title="Edit">✎</button>
+            <button onclick="deleteSession(${s.id})" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;opacity:0.4;line-height:1;" title="Delete">×</button>
+          </div>
         </div>
       </div>
     </div>`;
