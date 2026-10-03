@@ -1159,7 +1159,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.3';
+const APP_VERSION = '7.4';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -3689,8 +3689,13 @@ function renderForecast(forecast, tideData, swellData) {
     </div>
   </div>` : '';
 
+  const curTide = getCurrentTide(tideData);
+  // Heading reflects whether the tide is rising or falling (from the next tide)
+  const tideHeading = curTide
+    ? `Tide · ${curTide.rising ? 'Rising ↑' : 'Falling ↓'}`
+    : 'Tide';
   const tideStr = (() => {
-    const t = getCurrentTide(tideData);
+    const t = curTide;
     if (!t || t.current === undefined) return '—';
     const dir = t.rising ? '↑' : '↓';
     const fmtT = (tt) => {
@@ -3698,9 +3703,10 @@ function renderForecast(forecast, tideData, swellData) {
       const ampm = h < 12 ? 'am' : 'pm';
       return `${(h % 12) || 12}:${String(m).padStart(2,'0')}${ampm}`;
     };
-    // Previous tide → next tide, with the rising/falling arrow between them
-    const prevStr = t.prev ? `${t.prev.type} ${fmtT(t.prev)}` : '';
-    const nextStr = t.next ? `${t.next.type} ${fmtT(t.next)}` : '';
+    // Low tide = red, High tide = green
+    const seg = (tt) => `<span style="color:${tt.type === 'High' ? 'var(--high)' : '#ff6b6b'};">${tt.type} ${fmtT(tt)}</span>`;
+    const prevStr = t.prev ? seg(t.prev) : '';
+    const nextStr = t.next ? seg(t.next) : '';
     const bracket = [prevStr, nextStr].filter(Boolean).join(` ${dir} `);
     return `${bracket} <span style="color:var(--muted);font-size:10px;">· ${t.current.toFixed(1)}m now</span>`;
   })();
@@ -3784,7 +3790,7 @@ function renderForecast(forecast, tideData, swellData) {
             <div class="condition-value">${waterTemp !== null ? Math.round(waterTemp) + '°C' : '—'}</div>
           </div>
           <div style="padding:10px 12px;border-top:1px solid rgba(0,229,160,0.15);">
-            <div class="condition-label">Tide</div>
+            <div class="condition-label">${tideHeading}</div>
             <div class="condition-value" style="font-size:12px;">${tideStr}</div>
           </div>
         </div>
