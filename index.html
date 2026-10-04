@@ -59,6 +59,7 @@
     max-width: 480px;
     margin: 0 auto;
     padding: 0 0 80px;
+    overflow-x: clip;   /* no child can widen the page / knock it off-centre */
   }
 
   /* HEADER */
@@ -119,6 +120,10 @@
     letter-spacing: 1px;
     color: #fff;
     line-height: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .break-name-region {
     font-family: 'DM Mono', monospace;
@@ -127,7 +132,8 @@
     text-transform: uppercase;
     color: var(--muted);
     text-align: right;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   /* STATION TOGGLE */
@@ -837,10 +843,11 @@
   .tab-bar {
     position: fixed;
     top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 480px;      /* match the content column; never span wider */
+    left: 0;
+    right: 0;
+    max-width: 480px;          /* match the content column; never span wider */
+    margin-left: auto;
+    margin-right: auto;
     display: flex;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
@@ -1164,7 +1171,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '8.0';
+const APP_VERSION = '8.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
