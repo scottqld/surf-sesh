@@ -1171,7 +1171,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '8.5';
+const APP_VERSION = '8.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1649,7 +1649,6 @@ function buildForecastPanelBlock(day, opts = {}) {
         ${sublabel ? `<div class="current-issued">${sublabel}</div>` : ''}
       </div>`}
     </div>
-    ${opts.intradayHtml || ''}
     <div style="margin:0 12px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="padding:7px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
         <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--muted);">● FORECAST</span>
@@ -1678,6 +1677,7 @@ function buildForecastPanelBlock(day, opts = {}) {
       ${extraPanels}
     </div>
     ${opts.bestWindowHtml || ''}
+    ${opts.intradayHtml || ''}
   </div>`;
 }
 
@@ -3785,9 +3785,7 @@ function renderForecast(forecast, tideData, swellData) {
       .replace(/\s+until midnight\.?$/i, '')
       .toUpperCase();
     currentCard.innerHTML = `
-      <div id="intradayNow" style="margin-top:12px;"></div>
-
-      <div style="margin:0 12px 10px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;overflow:hidden;">
+      <div style="margin:12px 12px 10px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;overflow:hidden;">
         <div style="padding:7px 12px;background:rgba(0,229,160,0.08);border-bottom:1px solid rgba(0,229,160,0.15);display:flex;align-items:center;gap:8px;">
           <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:var(--high);">● NOW</span>
           <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;">Open-Meteo</span>
@@ -3822,6 +3820,7 @@ function renderForecast(forecast, tideData, swellData) {
       </div>
 
       <div id="bestWindowNow"></div>
+      <div id="intradayNow"></div>
       <div id="nowDayExtras"></div>
     `;
 
