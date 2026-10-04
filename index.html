@@ -136,15 +136,15 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    display: block;
+    display: flex;
+    flex-wrap: wrap;          /* wrap breaks onto 2 rows — no horizontal scroll */
+    justify-content: center;
+    gap: 2px 4px;
   }
 
   .station-toggle::-webkit-scrollbar { display: none; }
+  /* Scroll affordances no longer needed now the selector wraps */
+  .scroll-arrow, .station-toggle-fade, .station-toggle-fade-left { display: none !important; }
 
   .station-toggle-wrap {
     position: relative;
@@ -1162,7 +1162,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '7.8';
+const APP_VERSION = '7.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
