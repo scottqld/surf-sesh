@@ -1171,7 +1171,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '8.3';
+const APP_VERSION = '8.4';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -4986,31 +4986,6 @@ window.addEventListener('appinstalled', () => {
     if (ind) { ind.style.opacity = '0'; ind.style.transform = 'translateX(-50%) translateY(-40px)'; }
     if (dy >= THRESHOLD) { isActiveHours() ? loadData() : loadNightMode(); }
   }, { passive: true });
-})();
-
-// ─── TEMP: viewport diagnostic (remove after debugging) ──────────────────────
-(function viewportDiag() {
-  function run() {
-    try {
-      const app = document.querySelector('.app');
-      const vv = window.visualViewport;
-      const parts = [
-        `iw=${window.innerWidth}`,
-        `cw=${document.documentElement.clientWidth}`,
-        `sw=${document.documentElement.scrollWidth}`,
-        `scr=${screen.width}`,
-        `dpr=${window.devicePixelRatio}`,
-        vv ? `vv=${Math.round(vv.width)}@${vv.scale.toFixed(2)}` : '',
-        app ? `app=${app.offsetWidth}` : '',
-      ].filter(Boolean);
-      const d = document.createElement('div');
-      d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#036;color:#fff;font:11px/1.4 monospace;padding:6px 8px;text-align:center;';
-      d.textContent = parts.join(' · ');
-      d.onclick = () => d.remove();
-      document.body.appendChild(d);
-    } catch (e) {}
-  }
-  window.addEventListener('load', () => setTimeout(run, 1200));
 })();
 
 // ─── PUSH NOTIFICATIONS (Settings tab) ───────────────────────────────────────
