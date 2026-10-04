@@ -1171,7 +1171,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '8.1';
+const APP_VERSION = '8.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -4986,6 +4986,32 @@ window.addEventListener('appinstalled', () => {
     if (ind) { ind.style.opacity = '0'; ind.style.transform = 'translateX(-50%) translateY(-40px)'; }
     if (dy >= THRESHOLD) { isActiveHours() ? loadData() : loadNightMode(); }
   }, { passive: true });
+})();
+
+// ─── TEMP: horizontal-overflow diagnostic (remove after debugging) ───────────
+(function overflowDiag() {
+  function run() {
+    try {
+      const vw = window.innerWidth;
+      const sw = document.documentElement.scrollWidth;
+      if (sw <= vw + 1) return; // no overflow — nothing to show
+      let worst = null;
+      document.querySelectorAll('*').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.width <= vw + 1 && r.right <= vw + 1) return;
+        if (!worst || r.right > worst.r) {
+          const cls = (typeof el.className === 'string' && el.className) ? '.' + el.className.trim().split(/\s+/)[0] : '';
+          worst = { r: r.right, w: r.width, id: `${el.tagName}${el.id ? '#' + el.id : ''}${cls}` };
+        }
+      });
+      const d = document.createElement('div');
+      d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#a00;color:#fff;font:11px/1.4 monospace;padding:6px 8px;text-align:center;';
+      d.textContent = `overflow ${sw}/${vw}` + (worst ? ` · ${worst.id} w=${Math.round(worst.w)} right=${Math.round(worst.r)}` : '');
+      d.onclick = () => d.remove();
+      document.body.appendChild(d);
+    } catch (e) {}
+  }
+  window.addEventListener('load', () => setTimeout(run, 1500));
 })();
 
 // ─── PUSH NOTIFICATIONS (Settings tab) ───────────────────────────────────────
