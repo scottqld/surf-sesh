@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>SurfSesh — Noosa</title>
+<title>SurfSesh</title>
 <meta name="theme-color" content="#0A0C0F">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1195,7 +1195,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.0';
+const APP_VERSION = '9.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1931,7 +1931,7 @@ function setBreak(index, fromUser = false) {
     condLabel.textContent = condLabel.textContent.replace(/\s*—.*$/, '') + ` — ${breakBtnLabel(b).toUpperCase()}`;
   }
   // Update browser tab title with current score
-  if (score !== null) document.title = `${b.name} · SurfSesh`;
+  document.title = 'SurfSesh';
   // Attach the first morning tide (before noon today) so conditionNote can show it
   if (cachedData?.forecast) {
     const todayTides = getTidesForDay(0);
