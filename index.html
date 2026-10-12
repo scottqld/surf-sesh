@@ -1096,6 +1096,27 @@
         <div id="notifStatus" style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-height:36px;"></div>
       </div>
 
+      <div class="section-label">EVENING FORECAST</div>
+      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 16px;">
+        <div class="toggle-wrap" style="border-bottom:1px solid var(--border);">
+          <div>
+            <div class="toggle-label">Nightly notification</div>
+            <div class="toggle-sub">Tomorrow morning's best break, sent the night before</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="nightlyToggle" onchange="handleNightlyToggle(this)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="nightlyTimeRow" style="display:none;padding:16px 0;border-bottom:1px solid var(--border);">
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:10px;">NOTIFICATION TIME</div>
+          <select id="nightlyHourSelect" onchange="updateNightlyHour()"
+            style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;cursor:pointer;appearance:none;">
+          </select>
+        </div>
+        <div id="nightlyStatus" style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-height:36px;"></div>
+      </div>
+
       <div class="section-label">SWELL ALERTS</div>
       <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
@@ -1195,7 +1216,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.1';
+const APP_VERSION = '9.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -5031,8 +5052,7 @@ function fillHourSelect(sel, value) {
   sel.value = value;
 }
 
-function buildHourOptions() {
-  const sel = document.getElementById('notifHourSelect');
+function fillHourSelect(sel, selected) {
   if (!sel || sel.options.length) return;
   for (let h = 0; h < 24; h++) {
     const opt = document.createElement('option');
@@ -5042,7 +5062,12 @@ function buildHourOptions() {
     opt.textContent = `${h12}:00 ${ampm}`;
     sel.appendChild(opt);
   }
-  sel.value = localStorage.getItem('notifHour') ?? 7;
+  sel.value = selected;
+}
+
+function buildHourOptions() {
+  fillHourSelect(document.getElementById('notifHourSelect'), localStorage.getItem('notifHour') ?? 7);
+  fillHourSelect(document.getElementById('nightlyHourSelect'), localStorage.getItem('nightlyHour') ?? 19);
 }
 
 let _pushSub = null;
@@ -5064,6 +5089,14 @@ async function initNotifications() {
       const saved = localStorage.getItem('notifHour');
       if (saved !== null) document.getElementById('notifHourSelect').value = saved;
       document.getElementById('notifStatus').textContent = 'Morning report active ✓';
+      // Nightly report shows on only when its own slot is saved
+      const nightly = localStorage.getItem('nightlyHour');
+      if (nightly !== null) {
+        document.getElementById('nightlyToggle').checked = true;
+        document.getElementById('nightlyTimeRow').style.display = '';
+        document.getElementById('nightlyHourSelect').value = nightly;
+        document.getElementById('nightlyStatus').textContent = 'Nightly report active ✓';
+      }
     }
   } catch { /* SW not ready yet — handled on tab switch */ }
 }
@@ -5180,6 +5213,92 @@ async function updateNotifHour() {
       body: JSON.stringify({ subscription: _pushSub.toJSON(), preferredHour: hour }),
     });
     if (stat) { stat.textContent = res.ok ? `✓ Saved — morning report at ${label}` : '✓ Saved locally · server sync failed'; }
+  } catch {
+    if (stat) stat.textContent = '✓ Saved locally · server sync failed';
+  }
+}
+
+// ─── Nightly (tomorrow-morning) report ──────────────────────────────────────
+async function handleNightlyToggle(checkbox) {
+  checkbox.disabled = true;
+  try {
+    if (checkbox.checked) await enableNightly();
+    else await disableNightly();
+  } finally {
+    checkbox.disabled = false;
+  }
+}
+
+async function enableNightly() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    document.getElementById('nightlyToggle').checked = false;
+    document.getElementById('nightlyStatus').textContent = 'Permission denied — enable in browser settings.';
+    return;
+  }
+  document.getElementById('nightlyTimeRow').style.display = '';
+  document.getElementById('nightlyStatus').textContent = 'Subscribing…';
+
+  let sub;
+  try {
+    sub = await ensurePushSubscription();
+  } catch (e) {
+    document.getElementById('nightlyToggle').checked = false;
+    document.getElementById('nightlyTimeRow').style.display = 'none';
+    const hint = /push service error/i.test(e.message)
+      ? ' — your browser couldn\'t reach its push service. On Brave: Settings → Privacy → enable "Use Google services for push messaging", then restart.'
+      : '';
+    document.getElementById('nightlyStatus').textContent = 'Push subscription failed: ' + e.message + hint;
+    return;
+  }
+
+  _pushSub = sub;
+  const hour = parseInt(document.getElementById('nightlyHourSelect').value);
+  localStorage.setItem('nightlyHour', hour);
+  try {
+    const res = await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), nightlyHour: hour }),
+    });
+    document.getElementById('nightlyStatus').textContent = res.ok
+      ? 'Nightly report active ✓'
+      : 'Subscribed — server sync failed, will retry on next save.';
+  } catch {
+    document.getElementById('nightlyStatus').textContent = 'Subscribed locally — server sync failed.';
+  }
+}
+
+async function disableNightly() {
+  localStorage.removeItem('nightlyHour');
+  // Keep the push subscription alive (morning report / swell alerts may use it);
+  // just clear the nightly slot server-side.
+  if (_pushSub) {
+    await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: _pushSub.toJSON(), nightlyHour: null }),
+    }).catch(() => {});
+  }
+  document.getElementById('nightlyTimeRow').style.display = 'none';
+  document.getElementById('nightlyStatus').textContent = '';
+}
+
+async function updateNightlyHour() {
+  const sel = document.getElementById('nightlyHourSelect');
+  const hour = parseInt(sel.value);
+  const label = sel.selectedOptions[0]?.textContent.trim() || `${hour}:00`;
+  localStorage.setItem('nightlyHour', hour);
+  const stat = document.getElementById('nightlyStatus');
+  if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
+  if (!_pushSub) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: _pushSub.toJSON(), nightlyHour: hour }),
+    });
+    if (stat) stat.textContent = res.ok ? `✓ Saved — nightly report at ${label}` : '✓ Saved locally · server sync failed';
   } catch {
     if (stat) stat.textContent = '✓ Saved locally · server sync failed';
   }

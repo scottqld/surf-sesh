@@ -269,6 +269,60 @@ function bestWindowForBreak(swellHourly, br, dayOffset = 0) {
 
 function fmtHour(h) { return h === 12 ? '12pm' : h > 12 ? (h - 12) + 'pm' : h + 'am'; }
 
+// Swell snapshot at a specific future day/hour (Brisbane wall-clock) from Open-Meteo hourly
+function swellAt(swellHourly, dayOffset, hour) {
+  if (!swellHourly?.time) return null;
+  const d = getBrisbaneDate(dayOffset * 24);
+  const dayStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+  const target = `${dayStr}T${String(hour).padStart(2,'0')}`;
+  const idx = swellHourly.time.findIndex(t => t.startsWith(target));
+  if (idx < 0) return null;
+  const hArr = swellHourly.swell_wave_height || swellHourly.wave_height || null;
+  const pArr = swellHourly.swell_wave_period || swellHourly.wave_period || null;
+  const dArr = swellHourly.swell_wave_direction || swellHourly.wave_direction || null;
+  return {
+    h:   hArr ? hArr[idx] : null,
+    p:   pArr ? pArr[idx] : null,
+    dir: dArr ? degToCompass(dArr[idx]) : null,
+  };
+}
+
+// Interpolated tide at a specific future day/hour (Brisbane wall-clock)
+function getTideAtMorning(tidesData, dayOffset, hour) {
+  if (!tidesData?.tides?.length) return null;
+  const bne = getBrisbaneDate(dayOffset * 24);
+  const dayStr = `${String(bne.getUTCDate()).padStart(2,'0')}/${String(bne.getUTCMonth()+1).padStart(2,'0')}/${bne.getUTCFullYear()}`;
+  const targetMin = hour * 60;
+  const dayTides = tidesData.tides
+    .filter(t => t.date === dayStr)
+    .map(t => { const [h,m] = t.time.split(':').map(Number); return { ...t, min: h*60 + m }; })
+    .sort((a,b) => a.min - b.min);
+  if (!dayTides.length) return null;
+  let prev = null, next = null;
+  for (const t of dayTides) { if (t.min <= targetMin) prev = t; else { next = t; break; } }
+  if (!prev && next) return { current: parseFloat(next.height), rising: next.type === 'High' };
+  if (prev && !next) return { current: parseFloat(prev.height), rising: prev.type !== 'High' };
+  const f = (targetMin - prev.min) / (next.min - prev.min);
+  return { current: parseFloat(prev.height) + (parseFloat(next.height) - parseFloat(prev.height)) * f, rising: next.type === 'High' };
+}
+
+// Score a break for a future morning (default tomorrow ~8am) using BOM's day
+// forecast text for swell height + wind, Open-Meteo for refined dir/period, and
+// the interpolated morning tide. Mirrors enrichForecast's today behaviour.
+const MORNING_HOUR = 8;
+function scoreMorning(br, allData, dayOffset = 1) {
+  const fcArr = allData.forecast?.forecasts || [];
+  const bomDay = fcArr[dayOffset] || fcArr[0] || {};
+  const sw = swellAt(allData.swell?.hourly, dayOffset, MORNING_HOUR);
+  const fc = {
+    forecasts: [{ swell: bomDay.swell || '', winds: bomDay.winds || '' }],
+    _swellDir: sw?.dir ?? null,
+    _period:   sw?.p ?? null,
+    _tide:     getTideAtMorning(allData.tides?.noosa, dayOffset, MORNING_HOUR),
+  };
+  return { score: scoreBreak(br, fc), sw, bomDay };
+}
+
 function getTideNow(tidesData) {
   if (!tidesData?.tides?.length) return null;
   const now = new Date();
@@ -404,6 +458,7 @@ async function handleCron(env) {
   }
 
   const morningDue = subs.filter(r => r.preferredHour === brisbaneHour);
+  const nightlyDue = subs.filter(r => r.nightlyHour === brisbaneHour);
   // Swell alerts fire within each device's chosen window (default 5am–5pm),
   // always clamped to daylight surf hours.
   const alertSubs = subs.filter(r => {
@@ -418,7 +473,7 @@ async function handleCron(env) {
     const to   = Math.min(17, a.toHour   ?? 17);
     return brisbaneHour >= from && brisbaneHour <= to;
   });
-  if (!morningDue.length && !alertSubs.length) return;
+  if (!morningDue.length && !nightlyDue.length && !alertSubs.length) return;
 
   // Fetch + enrich surf data once for everyone
   const allData = await buildAll();
@@ -475,6 +530,65 @@ async function handleCron(env) {
     };
 
     await Promise.allSettled(morningDue.map(async rec => {
+      try {
+        await sendPush(rec.subscription, payload, env);
+      } catch (e) {
+        if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
+      }
+    }));
+  }
+
+  // ── Nightly report: suggestions for tomorrow morning (dawn patrol) ──
+  if (nightlyDue.length) {
+    const scoredTmrw = BREAKS.map(br => { const r = scoreMorning(br, allData, 1); return { br, ...r }; });
+    const best = scoredTmrw.reduce((a, b) => b.score > a.score ? b : a);
+
+    // Tomorrow-morning conditions summary from the same inputs scoreMorning used
+    const tSwellDir = best.sw?.dir || extractDir(shortDir(best.bomDay.swell || '')) || '';
+    const tHeight   = (best.sw?.h != null ? best.sw.h : extractHeight(shortDir(best.bomDay.swell || '')));
+    const tSwellH   = tHeight != null ? `${tHeight.toFixed(1)}m` : '';
+    const tPeriod   = best.sw?.p != null ? `${Math.round(best.sw.p)}s` : '';
+    const tWind     = shortDir(best.bomDay.winds || '').split(' ').slice(0, 3).join(' ');
+    const tSummary  = ([[tSwellH, tSwellDir].filter(Boolean).join(' '), tPeriod ? `@ ${tPeriod}` : '']
+      .filter(Boolean).join(' ') + (tWind ? ` · wind ${tWind}` : '')).trim();
+
+    // Runners-up worth a mention (score within 1 of the best, excluding the top pick)
+    const others = scoredTmrw
+      .filter(s => s !== best && s.score >= Math.max(3, best.score - 1))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2)
+      .map(s => `${s.br.name} ${s.score}/10`)
+      .join(', ');
+
+    let line1 = tSummary || 'Forecast unavailable';
+    if (env.ANTHROPIC_API_KEY) {
+      try {
+        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'x-api-key':env.ANTHROPIC_API_KEY, 'anthropic-version':'2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 60,
+            messages: [{ role:'user', content:`Write one casual sentence (max 14 words) advising whether to surf tomorrow morning. Best bet is ${best.br.name}, Noosa: ${tSummary || 'small/unknown'}, rated ${best.score}/10 for dawn. Do NOT repeat the break name or the score. No hashtags, no emoji. If ${best.score} is 3 or less, say plainly it's not worth a dawn patrol.` }],
+          }),
+        });
+        const aiJson = await aiRes.json();
+        const text = aiJson?.content?.[0]?.text?.trim();
+        if (text) line1 = text;
+      } catch { /* fallback to tSummary */ }
+    }
+
+    const win  = (() => { const w = bestWindowForBreak(allData.swell?.hourly, best.br, 1); return w ? `Best window ${fmtHour(w.start)}–${fmtHour(w.end)}` : ''; })();
+    const line2 = [win ? `⏱ ${win}` : '', others ? `Also worth it: ${others}` : ''].filter(Boolean).join(' · ');
+    const payload = {
+      title: `🌅 Tomorrow’s pick: ${best.br.name} ${best.score}/10`,
+      body: [line1, line2].filter(Boolean).join('\n'),
+      icon: ICON,
+      badge: ICON,
+      url: APP_URL,
+    };
+
+    await Promise.allSettled(nightlyDue.map(async rec => {
       try {
         await sendPush(rec.subscription, payload, env);
       } catch (e) {
@@ -794,9 +908,10 @@ export default {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Push not configured' }), { status: 503, headers: corsHeaders });
         }
-        const { subscription, preferredHour, alerts } = await request.json();
+        const { subscription, preferredHour, nightlyHour, alerts } = await request.json();
         const fields = {};
-        if (preferredHour !== undefined) fields.preferredHour = preferredHour; // null = daily report off
+        if (preferredHour !== undefined) fields.preferredHour = preferredHour; // null = morning report off
+        if (nightlyHour  !== undefined) fields.nightlyHour  = nightlyHour;  // null = nightly report off
         if (alerts !== undefined) fields.alerts = alerts; // { threshold, breaks: { name: bool } }
         await storeSubscription(env, subscription, fields);
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
