@@ -62,6 +62,8 @@ const BREAKS = [
 
 // ─── SCORING (mirrors index.html) ────────────────────────────────────────────
 const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+// 16-point → 8-point sector, for the wind-direction alert criterion
+const DIR8 = { N:'N',NNE:'NE',NE:'NE',ENE:'E',E:'E',ESE:'E',SE:'SE',SSE:'SE',S:'S',SSW:'SW',SW:'SW',WSW:'W',W:'W',WNW:'W',NW:'NW',NNW:'N' };
 function degToCompass(deg) { return COMPASS[Math.round(deg / 22.5) % 16] ?? null; }
 function dirDistance(a, b) {
   const ia = COMPASS.indexOf(a), ib = COMPASS.indexOf(b);
@@ -606,10 +608,25 @@ async function handleCron(env) {
       ? a.regions[region] !== false
       : BREAKS.some(b => (b.region || 'Other') === region && a.breaks?.[b.name] !== false);
 
+    // Wind-direction criterion (region-wide — one wind for the area). Empty/all = any.
+    if (a.windDirs && a.windDirs.length && a.windDirs.length < 8) {
+      const wd = fc._obsWindDir || extractDir(shortDir(fc.forecasts?.[0]?.winds || ''));
+      // Unknown wind doesn't block; a known wind must fall in an allowed sector.
+      if (wd && !a.windDirs.includes(DIR8[wd] || wd)) continue;
+    }
+
+    // Minimum-surf criterion (per break, in feet — mirrors the app's face estimate)
+    const swellHForGate = fc._swellH ?? extractHeight(shortDir(fc.forecasts?.[0]?.swell || ''));
+    const surfFt = (br) => {
+      const m = estimateSurfHeight(swellHForGate, br.exposure, fc._swellDir, br, fc._period);
+      return m != null ? m * 3.281 : null;
+    };
+
     // Best qualifying break per enabled region, respecting the per-region cooldown
     const regionHits = {};
     for (const { br, score } of scored) {
       if (score < a.threshold) continue;
+      if (a.minSurfFt) { const ft = surfFt(br); if (ft == null || ft < a.minSurfFt) continue; }
       const region = br.region || 'Other';
       if (!regionEnabled(region)) continue;
       if (now - (sent[region] || 0) < ALERT_COOLDOWN_MS) continue;

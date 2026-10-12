@@ -651,6 +651,15 @@
   .alert-check {
     width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0;
   }
+  .wind-chip {
+    width: calc(25% - 5px); padding: 7px 0; text-align: center;
+    font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--muted); cursor: pointer; transition: all 0.15s;
+  }
+  .wind-chip.active {
+    background: rgba(0,218,216,0.15); border-color: var(--accent); color: var(--accent);
+  }
   .calibration-bar-wrap {
     height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 4px; overflow: hidden;
   }
@@ -1132,6 +1141,19 @@
         <input type="range" id="alertThreshold" min="5" max="10" value="7" step="1"
           oninput="document.getElementById('alertThresholdLabel').textContent=this.value;saveAlertSettings()"
           style="width:100%;accent-color:var(--accent);margin-bottom:14px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MINIMUM SURF</div>
+        <select id="alertMinSurf" onchange="saveAlertSettings()"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;appearance:none;margin-bottom:14px;">
+          <option value="0">Any size</option>
+          <option value="1">1 ft or bigger</option>
+          <option value="2">2 ft or bigger</option>
+          <option value="3">3 ft or bigger</option>
+          <option value="4">4 ft or bigger</option>
+          <option value="5">5 ft or bigger</option>
+          <option value="6">6 ft or bigger</option>
+        </select>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">ONLY WHEN WIND IS FROM</div>
+        <div id="alertWindDirs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;"></div>
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">ONLY ALERT BETWEEN</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
           <select id="alertFromHour" onchange="saveAlertSettings()"
@@ -1216,7 +1238,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.2';
+const APP_VERSION = '9.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -4641,7 +4663,11 @@ function saveAlertSettings() {
     const cb = document.getElementById(`alertRegion_${g.label.replace(/\s+/g,'_')}`);
     if (cb) regions[g.label] = cb.checked;
   });
-  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, regions, fromHour, toHour }));
+  const minSurfFt = parseInt(document.getElementById('alertMinSurf')?.value || '0');
+  // Collect active wind sectors; all 8 (or none) means "any wind" → store [].
+  const activeDirs = [...document.querySelectorAll('#alertWindDirs .wind-chip.active')].map(c => c.dataset.dir);
+  const windDirs = activeDirs.length >= 8 ? [] : activeDirs;
+  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, regions, fromHour, toHour, minSurfFt, windDirs }));
   // Immediate confirmation; the debounced sync below replaces it with the
   // synced/needs-permission result.
   const stat = document.getElementById('alertPermStatus');
@@ -4661,16 +4687,34 @@ async function syncAlertsToServer() {
   }
   try {
     const sub = await ensurePushSubscription();
-    const { threshold, regions, fromHour, toHour } = getAlertSettings();
+    const { threshold, regions, fromHour, toHour, minSurfFt, windDirs } = getAlertSettings();
     await fetch(`${WORKER_URL}/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, regions: regions || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17 } }),
+      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, regions: regions || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17, minSurfFt: minSurfFt ?? 0, windDirs: windDirs || [] } }),
     });
     if (stat) { stat.textContent = '✓ Saved & synced — alerts active on this device'; stat.style.color = 'var(--high)'; }
   } catch (e) {
     if (stat) { stat.textContent = '✓ Saved locally · sync failed: ' + e.message; stat.style.color = 'var(--muted)'; }
   }
+}
+
+const WIND_DIRS8 = ['N','NE','E','SE','S','SW','W','NW'];
+function renderWindChips(selected) {
+  const cont = document.getElementById('alertWindDirs');
+  if (!cont) return;
+  // Empty saved list means "any wind" → show all active.
+  const active = (selected && selected.length) ? new Set(selected) : new Set(WIND_DIRS8);
+  cont.innerHTML = WIND_DIRS8.map(d =>
+    `<button type="button" class="wind-chip${active.has(d) ? ' active' : ''}" data-dir="${d}" onclick="toggleWindChip(this)">${d}</button>`
+  ).join('');
+}
+function toggleWindChip(btn) {
+  btn.classList.toggle('active');
+  // Never allow an all-off state (meaningless) — snap back to "any" (all on).
+  const chips = [...document.querySelectorAll('#alertWindDirs .wind-chip')];
+  if (!chips.some(c => c.classList.contains('active'))) chips.forEach(c => c.classList.add('active'));
+  saveAlertSettings();
 }
 
 function initAlertSettings() {
@@ -4683,6 +4727,10 @@ function initAlertSettings() {
 
   fillHourSelect(document.getElementById('alertFromHour'), settings.fromHour ?? 5);
   fillHourSelect(document.getElementById('alertToHour'),   settings.toHour   ?? 17);
+
+  const minSurfEl = document.getElementById('alertMinSurf');
+  if (minSurfEl) minSurfEl.value = settings.minSurfFt ?? 0;
+  renderWindChips(settings.windDirs);
 
   const list = document.getElementById('alertBreakList');
   if (!list) return;
