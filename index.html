@@ -114,6 +114,27 @@
     justify-content: space-between;
     gap: 10px;
   }
+  .break-name-left {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    min-width: 0;
+  }
+  .break-name-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .break-name-score small {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-left: 3px;
+  }
   .break-name {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 26px;
@@ -950,7 +971,10 @@
 
   <!-- Break name bar — confirms which break is displayed -->
   <div class="break-name-bar">
-    <span id="photoBreakName" class="break-name">—</span>
+    <div class="break-name-left">
+      <span id="photoBreakName" class="break-name">—</span>
+      <span id="breakNameScore" class="break-name-score" onclick="openScoreExplain()" style="display:none;cursor:pointer;"></span>
+    </div>
     <span id="breakNameRegion" class="break-name-region"></span>
   </div>
 
@@ -1171,7 +1195,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '8.8';
+const APP_VERSION = '8.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1880,20 +1904,16 @@ function setBreak(index, fromUser = false) {
     if (sv) { sv.style.color = c; sv.innerHTML = `${score}<span style="font-size:13px;color:var(--muted);">/10</span>`; }
     if (sl) { sl.style.color = c; sl.textContent = lbl; }
 
-    // Photo score badge — only in day mode (live conditions)
-    const badge    = document.getElementById('photoScoreBadge');
-    const badgeNum = document.getElementById('photoScoreNum');
-    const badgeLbl = document.getElementById('photoScoreLabel');
-    if (badge && badgeNum && badgeLbl) {
-      if (isActiveHours()) {
-        badgeNum.textContent = score;
-        badgeNum.style.color = c;
-        badgeLbl.textContent = scoreLabel(score, true);
-        badge.style.display  = 'flex';
-      } else {
-        badge.style.display = 'none';
-      }
+    // Rating next to the break name
+    const nameScore = document.getElementById('breakNameScore');
+    if (nameScore) {
+      nameScore.style.color = c;
+      nameScore.innerHTML = `${score}<small>${scoreLabel(score, true)}</small>`;
+      nameScore.style.display = 'inline-flex';
     }
+    // Photo score badge retired in favour of the name-bar rating
+    const badge = document.getElementById('photoScoreBadge');
+    if (badge) badge.style.display = 'none';
     // Today forecast panel score badge
     const todayFcScore = document.getElementById('todayFcScore');
     const todayFcScoreNum = document.getElementById('todayFcScoreNum');
