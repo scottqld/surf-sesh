@@ -1238,7 +1238,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.4';
+const APP_VERSION = '9.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1730,7 +1730,7 @@ function buildForecastPanelBlock(day, opts = {}) {
         </div>
         <div style="padding:10px 12px;">
           <div class="condition-label">Wind</div>
-          <div class="condition-value" style="display:flex;align-items:center;gap:6px;font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1;">${dirArrow(windDir, 24, 'var(--text)')}<span>${windStr}</span></div>
+          <div class="condition-value highlight" style="display:flex;align-items:center;gap:6px;white-space:nowrap;">${dirArrow(windDir, 24, 'var(--accent)')}<span>${windStr}</span></div>
         </div>
         ${SHOW_WEATHER ? `<div style="padding:10px 12px;border-top:1px solid var(--border);grid-column:1/-1;">
           <div class="condition-label">Weather</div>
@@ -3865,9 +3865,9 @@ function renderForecast(forecast, tideData, swellData) {
           </div>
           <div style="padding:10px 12px;">
             <div class="condition-label">Wind</div>
-            <div class="condition-value" style="display:flex;align-items:center;gap:6px;font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1;">
-              ${dirArrow(windDir, 24, 'var(--text)')}
-              <span>${windDir || '—'}${windKmh ? ' · ' + windKmh + ' km/h' : ''}${windGust ? ' · ' + windGust + ' gust' : ''}</span>
+            <div class="condition-value highlight" style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+              ${dirArrow(windDir, 24, 'var(--accent)')}
+              <span>${windDir || '—'}${windKmh ? ' ' + windKmh + 'km/h' : ''}</span>
             </div>
             <div class="condition-sub" id="windOutlook"></div>
           </div>
