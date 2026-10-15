@@ -4,7 +4,7 @@
 //   - API calls (/all, /forecast, etc.): network-first, cache fallback
 //   - Offline: serve stale cache and post message to page to show stale banner
 
-const CACHE_NAME   = 'surfcall-v96';
+const CACHE_NAME   = 'surfcall-v97';
 const SHELL_URL    = '/surf-sesh/';
 const API_PATTERNS = ['/all', '/forecast', '/swell', '/tides', '/conditions'];
 

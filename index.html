@@ -1238,7 +1238,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.6';
+const APP_VERSION = '9.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -1548,7 +1548,7 @@ function selectForecastTab(tabIdx) {
   if (!showLive && b && omHeight !== null) {
     const surfEl = document.getElementById(surfId);
     const sH = estimateSurfHeight(omHeight, b.exposure, swellDir, b, period);
-    if (surfEl && sH !== null) surfEl.textContent = `~${Math.round(sH * 3.281 * 2) / 2}ft`;
+    if (surfEl && sH !== null) surfEl.innerHTML = `~${Math.round(sH * 3.281 * 2) / 2}<small style="font-size:0.5em;">ft</small>`;
   }
 
   if (!showLive && score !== null) {
@@ -1884,7 +1884,7 @@ function setBreak(index, fromUser = false) {
     const currentPer = cachedData.forecast._period ?? null;
     const surfH = estimateSurfHeight(offshoreH, b.exposure, swellDir, b, currentPer);
     surfVal.innerHTML = surfH !== null
-      ? `~${Math.round(surfH * 3.281 * 2) / 2}ft <span style="color:var(--muted);font-size:10px;">est. face at ${b.subtitle}</span>`
+      ? `~${Math.round(surfH * 3.281 * 2) / 2}<small style="font-size:0.5em;">ft</small> <span style="color:var(--muted);font-size:10px;">est. face at ${b.subtitle}</span>`
       : '—';
   }
 
@@ -1893,14 +1893,14 @@ function setBreak(index, fromUser = false) {
     const fc = cachedData.forecast;
     const fmtSurf = (h, dir, per) => {
       const s = estimateSurfHeight(h, b.exposure, dir, b, per);
-      return s !== null ? `~${Math.round(s * 3.281 * 2) / 2}ft` : '—';
+      return s !== null ? `~${Math.round(s * 3.281 * 2) / 2}<small style="font-size:0.5em;">ft</small>` : '—';
     };
     const todaySurfEl = document.getElementById('fcTodaySurf');
-    if (todaySurfEl) todaySurfEl.textContent = fmtSurf(fc._currentWaveHeight, fc._currentSwellDir, fc._period);
+    if (todaySurfEl) todaySurfEl.innerHTML = fmtSurf(fc._currentWaveHeight, fc._currentSwellDir, fc._period);
     const tmrwSurfEl = document.getElementById('fcTmrwSurf');
-    if (tmrwSurfEl) tmrwSurfEl.textContent = fmtSurf(fc._swellHeightByDay?.[1], fc._swellDirByDay?.[1], fc._periodTomorrow);
+    if (tmrwSurfEl) tmrwSurfEl.innerHTML = fmtSurf(fc._swellHeightByDay?.[1], fc._swellDirByDay?.[1], fc._periodTomorrow);
     const dayAfterSurfEl = document.getElementById('fcDayAfterSurf');
-    if (dayAfterSurfEl) dayAfterSurfEl.textContent = fmtSurf(fc._swellHeightByDay?.[2], fc._swellDirByDay?.[2], fc._periodByDay?.[2]);
+    if (dayAfterSurfEl) dayAfterSurfEl.innerHTML = fmtSurf(fc._swellHeightByDay?.[2], fc._swellDirByDay?.[2], fc._periodByDay?.[2]);
   }
 
   // Update forecast card scores and surf heights for newly selected break
