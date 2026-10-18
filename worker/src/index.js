@@ -123,7 +123,7 @@ function extractWindSpeedKts(text) {
   if (s2) return parseInt(s2[1])/1.852;
   return null;
 }
-function scoreBreak(br, fc) {
+function scoreBreak(br, fc, offset = 0) {
   if (!fc?.forecasts?.length) return 0;
   const cur = fc.forecasts[0];
   const swellText = shortDir(cur.swell||''), windText = shortDir(cur.winds||'');
@@ -176,7 +176,25 @@ function scoreBreak(br, fc) {
     else if (scoringH < 1.6) sizeCap=9;
   }
   if (br.sizeCap !== undefined) sizeCap = Math.min(sizeCap, br.sizeCap);
-  return Math.min(Math.max(0, Math.round(raw)), sizeCap, br.maxScore ?? 10);
+  // offset = per-subscriber calibration from their logged sessions (bounded upstream)
+  return Math.min(Math.max(0, Math.round(raw + offset)), sizeCap, br.maxScore ?? 10);
+}
+
+// Clamp + sanitise a client-supplied calibration map { breakName: offset }.
+// Offsets are learned from logged sessions; bound them so bad data can't run away.
+const CALIB_MAX_OFFSET = 1.5;
+function sanitizeCalibration(cal) {
+  if (!cal || typeof cal !== 'object') return {};
+  const out = {};
+  for (const [k, v] of Object.entries(cal)) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n !== 0) out[k] = Math.max(-CALIB_MAX_OFFSET, Math.min(CALIB_MAX_OFFSET, n));
+  }
+  return out;
+}
+function calOffset(rec, name) {
+  const v = rec?.calibration?.[name];
+  return Number.isFinite(v) ? v : 0;
 }
 
 // ─── FORECAST ENRICHMENT FOR SCORING ─────────────────────────────────────────
@@ -312,7 +330,7 @@ function getTideAtMorning(tidesData, dayOffset, hour) {
 // forecast text for swell height + wind, Open-Meteo for refined dir/period, and
 // the interpolated morning tide. Mirrors enrichForecast's today behaviour.
 const MORNING_HOUR = 8;
-function scoreMorning(br, allData, dayOffset = 1) {
+function scoreMorning(br, allData, dayOffset = 1, offset = 0) {
   const fcArr = allData.forecast?.forecasts || [];
   const bomDay = fcArr[dayOffset] || fcArr[0] || {};
   const sw = swellAt(allData.swell?.hourly, dayOffset, MORNING_HOUR);
@@ -322,7 +340,7 @@ function scoreMorning(br, allData, dayOffset = 1) {
     _period:   sw?.p ?? null,
     _tide:     getTideAtMorning(allData.tides?.noosa, dayOffset, MORNING_HOUR),
   };
-  return { score: scoreBreak(br, fc), sw, bomDay };
+  return { score: scoreBreak(br, fc, offset), sw, bomDay };
 }
 
 function getTideNow(tidesData) {
@@ -480,7 +498,6 @@ async function handleCron(env) {
   // Fetch + enrich surf data once for everyone
   const allData = await buildAll();
   const fc = enrichForecast(allData);
-  const scored = BREAKS.map(br => ({ br, score: scoreBreak(br, fc) }));
 
   const swellDir = (fc._swellDir && fc._swellDir !== 'unknown') ? fc._swellDir : '';
   const period   = fc._period   ? `${Math.round(fc._period)}s` : '';
@@ -500,39 +517,48 @@ async function handleCron(env) {
   };
 
   // ── Daily morning report ──
+  // Scored + built per subscriber so each person's logged-session calibration
+  // applies. Cache by calibration key so the AI line runs once per distinct map
+  // (a user's multiple devices share one calibration → one API call).
   if (morningDue.length) {
-    const best = scored.reduce((a, b) => b.score > a.score ? b : a);
-
-    // AI one-liner (conditions/advice only — title already has break + score)
-    let line1 = condSummary || 'Conditions unavailable';
-    if (env.ANTHROPIC_API_KEY) {
-      try {
-        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'x-api-key':env.ANTHROPIC_API_KEY, 'anthropic-version':'2023-06-01' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5',
-            max_tokens: 60,
-            messages: [{ role:'user', content:`Write one casual sentence (max 12 words) describing today's surf for a push notification. Conditions at ${best.br.name}, Noosa: ${condSummary || 'small/unknown'}, rated ${best.score}/10. Do NOT repeat the break name or the score. No hashtags, no emoji. If ${best.score} is 3 or less, say plainly it's not worth a surf.` }],
-          }),
-        });
-        const aiJson = await aiRes.json();
-        const text = aiJson?.content?.[0]?.text?.trim();
-        if (text) line1 = text;
-      } catch { /* fallback to condSummary */ }
-    }
-
-    const win = windowLabel(best.br);
-    const payload = {
-      title: `🏄 Best today: ${best.br.name} ${best.score}/10`,
-      body: win ? `${line1}\n⏱ ${win}` : line1,
-      icon: ICON,
-      badge: ICON,
-      url: APP_URL,
+    const cache = new Map();
+    const buildMorning = (rec) => {
+      const key = JSON.stringify(rec.calibration || {});
+      if (!cache.has(key)) cache.set(key, (async () => {
+        const scoredRec = BREAKS.map(br => ({ br, score: scoreBreak(br, fc, calOffset(rec, br.name)) }));
+        const best = scoredRec.reduce((a, b) => b.score > a.score ? b : a);
+        let line1 = condSummary || 'Conditions unavailable';
+        if (env.ANTHROPIC_API_KEY) {
+          try {
+            const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'Content-Type':'application/json', 'x-api-key':env.ANTHROPIC_API_KEY, 'anthropic-version':'2023-06-01' },
+              body: JSON.stringify({
+                model: 'claude-haiku-4-5',
+                max_tokens: 60,
+                messages: [{ role:'user', content:`Write one casual sentence (max 12 words) describing today's surf for a push notification. Conditions at ${best.br.name}, Noosa: ${condSummary || 'small/unknown'}, rated ${best.score}/10. Do NOT repeat the break name or the score. No hashtags, no emoji. If ${best.score} is 3 or less, say plainly it's not worth a surf.` }],
+              }),
+            });
+            const aiJson = await aiRes.json();
+            const text = aiJson?.content?.[0]?.text?.trim();
+            if (text) line1 = text;
+          } catch { /* fallback to condSummary */ }
+        }
+        const win = windowLabel(best.br);
+        return {
+          title: `🏄 Best today: ${best.br.name} ${best.score}/10`,
+          body: win ? `${line1}\n⏱ ${win}` : line1,
+          icon: ICON,
+          badge: ICON,
+          url: APP_URL,
+        };
+      })());
+      return cache.get(key);
     };
 
     await Promise.allSettled(morningDue.map(async rec => {
       try {
+        const payload = await buildMorning(rec);
         await sendPush(rec.subscription, payload, env);
       } catch (e) {
         if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
@@ -542,56 +568,64 @@ async function handleCron(env) {
 
   // ── Nightly report: suggestions for tomorrow morning (dawn patrol) ──
   if (nightlyDue.length) {
-    const scoredTmrw = BREAKS.map(br => { const r = scoreMorning(br, allData, 1); return { br, ...r }; });
-    const best = scoredTmrw.reduce((a, b) => b.score > a.score ? b : a);
+    const cache = new Map();
+    const buildNightly = (rec) => {
+      const key = JSON.stringify(rec.calibration || {});
+      if (!cache.has(key)) cache.set(key, (async () => {
+        const scoredTmrw = BREAKS.map(br => { const r = scoreMorning(br, allData, 1, calOffset(rec, br.name)); return { br, ...r }; });
+        const best = scoredTmrw.reduce((a, b) => b.score > a.score ? b : a);
 
-    // Tomorrow-morning conditions summary from the same inputs scoreMorning used
-    const tSwellDir = best.sw?.dir || extractDir(shortDir(best.bomDay.swell || '')) || '';
-    const tHeight   = (best.sw?.h != null ? best.sw.h : extractHeight(shortDir(best.bomDay.swell || '')));
-    const tSwellH   = tHeight != null ? `${tHeight.toFixed(1)}m` : '';
-    const tPeriod   = best.sw?.p != null ? `${Math.round(best.sw.p)}s` : '';
-    const tWind     = shortDir(best.bomDay.winds || '').split(' ').slice(0, 3).join(' ');
-    const tSummary  = ([[tSwellH, tSwellDir].filter(Boolean).join(' '), tPeriod ? `@ ${tPeriod}` : '']
-      .filter(Boolean).join(' ') + (tWind ? ` · wind ${tWind}` : '')).trim();
+        // Tomorrow-morning conditions summary from the same inputs scoreMorning used
+        const tSwellDir = best.sw?.dir || extractDir(shortDir(best.bomDay.swell || '')) || '';
+        const tHeight   = (best.sw?.h != null ? best.sw.h : extractHeight(shortDir(best.bomDay.swell || '')));
+        const tSwellH   = tHeight != null ? `${tHeight.toFixed(1)}m` : '';
+        const tPeriod   = best.sw?.p != null ? `${Math.round(best.sw.p)}s` : '';
+        const tWind     = shortDir(best.bomDay.winds || '').split(' ').slice(0, 3).join(' ');
+        const tSummary  = ([[tSwellH, tSwellDir].filter(Boolean).join(' '), tPeriod ? `@ ${tPeriod}` : '']
+          .filter(Boolean).join(' ') + (tWind ? ` · wind ${tWind}` : '')).trim();
 
-    // Runners-up worth a mention (score within 1 of the best, excluding the top pick)
-    const others = scoredTmrw
-      .filter(s => s !== best && s.score >= Math.max(3, best.score - 1))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2)
-      .map(s => `${s.br.name} ${s.score}/10`)
-      .join(', ');
+        // Runners-up worth a mention (score within 1 of the best, excluding the top pick)
+        const others = scoredTmrw
+          .filter(s => s !== best && s.score >= Math.max(3, best.score - 1))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 2)
+          .map(s => `${s.br.name} ${s.score}/10`)
+          .join(', ');
 
-    let line1 = tSummary || 'Forecast unavailable';
-    if (env.ANTHROPIC_API_KEY) {
-      try {
-        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'x-api-key':env.ANTHROPIC_API_KEY, 'anthropic-version':'2023-06-01' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5',
-            max_tokens: 60,
-            messages: [{ role:'user', content:`Write one casual sentence (max 14 words) advising whether to surf tomorrow morning. Best bet is ${best.br.name}, Noosa: ${tSummary || 'small/unknown'}, rated ${best.score}/10 for dawn. Do NOT repeat the break name or the score. No hashtags, no emoji. If ${best.score} is 3 or less, say plainly it's not worth a dawn patrol.` }],
-          }),
-        });
-        const aiJson = await aiRes.json();
-        const text = aiJson?.content?.[0]?.text?.trim();
-        if (text) line1 = text;
-      } catch { /* fallback to tSummary */ }
-    }
+        let line1 = tSummary || 'Forecast unavailable';
+        if (env.ANTHROPIC_API_KEY) {
+          try {
+            const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'Content-Type':'application/json', 'x-api-key':env.ANTHROPIC_API_KEY, 'anthropic-version':'2023-06-01' },
+              body: JSON.stringify({
+                model: 'claude-haiku-4-5',
+                max_tokens: 60,
+                messages: [{ role:'user', content:`Write one casual sentence (max 14 words) advising whether to surf tomorrow morning. Best bet is ${best.br.name}, Noosa: ${tSummary || 'small/unknown'}, rated ${best.score}/10 for dawn. Do NOT repeat the break name or the score. No hashtags, no emoji. If ${best.score} is 3 or less, say plainly it's not worth a dawn patrol.` }],
+              }),
+            });
+            const aiJson = await aiRes.json();
+            const text = aiJson?.content?.[0]?.text?.trim();
+            if (text) line1 = text;
+          } catch { /* fallback to tSummary */ }
+        }
 
-    const win  = (() => { const w = bestWindowForBreak(allData.swell?.hourly, best.br, 1); return w ? `Best window ${fmtHour(w.start)}–${fmtHour(w.end)}` : ''; })();
-    const line2 = [win ? `⏱ ${win}` : '', others ? `Also worth it: ${others}` : ''].filter(Boolean).join(' · ');
-    const payload = {
-      title: `🌅 Tomorrow’s pick: ${best.br.name} ${best.score}/10`,
-      body: [line1, line2].filter(Boolean).join('\n'),
-      icon: ICON,
-      badge: ICON,
-      url: APP_URL,
+        const win  = (() => { const w = bestWindowForBreak(allData.swell?.hourly, best.br, 1); return w ? `Best window ${fmtHour(w.start)}–${fmtHour(w.end)}` : ''; })();
+        const line2 = [win ? `⏱ ${win}` : '', others ? `Also worth it: ${others}` : ''].filter(Boolean).join(' · ');
+        return {
+          title: `🌅 Tomorrow’s pick: ${best.br.name} ${best.score}/10`,
+          body: [line1, line2].filter(Boolean).join('\n'),
+          icon: ICON,
+          badge: ICON,
+          url: APP_URL,
+        };
+      })());
+      return cache.get(key);
     };
 
     await Promise.allSettled(nightlyDue.map(async rec => {
       try {
+        const payload = await buildNightly(rec);
         await sendPush(rec.subscription, payload, env);
       } catch (e) {
         if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
@@ -622,9 +656,11 @@ async function handleCron(env) {
       return m != null ? m * 3.281 : null;
     };
 
-    // Best qualifying break per enabled region, respecting the per-region cooldown
+    // Best qualifying break per enabled region, respecting the per-region cooldown.
+    // Scored with this subscriber's own logged-session calibration.
+    const scoredRec = BREAKS.map(br => ({ br, score: scoreBreak(br, fc, calOffset(rec, br.name)) }));
     const regionHits = {};
-    for (const { br, score } of scored) {
+    for (const { br, score } of scoredRec) {
       if (score < a.threshold) continue;
       if (a.minSurfFt) { const ft = surfFt(br); if (ft == null || ft < a.minSurfFt) continue; }
       const region = br.region || 'Other';
@@ -925,11 +961,12 @@ export default {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Push not configured' }), { status: 503, headers: corsHeaders });
         }
-        const { subscription, preferredHour, nightlyHour, alerts } = await request.json();
+        const { subscription, preferredHour, nightlyHour, alerts, calibration } = await request.json();
         const fields = {};
         if (preferredHour !== undefined) fields.preferredHour = preferredHour; // null = morning report off
         if (nightlyHour  !== undefined) fields.nightlyHour  = nightlyHour;  // null = nightly report off
         if (alerts !== undefined) fields.alerts = alerts; // { threshold, breaks: { name: bool } }
+        if (calibration !== undefined) fields.calibration = sanitizeCalibration(calibration); // { breakName: offset } from logged sessions
         await storeSubscription(env, subscription, fields);
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
 

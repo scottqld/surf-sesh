@@ -1238,7 +1238,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.8';
+const APP_VERSION = '9.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -2296,7 +2296,7 @@ function scoreTide(tide, breakTide) {
   return 0;
 }
 
-function scoreBreak(breakData, forecast, isCurrent = false) {
+function scoreBreak(breakData, forecast, isCurrent = false, applyCalib = true) {
   if (!forecast || !forecast.forecasts || forecast.forecasts.length === 0) return 0;
   const current = forecast.forecasts[0];
 
@@ -2411,7 +2411,10 @@ function scoreBreak(breakData, forecast, isCurrent = false) {
 
   const hardCap = breakData.maxScore ?? 10;
 
-  return Math.min(Math.max(0, Math.round(raw)), sizeCap, hardCap);
+  // Logged-session calibration: nudge the raw total by the learned per-break
+  // offset before capping (skipped when logging a session, to measure base bias).
+  const off = applyCalib ? calibrationOffset(breakData.name) : 0;
+  return Math.min(Math.max(0, Math.round(raw + off)), sizeCap, hardCap);
 }
 
 /** Return score + per-factor breakdown for the explain sheet. Mirrors scoreBreak logic exactly. */
@@ -2479,7 +2482,8 @@ function scoreBreakExplain(breakData, forecast) {
   }
   if (breakData.sizeCap !== undefined) sizeCap = Math.min(sizeCap, breakData.sizeCap);
   const hardCap = breakData.maxScore ?? 10;
-  const score = Math.min(Math.max(0, Math.round(raw)), sizeCap, hardCap);
+  const calibOff = calibrationOffset(breakData.name);
+  const score = Math.min(Math.max(0, Math.round(raw + calibOff)), sizeCap, hardCap);
 
   // Human-readable factors
   const factors = [];
@@ -2522,6 +2526,16 @@ function scoreBreakExplain(breakData, forecast) {
     if      (tidePts > 0)  factors.push({ label: `Tide (${tideStr} ${h.toFixed(1)}m)`, pts: 1,  max: 1, status: 'good',    note: `ideal: ${breakData.tide.ideal}` });
     else if (tidePts < 0)  factors.push({ label: `Tide (${tideStr} ${h.toFixed(1)}m)`, pts: -1, max: 1, status: 'bad',     note: `avoid: ${tideStr}` });
     else                   factors.push({ label: `Tide (${tideStr} ${h.toFixed(1)}m)`, pts: 0,  max: 1, status: 'neutral', note: 'neutral' });
+  }
+
+  if (calibOff) {
+    factors.push({
+      label: `Your calibration (${calibOff > 0 ? '+' : ''}${calibOff})`,
+      pts: calibOff,
+      max: 0,
+      status: calibOff > 0 ? 'good' : 'bad',
+      note: 'learned from your logged sessions here',
+    });
   }
 
   let sizeCapNote = '';
@@ -4384,6 +4398,69 @@ function getSessions() {
   catch { return []; }
 }
 
+// ─── CALIBRATION (logged-session feedback into scoring) ─────────────────────
+// Per-break offset = mean(your rating − algo's score) across your logged
+// sessions, added to the raw score before caps. Needs a few sessions and is
+// bounded so one outlier can't swing the model. Toggle in the Calibration panel.
+const CALIB_KEY          = 'surfsesh_calibration_v1'; // { enabled: bool }
+const CALIB_MIN_SESSIONS = 3;
+const CALIB_MAX_OFFSET   = 1.5;
+const CALIB_MIN_APPLY    = 0.5;  // ignore tiny, noisy bias
+let CALIBRATION_OFFSETS  = {};   // { breakName: offset } — live, read by scoreBreak
+
+function calibrationEnabled() {
+  try { return JSON.parse(localStorage.getItem(CALIB_KEY) || '{}').enabled !== false; }
+  catch { return true; }
+}
+function setCalibrationEnabled(on) {
+  try { localStorage.setItem(CALIB_KEY, JSON.stringify({ enabled: !!on })); } catch {}
+  recomputeCalibration();
+  syncCalibrationToServer();
+  if (typeof setBreak === 'function' && cachedData) setBreak(currentBreak); // refresh visible scores
+  renderCalibration();
+}
+
+// Rebuild CALIBRATION_OFFSETS from logged sessions. Bias is measured against the
+// base algo score stored at log time (which excludes calibration), so applying
+// the offset converges rather than compounding on itself.
+function recomputeCalibration() {
+  const offsets = {};
+  if (calibrationEnabled()) {
+    const byBreak = {};
+    getSessions().filter(s => s.algoScore != null).forEach(s => {
+      (byBreak[s.break] = byBreak[s.break] || []).push(s);
+    });
+    for (const [name, arr] of Object.entries(byBreak)) {
+      if (arr.length < CALIB_MIN_SESSIONS) continue;
+      const bias    = arr.reduce((a, s) => a + (s.myScore - s.algoScore), 0) / arr.length;
+      const clamped = Math.max(-CALIB_MAX_OFFSET, Math.min(CALIB_MAX_OFFSET, bias));
+      if (Math.abs(clamped) >= CALIB_MIN_APPLY) offsets[name] = Math.round(clamped * 10) / 10;
+    }
+  }
+  CALIBRATION_OFFSETS = offsets;
+  return offsets;
+}
+function calibrationOffset(name) {
+  return CALIBRATION_OFFSETS[name] || 0;
+}
+
+// Push offsets to the worker so nightly reports + swell alerts use the same
+// calibrated scores. No-op without an active push subscription.
+async function syncCalibrationToServer() {
+  if (!('Notification' in window) || Notification.permission !== 'granted' ||
+      !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const sub = await ensurePushSubscription();
+    await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), calibration: CALIBRATION_OFFSETS }),
+    });
+  } catch { /* offline / not subscribed — client-side calibration still applies */ }
+}
+
+recomputeCalibration();
+
 // Pre-fill a plausible session window: ends now, started ~90 min earlier.
 function defaultLogTimes() {
   const fmt = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -4486,7 +4563,8 @@ function commitLogSession() {
       break:      b.name,
       startTime, endTime,
       myScore:    _logScore,
-      algoScore:  cachedData ? scoreBreak(b, cachedData.forecast) : null,
+      // Base (uncalibrated) algo score — calibration bias is measured against this.
+      algoScore:  cachedData ? scoreBreak(b, cachedData.forecast, false, false) : null,
       note,
       conditions: captureConditions(b),
     });
@@ -4506,8 +4584,11 @@ function commitLogSession() {
   const noteEl = document.getElementById('logNote');
   if (noteEl) noteEl.value = '';
 
+  recomputeCalibration();
+  syncCalibrationToServer();
   renderSessionLog();
   renderCalibration();
+  if (cachedData) setBreak(currentBreak); // apply any updated calibration to visible scores
 }
 
 // Load a logged session into the form for editing (score, times, note).
@@ -4537,8 +4618,11 @@ function deleteSession(id) {
   if (_editingSessionId === id) { _editingSessionId = null; const sb = document.getElementById('logSubmitBtn'); if (sb) sb.textContent = 'LOG SESSION'; }
   const sessions = getSessions().filter(s => s.id !== id);
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(sessions));
+  recomputeCalibration();
+  syncCalibrationToServer();
   renderSessionLog();
   renderCalibration();
+  if (cachedData) setBreak(currentBreak);
 }
 
 function renderSessionLog() {
@@ -4785,10 +4869,23 @@ async function requestAlertPermission() {
 function renderCalibration() {
   const panel = document.getElementById('calibrationPanel');
   if (!panel) return;
+  recomputeCalibration(); // keep live offsets in sync with whatever changed the sessions
+  const on = calibrationEnabled();
   const sessions = getSessions().filter(s => s.algoScore !== null);
   const byBreak = {};
   sessions.forEach(s => { if (!byBreak[s.break]) byBreak[s.break] = []; byBreak[s.break].push(s); });
   const currentBreakName = BREAKS[currentBreak]?.name;
+
+  // Toggle header — turn the whole feedback loop on/off.
+  const toggle = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 20px 12px;">
+      <div style="max-width:72%;">
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text);letter-spacing:0.5px;">Auto-calibration</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;">Adjust scores toward your own ratings</div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="calibToggle" ${on ? 'checked' : ''} onchange="setCalibrationEnabled(this.checked)"><span class="toggle-slider"></span></label>
+    </div>`;
+
   const rows = Object.entries(byBreak)
     .filter(([, arr]) => arr.length >= 3)
     .sort(([aName, aArr], [bName, bArr]) => {
@@ -4806,6 +4903,10 @@ function renderCalibration() {
       const biasColor = Math.abs(bias) < 0.5 ? 'var(--high)' : Math.abs(bias) < 1.5 ? 'var(--accent)' : 'var(--muted)';
       const barW = Math.min(Math.abs(bias) / 3 * 100, 100);
       const barColor = bias > 0 ? 'var(--accent)' : 'var(--high)';
+      const applied = on ? (CALIBRATION_OFFSETS[name] || 0) : 0;
+      const appliedTag = applied
+        ? `<span style="color:var(--accent);">applying ${applied > 0 ? '+' : ''}${applied}</span>`
+        : `<span style="color:var(--muted);">${on ? 'no adjustment' : 'paused'}</span>`;
       return `<div style="padding:10px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
           <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:#fff;">${name}</span>
@@ -4819,11 +4920,12 @@ function renderCalibration() {
         <div class="calibration-bar-wrap">
           <div style="height:100%;width:${barW}%;background:${barColor};border-radius:2px;transition:width 0.4s;"></div>
         </div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;margin-top:5px;text-align:right;">${appliedTag}</div>
       </div>`;
     });
   panel.innerHTML = rows.length
-    ? `<div style="padding:0 20px;">${rows.join('')}</div>`
-    : `<div style="padding:0 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Need 3+ sessions per break to calculate bias.</div>`;
+    ? `${toggle}<div style="padding:0 20px;">${rows.join('')}</div>`
+    : `${toggle}<div style="padding:0 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Need 3+ sessions per break to calculate bias.</div>`;
 }
 
 // ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────
@@ -5145,6 +5247,9 @@ async function initNotifications() {
         document.getElementById('nightlyHourSelect').value = nightly;
         document.getElementById('nightlyStatus').textContent = 'Nightly report active ✓';
       }
+      // Push any locally-computed calibration up so reports/alerts use it too.
+      recomputeCalibration();
+      syncCalibrationToServer();
     }
   } catch { /* SW not ready yet — handled on tab switch */ }
 }
