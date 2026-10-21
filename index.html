@@ -1072,8 +1072,9 @@
         </div>
         <button class="log-submit-btn" id="logSubmitBtn" onclick="commitLogSession()">LOG SESSION</button>
       </div>
-      <div class="section-label" style="margin-top:4px;">
-        PAST SESSIONS <span id="logAccuracy" style="font-size:8px;letter-spacing:1px;opacity:0.55;"></span>
+      <div class="section-label" style="margin-top:4px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span id="logScopeLabel">PAST SESSIONS</span> <span id="logAccuracy" style="font-size:8px;letter-spacing:1px;opacity:0.55;"></span></span>
+        <button id="logScopeToggle" onclick="toggleLogScope()" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;">ALL BREAKS</button>
       </div>
       <div id="sessionLog" style="padding:0 20px 20px;"></div>
 
@@ -1238,7 +1239,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '9.9';
+const APP_VERSION = '10.0';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
@@ -4392,6 +4393,12 @@ const SESSION_STORE_KEY = 'surfcall_sessions_v1';
 let _logScore = null;
 let _logTod   = null; // legacy — older records only
 let _editingSessionId = null; // set while editing an existing session
+let _logShowAll = false; // Past Sessions scope: current break vs every break
+
+function toggleLogScope() {
+  _logShowAll = !_logShowAll;
+  renderSessionLog();
+}
 
 function getSessions() {
   try { return JSON.parse(localStorage.getItem(SESSION_STORE_KEY) || '[]'); }
@@ -4628,19 +4635,22 @@ function deleteSession(id) {
 function renderSessionLog() {
   const allSessions = getSessions();
   const breakName   = BREAKS[currentBreak]?.name;
-  const sessions    = allSessions.filter(s => s.break === breakName);
+  // Scope: current break only, or every break (newest first) so any session is editable.
+  const sessions    = _logShowAll
+    ? [...allSessions].sort((a, b) => new Date(b.ts) - new Date(a.ts))
+    : allSessions.filter(s => s.break === breakName);
   const logEl       = document.getElementById('sessionLog');
   const accEl       = document.getElementById('logAccuracy');
   if (!logEl) return;
 
-  // Update section label to show current break
-  const sectionLbl = logEl.previousElementSibling;
-  if (sectionLbl && sectionLbl.classList.contains('section-label')) {
-    sectionLbl.textContent = `PAST SESSIONS — ${(breakName || '').toUpperCase()}`;
-  }
+  // Section label + scope toggle reflect the current view
+  const scopeLbl = document.getElementById('logScopeLabel');
+  if (scopeLbl) scopeLbl.textContent = _logShowAll ? 'PAST SESSIONS — ALL' : `PAST SESSIONS — ${(breakName || '').toUpperCase()}`;
+  const scopeBtn = document.getElementById('logScopeToggle');
+  if (scopeBtn) scopeBtn.textContent = _logShowAll ? 'THIS BREAK' : 'ALL BREAKS';
 
-  // Accuracy headline for current break
-  const rated = sessions.filter(s => s.algoScore !== null);
+  // Accuracy headline only in per-break view (mixing breaks would be meaningless)
+  const rated = _logShowAll ? [] : sessions.filter(s => s.algoScore !== null);
   if (rated.length >= 3 && accEl) {
     const avgErr = rated.reduce((a, s) => a + Math.abs(s.myScore - s.algoScore), 0) / rated.length;
     accEl.textContent = `— algo avg ±${avgErr.toFixed(1)} pts`;
@@ -4649,7 +4659,7 @@ function renderSessionLog() {
   }
 
   if (!sessions.length) {
-    logEl.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:16px 0;">No sessions logged at ${breakName || 'this break'} yet.</div>`;
+    logEl.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:16px 0;">${_logShowAll ? 'No sessions logged yet.' : `No sessions logged at ${breakName || 'this break'} yet.`}</div>`;
     return;
   }
 
