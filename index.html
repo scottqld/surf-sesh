@@ -1172,6 +1172,13 @@
         </button>
         <div id="alertPermStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:8px;text-align:center;"></div>
       </div>
+
+      <div class="section-label">ABOUT</div>
+      <div style="margin:0 20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 16px;text-align:center;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;line-height:1;">SURF<span style="color:var(--accent);">SESH</span></div>
+        <div id="settingsVersion" style="font-family:'Bebas Neue',sans-serif;font-size:40px;color:var(--accent);line-height:1;margin-top:6px;">v—</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:4px;">INSTALLED VERSION</div>
+      </div>
     </div>
 
   </div>
@@ -1240,9 +1247,10 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.2';
+const APP_VERSION = '10.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
+document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
 let currentStation = 'noosa';
 let cachedData = null;
 let _hasLoaded = false; // tracks whether initial data load has completed
@@ -4962,7 +4970,7 @@ const LIVE_CAM_LINKS = {
     { label: 'Swellnet', url: 'https://www.swellnet.com/surfcams/australia/queensland/first-point' },
     { label: 'Surfline', url: 'https://www.surfline.com/surf-report/noosa-heads/5842041f4e65fad6a7708bee' },
   ],
-  'Nationals':    [{ label: 'Swellnet', url: 'https://www.swellnet.com/surfcams/nationals' }],
+  'Nationals':    [{ label: 'Swellnet', url: 'https://www.swellnet.com/surfcams/australia/queensland/nationals' }],
   'Sunshine Beach': [
     { label: 'Swellnet', url: 'https://www.swellnet.com/surfcams/sunshine-beach' },
     { label: 'Surfline', url: 'https://www.surfline.com/surf-report/sunshine-beach/5d81683d213f4400014af35d' },
