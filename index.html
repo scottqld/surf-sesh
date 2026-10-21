@@ -1247,7 +1247,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.4';
+const APP_VERSION = '10.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1289,7 +1289,7 @@ let BREAKS = [
   {
     name: 'First Point', subtitle: 'First Point', region: 'Noosa National Park',
     notes: 'Classic longboard right-hander at the end of Hastings St. Ideal ENE–E swell with S–SSW offshore wind. Needs size to wrap around the point. Sensitive to NE wind — anything from north quarters will ruin it.',
-    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.32,
+    tide: { ideal: 'low-mid', avoid: 'high' }, pointBreak: true, exposure: 0.55,
     ideal:      { swellDirs: ['ENE','E','NE'],        windDirs: ['S','SSW','SW'],                  swellMin: 0.7, swellMax: 1.0, periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],      windDirs: ['SSE','SE','WSW','W'],            swellMin: 0.3, swellMax: 1.2, periodMin: 8  },
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E'],        swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 3 },

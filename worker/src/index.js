@@ -10,7 +10,7 @@ const BREAKS = [
     avoid:      { swellDirs: ['N','NW','S'],         windDirs: ['N','NNE','NE','ENE','E'],       windPenalty: 2 },
   },
   {
-    name: 'First Point', region: 'Noosa National Park', exposure: 0.32, pointBreak: true,
+    name: 'First Point', region: 'Noosa National Park', exposure: 0.55, pointBreak: true,
     tide: { ideal: 'low-mid', avoid: 'high' },
     ideal:      { swellDirs: ['ENE','E','NE'],       windDirs: ['S','SSW','SW'],                 periodMin: 10 },
     acceptable: { swellDirs: ['ESE','NNE','SE'],     windDirs: ['SSE','SE','WSW','W'],           periodMin: 8  },
