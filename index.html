@@ -1277,7 +1277,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.8';
+const APP_VERSION = '11.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4638,7 +4638,7 @@ function renderLogWavesPicker() {
   const cont = document.getElementById('logWavesPicker');
   if (!cont) return;
   cont.innerHTML = WAVE_OPTIONS.map((v, i) =>
-    `<button class="log-wave-btn${v === _logWaves ? ' active' : ''}" id="logWave${i}" onclick="selectLogWaves(${JSON.stringify(v)})">${v}</button>`
+    `<button class="log-wave-btn${v === _logWaves ? ' active' : ''}" id="logWave${i}" onclick="selectLogWaves(WAVE_OPTIONS[${i}])">${v}</button>`
   ).join('');
 }
 
