@@ -238,6 +238,13 @@
     background: var(--surface2);
   }
   .break-chip.active .break-chip-name { color: #fff; }
+  /* Best break — gold standout (wins over .active styling) */
+  .break-chip.is-best {
+    border-color: #ffce3a;
+    background: rgba(255,206,58,0.12);
+    box-shadow: 0 0 12px rgba(255,206,58,0.28);
+  }
+  .break-chip.is-best .break-chip-name { color: #ffe08a; }
 
   /* WARNING BANNER */
   .warning-banner {
@@ -1210,7 +1217,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.1';
+const APP_VERSION = '11.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -2799,11 +2806,17 @@ function updateBreakIndicators(forecast, isLive = isActiveHours()) {
   const bestNonAdv = nonAdv.length ? nonAdv.reduce((a, s) => s.score > a.score ? s : a, { score: -1 }) : { score: -1 };
   const bestAll    = all.length    ? all.reduce((a, s) => s.score > a.score ? s : a, { score: -1 })    : scores.reduce((a, s) => s.score > a.score ? s : a, { score: -1 });
   const pick = (bestNonAdv.score >= bestAll.score - 2) ? bestNonAdv : bestAll;
-  _bestPick = pick.b ? { idx: pick.idx, score: pick.score, name: pick.b.name, adv: !!pick.b.advanced } : null;
-  // Star the best break in the selector chips (matches the best-break banner pick)
+  // Only recommend a best break when it's actually worth it (score above 4).
+  _bestPick = (pick.b && pick.score > 4)
+    ? { idx: pick.idx, score: pick.score, name: pick.b.name, adv: !!pick.b.advanced }
+    : null;
+  // Highlight + star the best break in the selector chips (matches the banner pick)
   BREAKS.forEach((_, i) => {
+    const isBest = !!_bestPick && i === _bestPick.idx;
     const star = document.getElementById(`chipStar${i}`);
-    if (star) star.style.display = (_bestPick && i === _bestPick.idx) ? '' : 'none';
+    if (star) star.style.display = isBest ? '' : 'none';
+    const chip = document.getElementById(`btn${i}`);
+    if (chip) chip.classList.toggle('is-best', isBest);
   });
   renderBestBreakBanner();
   return pick.idx ?? 0;
