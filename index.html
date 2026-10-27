@@ -213,9 +213,19 @@
   }
   .break-chip-star {
     flex-shrink: 0;
-    color: #f5c451;
-    font-size: 11px;
+    display: inline-block;
+    color: #ffce3a;
+    font-size: 15px;
     line-height: 1;
+    text-shadow: 0 0 8px rgba(255,206,58,0.9), 0 0 2px rgba(255,206,58,0.7);
+    animation: starPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes starPulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.28); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .break-chip-star { animation: none; }
   }
   .break-chip-score {
     font-family: 'Bebas Neue', sans-serif;
@@ -1200,7 +1210,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.0';
+const APP_VERSION = '11.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
