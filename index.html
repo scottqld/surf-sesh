@@ -1241,7 +1241,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.3';
+const APP_VERSION = '11.4';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -5128,12 +5128,14 @@ function switchTab(tab) {
   document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
   const scoreBadge = document.getElementById('photoScoreBadge');
   if (scoreBadge && tab !== 'conditions') scoreBadge.style.display = 'none';
-  // Score chips only on the main (conditions) tab; a simple dropdown elsewhere
+  // Break selector: score chips on the main (conditions) tab, a simple dropdown
+  // on Plan/Log (break-specific), and nothing on Settings (not break-specific).
   const chipsEl  = document.getElementById('breakChips');
   const selectEl = document.getElementById('breakSelect');
-  const onMain   = tab === 'conditions';
-  if (chipsEl)  chipsEl.style.display  = onMain ? '' : 'none';
-  if (selectEl) selectEl.style.display = onMain ? 'none' : 'block';
+  const showChips  = tab === 'conditions';
+  const showSelect = tab === 'planner' || tab === 'log';
+  if (chipsEl)  chipsEl.style.display  = showChips  ? '' : 'none';
+  if (selectEl) selectEl.style.display = showSelect ? 'block' : 'none';
   if (tab === 'planner' && cachedData?.swell) {
     setTimeout(() => renderSwellChart(cachedData.swell), 50);
   }
