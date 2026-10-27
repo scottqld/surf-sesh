@@ -1281,7 +1281,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.1';
+const APP_VERSION = '12.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1512,7 +1512,7 @@ function selectForecastTab(tabIdx) {
   const omDir     = forecast._swellDirByDay?.[realDayIdx]    ?? null;
   const swellStr  = fmtSwell(day.swell, omHeight, omDir, period);
   const swellDir  = omDir ?? extractDir(shortDir(day.swell || ''));
-  const windDir   = extractDir(shortDir(day.winds || ''));
+  const windDir   = resolveWindDir(day.winds, realDayIdx);
   const windSpeed = extractWindSpeed(day.winds || '');
   const b  = BREAKS[currentBreak];
   const fc = { forecasts: [day], ...dayScoreAux(forecast, realDayIdx) };
@@ -1566,7 +1566,7 @@ function selectForecastTab(tabIdx) {
       tidesStr,
       swellStr,
       swellDir,
-      windStr:     `${shortDir(day.winds || '') || '—'}${windSpeed ? ' · ' + windSpeed : ''}`,
+      windStr:     `${windDisplayStr(day.winds, realDayIdx) || '—'}${windSpeed ? ' · ' + windSpeed : ''}`,
       windDir,
       weather:     day.weather,
       sst,
@@ -1828,7 +1828,7 @@ function conditionNoteTomorrow(breakData, forecast) {
   const tomorrow = forecast.forecasts[1];
   const { ideal, acceptable, avoid } = breakData;
   const swellDir    = extractDir(shortDir(tomorrow.swell || ''));
-  const windDir     = extractDir(shortDir(tomorrow.winds || ''));
+  const windDir     = resolveWindDir(tomorrow.winds, 1);
   const swellHeight = extractHeight(shortDir(tomorrow.swell || ''));
   // _periodTomorrow and _tide._tomorrow are attached to cachedData.forecast by renderAll.
   // When called from setBreak, forecast IS cachedData.forecast so these are always available.
@@ -3746,6 +3746,37 @@ function extractWindSpeed(text) {
   return null;
 }
 
+// Open-Meteo wind direction (compass) for a forecast day, at a representative
+// surf-time hour. BOM often reports "variable" on light-wind days; Open-Meteo
+// still carries a modelled direction, so we use it as a fallback.
+function omWindDirForDay(dayOffset, hour = 8) {
+  if (!_windOutlook || !_windOutlook.time) return null;
+  const target = `${getBrisbaneDateStr(dayOffset)}T${String(hour).padStart(2, '0')}:00`;
+  const i = _windOutlook.time.indexOf(target);
+  if (i < 0) return null;
+  const deg = _windOutlook.wind_direction_10m?.[i];
+  return (deg != null) ? degToCompass(deg) : null;
+}
+
+// Wind direction for a forecast day: BOM's own direction when it has one,
+// else the Open-Meteo fallback (so "variable" days still show a direction).
+function resolveWindDir(winds, dayOffset) {
+  return extractDir(shortDir(winds || '')) || omWindDirForDay(dayOffset);
+}
+
+// Display string for a forecast day's wind — replaces a BOM "variable" with the
+// Open-Meteo direction when available, so the forecast never just reads "variable".
+function windDisplayStr(winds, dayOffset) {
+  let s = shortDir(winds || '') || '';
+  if (!extractDir(s)) {
+    const omDir = omWindDirForDay(dayOffset);
+    if (omDir) {
+      s = /variable/i.test(s) ? s.replace(/variable/i, omDir) : `${omDir} ${s}`.trim();
+    }
+  }
+  return s;
+}
+
 // Shared helper: format swell string — Open-Meteo values preferred, BOM text as fallback
 function fmtSwell(bomText, omHeight, omDir, omPeriod) {
   const dir = omDir  != null ? omDir  : extractDir(shortDir(bomText || ''));
@@ -3967,7 +3998,7 @@ function renderForecast(forecast, tideData, swellData) {
       const tmrwTidesStr = tmrwTides.slice(0, 4).map(t => `${t.type} ${formatTideTime(t.time)} ${parseFloat(t.height).toFixed(1)}m`).join(' · ');
       const tmrwSwellStr = fmtSwell(tomorrow.swell, forecast._swellHeightByDay?.[1] ?? null, forecast._swellDirByDay?.[1] ?? null, forecast._periodTomorrow ?? null);
       const tmrwSwellDir = forecast._swellDirByDay?.[1] ?? extractDir(shortDir(tomorrow.swell || ''));
-      const tmrwWindDir  = extractDir(shortDir(tomorrow.winds || ''));
+      const tmrwWindDir  = resolveWindDir(tomorrow.winds, 1);
       const tmrwWindSpeed = extractWindSpeed(tomorrow.winds || '');
       const tmrwBlock = buildForecastPanelBlock(tomorrow, {
         sideMargin: '0', // #tomorrowPlannerCard already has 20px side margins
@@ -3977,7 +4008,7 @@ function renderForecast(forecast, tideData, swellData) {
         tidesStr: tmrwTidesStr,
         swellStr: tmrwSwellStr,
         swellDir: tmrwSwellDir,
-        windStr:  `${shortDir(tomorrow.winds || '') || '—'}${tmrwWindSpeed ? ' · ' + tmrwWindSpeed : ''}`,
+        windStr:  `${windDisplayStr(tomorrow.winds, 1) || '—'}${tmrwWindSpeed ? ' · ' + tmrwWindSpeed : ''}`,
         windDir:  tmrwWindDir,
         weather:  tomorrow.weather,
         sst,
@@ -4382,7 +4413,7 @@ async function loadNightMode() {
       const tmrwDirNm      = data.forecast._swellDirByDay?.[1]    ?? null;
       const tmrwSwellStrNm = fmtSwell(tomorrow.swell, tmrwHeightNm, tmrwDirNm, tmrwPeriodNm);
       const tmrwSwellDirNm = tmrwDirNm ?? extractDir(shortDir(tomorrow.swell || ''));
-      const tmrwWindDirNm  = extractDir(shortDir(tomorrow.winds || ''));
+      const tmrwWindDirNm  = resolveWindDir(tomorrow.winds, 1);
       const tmrwWindSpeedNm = extractWindSpeed(tomorrow.winds || '');
       const plannerTmrwBlock = buildForecastPanelBlock(tomorrow, {
         sideMargin: '0', // #tomorrowPlannerCard already has 20px side margins
@@ -4392,7 +4423,7 @@ async function loadNightMode() {
         tidesStr: tmrwTidesStrNm,
         swellStr: tmrwSwellStrNm,
         swellDir: tmrwSwellDirNm,
-        windStr:  `${shortDir(tomorrow.winds || '') || '—'}${tmrwWindSpeedNm ? ' · ' + tmrwWindSpeedNm : ''}`,
+        windStr:  `${windDisplayStr(tomorrow.winds, 1) || '—'}${tmrwWindSpeedNm ? ' · ' + tmrwWindSpeedNm : ''}`,
         windDir:  tmrwWindDirNm,
         weather:  tomorrow.weather,
         sst:      nmSst,
