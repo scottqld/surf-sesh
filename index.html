@@ -1058,6 +1058,10 @@
           <select id="logBreakSelect" aria-label="Break for this session" onchange="setBreak(+this.value, true); renderSessionLog();"></select>
         </div>
         <div style="margin-bottom:14px;">
+          <div class="condition-label" style="margin-bottom:8px;">DATE</div>
+          <input type="date" id="logDate" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+        </div>
+        <div style="margin-bottom:14px;">
           <div class="condition-label" style="margin-bottom:8px;">SESSION TIME</div>
           <div style="display:flex;align-items:center;gap:8px;">
             <input type="time" id="logStartTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
@@ -1277,7 +1281,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.0';
+const APP_VERSION = '12.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4526,14 +4530,28 @@ async function syncCalibrationToServer() {
 
 recomputeCalibration();
 
-// Pre-fill a plausible session window: ends now, started ~90 min earlier.
+// Local YYYY-MM-DD for a Date (used for the date input + "is this today?" checks)
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Combine a YYYY-MM-DD date with an HH:MM time into an ISO timestamp (local → UTC).
+// Falls back to midday when no start time is given so the day is unambiguous.
+function tsFromDateTime(dateStr, timeStr) {
+  if (!dateStr) return new Date().toISOString();
+  const d = new Date(`${dateStr}T${(timeStr || '12:00')}:00`);
+  return isNaN(d) ? new Date().toISOString() : d.toISOString();
+}
+
+// Pre-fill a plausible session window: ends now, started ~90 min earlier, today.
 function defaultLogTimes() {
   const fmt = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   const now = new Date();
   const start = document.getElementById('logStartTime');
   const end = document.getElementById('logEndTime');
+  const date = document.getElementById('logDate');
   if (start) start.value = fmt(new Date(now.getTime() - 90 * 60000));
   if (end) end.value = fmt(now);
+  if (date) date.value = localDateStr(now);
 }
 
 // Build the in-form break picker (the only break selector shown on the Log tab)
@@ -4709,28 +4727,27 @@ function commitLogSession() {
   const board     = document.getElementById('logBoard')?.value?.trim() || '';
   const startTime = document.getElementById('logStartTime')?.value || '';
   const endTime   = document.getElementById('logEndTime')?.value || '';
+  const dateStr   = document.getElementById('logDate')?.value || localDateStr();
+  const isToday   = dateStr === localDateStr();
   const waves     = _logWaves; // preset bucket: 1, 2, 3, '5+', '10+' or null
 
   const all = getSessions();
-  if (_editingSessionId != null) {
-    // Edit existing — keep original timestamp, algo score, and conditions snapshot
-    const idx = all.findIndex(s => s.id === _editingSessionId);
-    if (idx >= 0) all[idx] = { ...all[idx], break: b.name, startTime, endTime, myScore: _logScore, board, waves, note };
-  } else {
-    all.unshift({
-      id:         Date.now(),
-      ts:         new Date().toISOString(),
-      break:      b.name,
-      startTime, endTime,
-      myScore:    _logScore,
-      // Base (uncalibrated) algo score — calibration bias is measured against this.
-      algoScore:  cachedData ? scoreBreak(b, cachedData.forecast, false, false) : null,
-      board,
-      waves,
-      note,
-      conditions: captureConditions(b),
-    });
-  }
+  // Each submit is a new record — log as many sessions per day as you like.
+  // The conditions snapshot + algo score reflect *current* data, so they're only
+  // captured for a session logged for today; backdated sessions store neither.
+  all.unshift({
+    id:         Date.now(),
+    ts:         tsFromDateTime(dateStr, startTime),
+    break:      b.name,
+    startTime, endTime,
+    myScore:    _logScore,
+    // Base (uncalibrated) algo score — calibration bias is measured against this.
+    algoScore:  (isToday && cachedData) ? scoreBreak(b, cachedData.forecast, false, false) : null,
+    board,
+    waves,
+    note,
+    conditions: isToday ? captureConditions(b) : null,
+  });
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
 
   // Reset form
@@ -4808,7 +4825,9 @@ function saveInline(id) {
   const endTime   = document.getElementById(`ieEnd${id}`)?.value || '';
   const board     = document.getElementById(`ieBoard${id}`)?.value?.trim() || '';
   const note      = document.getElementById(`ieNote${id}`)?.value?.trim() || '';
-  all[idx] = { ...all[idx], break: brk, startTime, endTime, myScore: _ieScore, board, waves: _ieWaves, note };
+  const dateStr   = document.getElementById(`ieDate${id}`)?.value || localDateStr(new Date(all[idx].ts));
+  const ts        = tsFromDateTime(dateStr, startTime);
+  all[idx] = { ...all[idx], ts, break: brk, startTime, endTime, myScore: _ieScore, board, waves: _ieWaves, note };
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
   _inlineEditId = null; _ieScore = null; _ieWaves = null;
   recomputeCalibration();
@@ -4837,6 +4856,7 @@ function inlineEditCardHTML(s) {
   return `<div id="sessionCard${id}" style="padding:14px;margin:8px 0;background:rgba(0,212,255,0.05);border:1px solid var(--accent);border-radius:12px;">
     <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:1.5px;margin-bottom:10px;">EDITING SESSION</div>
     <select id="ieBreak${id}" style="${field}appearance:none;-webkit-appearance:none;cursor:pointer;margin-bottom:8px;">${breakOpts}</select>
+    <input type="date" id="ieDate${id}" value="${escAttr(localDateStr(new Date(s.ts)))}" style="${field}margin-bottom:8px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
       <input type="time" id="ieStart${id}" value="${escAttr(s.startTime)}" style="flex:1;min-width:0;${field}">
       <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
