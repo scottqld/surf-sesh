@@ -1281,7 +1281,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.2';
+const APP_VERSION = '12.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4480,7 +4480,7 @@ async function loadNightMode() {
 const SESSION_STORE_KEY = 'surfcall_sessions_v1';
 let _logScore = null;
 let _logWaves = null; // selected waves-caught bucket (1, 2, 3, '5+', '10+') or null
-const WAVE_OPTIONS = [1, 2, 3, '5+', '10+'];
+const WAVE_OPTIONS = [0, 1, 2, 3, '5+', '10+'];
 let _logTod   = null; // legacy — older records only
 let _editingSessionId = null; // legacy — top-form edit; editing is now inline
 let _inlineEditId = null;     // id of the session being edited inline in the list
