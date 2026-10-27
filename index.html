@@ -269,6 +269,28 @@
   }
   .break-select:focus { outline: none; border-color: var(--accent); }
 
+  /* Break picker inside the log-session form (only selector shown on the Log tab) */
+  #logBreakSelect {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 36px 10px 12px;
+    color: #fff;
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  #logBreakSelect:focus { outline: none; border-color: var(--accent); }
+
   /* WARNING BANNER */
   .warning-banner {
     margin: 0 20px 12px;
@@ -1025,8 +1047,8 @@
       <div class="section-label">RATE YOUR SESSION</div>
       <div style="margin:0 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
         <div style="margin-bottom:14px;">
-          <div class="condition-label" style="margin-bottom:4px;">LOGGING SESSION AT</div>
-          <div id="logBreakDisplay" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#fff;line-height:1.2;">—</div>
+          <div class="condition-label" style="margin-bottom:6px;">LOGGING SESSION AT</div>
+          <select id="logBreakSelect" aria-label="Break for this session" onchange="setBreak(+this.value, true); renderSessionLog();"></select>
         </div>
         <div style="margin-bottom:14px;">
           <div class="condition-label" style="margin-bottom:8px;">SESSION TIME</div>
@@ -1241,7 +1263,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.5';
+const APP_VERSION = '11.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1866,6 +1888,8 @@ function setBreak(index, fromUser = false) {
   });
   const sel = document.getElementById('breakSelect');
   if (sel && sel.value !== String(index)) sel.value = String(index);
+  const logSel = document.getElementById('logBreakSelect');
+  if (logSel && logSel.options.length && logSel.value !== String(index)) logSel.value = String(index);
   const b = BREAKS[index];
   _currentBreakName = b.name;
   _currentBreakNotes = b.notes || '';
@@ -2117,7 +2141,7 @@ function setBreak(index, fromUser = false) {
     if (cachedData) generateAiSummary(b, cachedData.forecast, score);
     if (cachedData) renderDITripGate(cachedData.forecast, cachedData.swell);
     if (cachedData) { const sparkEl = document.getElementById('weekSparkline'); if (sparkEl) sparkEl.innerHTML = buildSparklineHTML(cachedData.forecast, true); }
-    if (currentTab === 'log') { const d = document.getElementById('logBreakDisplay'); if (d && BREAKS[currentBreak]) d.textContent = BREAKS[currentBreak].name; renderSessionLog(); renderCalibration(); renderBoardStats(); }
+    if (currentTab === 'log') { renderLogBreakSelect(); renderSessionLog(); renderCalibration(); renderBoardStats(); }
   });
 }
 
@@ -4408,7 +4432,7 @@ const SESSION_STORE_KEY = 'surfcall_sessions_v1';
 let _logScore = null;
 let _logTod   = null; // legacy — older records only
 let _editingSessionId = null; // set while editing an existing session
-let _logShowAll = false; // Past Sessions scope: current break vs every break
+let _logShowAll = true; // Past Sessions scope: show every break by default, narrow via toggle
 
 function toggleLogScope() {
   _logShowAll = !_logShowAll;
@@ -4493,10 +4517,19 @@ function defaultLogTimes() {
   if (end) end.value = fmt(now);
 }
 
+// Build the in-form break picker (the only break selector shown on the Log tab)
+function renderLogBreakSelect() {
+  const sel = document.getElementById('logBreakSelect');
+  if (!sel) return;
+  sel.innerHTML = BREAKS.map((b, i) =>
+    `<option value="${i}"${i === currentBreak ? ' selected' : ''}>${b.name}</option>`
+  ).join('');
+  sel.value = String(currentBreak);
+}
+
 function initLogTab() {
-  // Sync break display label with current break selector
-  const display = document.getElementById('logBreakDisplay');
-  if (display && BREAKS[currentBreak]) display.textContent = BREAKS[currentBreak].name;
+  // Break picker for the new session reflects the current break
+  renderLogBreakSelect();
 
   // Build 1–10 score picker
   const picker = document.getElementById('logScorePicker');
@@ -4693,8 +4726,7 @@ function editSession(id) {
   // Switch to the session's break so the form + selector match
   const bi = BREAKS.findIndex(b => b.name === s.break);
   if (bi >= 0) setBreak(bi, true);
-  const display = document.getElementById('logBreakDisplay');
-  if (display) display.textContent = s.break;
+  renderLogBreakSelect();
   const startEl = document.getElementById('logStartTime');
   const endEl = document.getElementById('logEndTime');
   if (startEl) startEl.value = s.startTime || '';
@@ -5133,11 +5165,11 @@ function switchTab(tab) {
   const chipsEl  = document.getElementById('breakChips');
   const selectEl = document.getElementById('breakSelect');
   const showChips  = tab === 'conditions';
-  const showSelect = tab === 'planner' || tab === 'log';
+  const showSelect = tab === 'planner'; // Log has its own in-form picker; Settings none
   if (chipsEl)  chipsEl.style.display  = showChips  ? '' : 'none';
   if (selectEl) selectEl.style.display = showSelect ? 'block' : 'none';
-  // Settings isn't break-specific — hide the break photo + name bar there too
-  const breakContext = tab !== 'settings';
+  // Break photo + name bar only where a break is the subject (Conditions, Plan)
+  const breakContext = tab === 'conditions' || tab === 'planner';
   const photoWrap = document.getElementById('breakPhotoWrap');
   const nameBar   = document.getElementById('breakNameBar');
   if (photoWrap) photoWrap.style.display = breakContext ? '' : 'none';
