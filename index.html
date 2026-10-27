@@ -1067,6 +1067,12 @@
           <div class="condition-label" style="margin-bottom:8px;">YOUR RATING</div>
           <div id="logScorePicker" style="display:flex;gap:4px;"></div>
         </div>
+        <div style="margin-bottom:14px;">
+          <div class="condition-label" style="margin-bottom:6px;">BOARD <span style="opacity:0.5;">(optional)</span></div>
+          <input type="text" id="logBoard" list="boardSuggestions" autocomplete="off" placeholder="e.g. 9'1 log, 6'2 shortboard…"
+            style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+          <datalist id="boardSuggestions"></datalist>
+        </div>
         <div style="margin-bottom:16px;">
           <div class="condition-label" style="margin-bottom:6px;">NOTE <span style="opacity:0.5;">(optional)</span></div>
           <textarea id="logNote" class="log-note" placeholder="Clean 3ft dawn session, light S wind…"></textarea>
@@ -1247,7 +1253,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.5';
+const APP_VERSION = '10.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4500,6 +4506,17 @@ function initLogTab() {
   picker.innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(n =>
     `<button class="log-score-btn" id="logScore${n}" onclick="selectLogScore(${n})">${n}</button>`
   ).join('');
+  fillBoardSuggestions();
+}
+
+// Autocomplete the board field with boards from previous logs (most-used first).
+function fillBoardSuggestions() {
+  const dl = document.getElementById('boardSuggestions');
+  if (!dl) return;
+  const counts = {};
+  getSessions().forEach(s => { const b = (s.board || '').trim(); if (b) counts[b] = (counts[b] || 0) + 1; });
+  const boards = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  dl.innerHTML = boards.map(b => `<option value="${b.replace(/"/g, '&quot;')}"></option>`).join('');
 }
 
 function selectLogScore(n) {
@@ -4564,6 +4581,7 @@ function commitLogSession() {
 
   const b         = BREAKS[currentBreak];
   const note      = document.getElementById('logNote')?.value?.trim() || '';
+  const board     = document.getElementById('logBoard')?.value?.trim() || '';
   const startTime = document.getElementById('logStartTime')?.value || '';
   const endTime   = document.getElementById('logEndTime')?.value || '';
 
@@ -4571,7 +4589,7 @@ function commitLogSession() {
   if (_editingSessionId != null) {
     // Edit existing — keep original timestamp, algo score, and conditions snapshot
     const idx = all.findIndex(s => s.id === _editingSessionId);
-    if (idx >= 0) all[idx] = { ...all[idx], break: b.name, startTime, endTime, myScore: _logScore, note };
+    if (idx >= 0) all[idx] = { ...all[idx], break: b.name, startTime, endTime, myScore: _logScore, board, note };
   } else {
     all.unshift({
       id:         Date.now(),
@@ -4581,6 +4599,7 @@ function commitLogSession() {
       myScore:    _logScore,
       // Base (uncalibrated) algo score — calibration bias is measured against this.
       algoScore:  cachedData ? scoreBreak(b, cachedData.forecast, false, false) : null,
+      board,
       note,
       conditions: captureConditions(b),
     });
@@ -4599,6 +4618,9 @@ function commitLogSession() {
   }
   const noteEl = document.getElementById('logNote');
   if (noteEl) noteEl.value = '';
+  const boardEl = document.getElementById('logBoard');
+  if (boardEl) boardEl.value = '';
+  fillBoardSuggestions();
 
   recomputeCalibration();
   syncCalibrationToServer();
@@ -4624,6 +4646,8 @@ function editSession(id) {
   if (endEl) endEl.value = s.endTime || '';
   const noteEl = document.getElementById('logNote');
   if (noteEl) noteEl.value = s.note || '';
+  const boardEl = document.getElementById('logBoard');
+  if (boardEl) boardEl.value = s.board || '';
   selectLogScore(s.myScore);
   const submitBtn = document.getElementById('logSubmitBtn');
   if (submitBtn) submitBtn.textContent = 'UPDATE SESSION';
@@ -4698,6 +4722,7 @@ function renderSessionLog() {
         <div style="flex:1;min-width:0;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fff;line-height:1.15;">${s.break}</div>
+          ${s.board ? `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:3px;">🏄 ${s.board.replace(/</g, '&lt;')}</div>` : ''}
           ${condLine ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px;">${condLine}</div>` : ''}
           ${s.note ? `<div style="font-size:12px;color:var(--text);margin-top:5px;font-style:italic;word-break:break-word;">"${s.note}"</div>` : ''}
         </div>
