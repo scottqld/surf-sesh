@@ -1091,6 +1091,9 @@
       </div>
       <div id="sessionLog" style="padding:0 20px 20px;"></div>
 
+      <div class="section-label">TOTALS</div>
+      <div id="totalsPanel" style="padding:0 20px 20px;"></div>
+
       <div class="section-label">BY BOARD</div>
       <div id="boardStatsPanel" style="padding:0 20px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log sessions with a board to see averages.</div>
 
@@ -1274,7 +1277,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.7';
+const APP_VERSION = '11.8';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -5099,7 +5102,43 @@ function renderCalibration() {
 }
 
 // Per-board average rating across all logged sessions (most-surfed first).
+// Map a waves bucket to a countable minimum (5+ → 5, 10+ → 10) for summing
+function waveBucketToNum(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  const n = parseInt(String(v), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+// Overall totals — sessions logged and (approx) waves caught across every break
+function renderTotals() {
+  const panel = document.getElementById('totalsPanel');
+  if (!panel) return;
+  const sessions = getSessions();
+  const totalSessions = sessions.length;
+  const wavesSessions = sessions.filter(s => s.waves != null);
+  const totalWaves = wavesSessions.reduce((a, s) => a + waveBucketToNum(s.waves), 0);
+  // Buckets are minimums (5+/10+), so the sum is a lower bound → show a "+"
+  const approx = wavesSessions.some(s => typeof s.waves === 'string' && s.waves.includes('+'));
+
+  if (!totalSessions) {
+    panel.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log a session to see your totals.</div>`;
+    return;
+  }
+
+  const stat = (num, label) => `
+    <div style="flex:1;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 8px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--accent);line-height:1;">${num}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:4px;">${label}</div>
+    </div>`;
+  panel.innerHTML = `<div style="display:flex;gap:10px;">
+      ${stat(totalSessions, 'SESSIONS')}
+      ${stat(totalWaves > 0 && approx ? totalWaves + '+' : totalWaves, 'WAVES CAUGHT')}
+    </div>`;
+}
+
 function renderBoardStats() {
+  renderTotals();
   const panel = document.getElementById('boardStatsPanel');
   if (!panel) return;
   const byBoard = {};
