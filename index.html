@@ -625,6 +625,13 @@
   .log-score-btn.active-good  { background: rgba(0,229,160,0.15); color: var(--high);   border-color: var(--high);   }
   .log-score-btn.active-ok    { background: rgba(0,212,255,0.15); color: var(--accent); border-color: var(--accent); }
   .log-score-btn.active-poor  { background: rgba(200,208,219,0.1); color: var(--text); border-color: var(--text);   }
+  .log-wave-btn {
+    flex: 1; min-width: 40px; padding: 9px 2px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--muted); font-family: 'DM Mono', monospace; font-size: 14px; letter-spacing: 0.5px;
+    cursor: pointer; transition: all 0.15s; line-height: 1;
+  }
+  .log-wave-btn.active { background: rgba(0,212,255,0.15); color: var(--accent); border-color: var(--accent); }
   .log-note {
     width: 100%; background: var(--surface2); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text); font-family: 'DM Sans', sans-serif;
@@ -1068,6 +1075,10 @@
             style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
           <datalist id="boardSuggestions"></datalist>
         </div>
+        <div style="margin-bottom:14px;">
+          <div class="condition-label" style="margin-bottom:8px;">WAVES CAUGHT <span style="opacity:0.5;">(optional)</span></div>
+          <div id="logWavesPicker" style="display:flex;gap:6px;"></div>
+        </div>
         <div style="margin-bottom:16px;">
           <div class="condition-label" style="margin-bottom:6px;">NOTE <span style="opacity:0.5;">(optional)</span></div>
           <textarea id="logNote" class="log-note" placeholder="Clean 3ft dawn session, light S wind…"></textarea>
@@ -1263,7 +1274,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.6';
+const APP_VERSION = '11.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4430,6 +4441,8 @@ async function loadNightMode() {
 
 const SESSION_STORE_KEY = 'surfcall_sessions_v1';
 let _logScore = null;
+let _logWaves = null; // selected waves-caught bucket (1, 2, 3, '5+', '10+') or null
+const WAVE_OPTIONS = [1, 2, 3, '5+', '10+'];
 let _logTod   = null; // legacy — older records only
 let _editingSessionId = null; // set while editing an existing session
 let _logShowAll = true; // Past Sessions scope: show every break by default, narrow via toggle
@@ -4535,10 +4548,12 @@ function initLogTab() {
   const picker = document.getElementById('logScorePicker');
   if (!picker) return;
   _logScore = null;
+  _logWaves = null;
   defaultLogTimes();
   picker.innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(n =>
     `<button class="log-score-btn" id="logScore${n}" onclick="selectLogScore(${n})">${n}</button>`
   ).join('');
+  renderLogWavesPicker();
   fillBoardSuggestions();
 }
 
@@ -4615,6 +4630,23 @@ function selectLogScore(n) {
   }
 }
 
+// Waves-caught picker — preset buckets (1, 2, 3, 5+, 10+), tap again to clear
+function renderLogWavesPicker() {
+  const cont = document.getElementById('logWavesPicker');
+  if (!cont) return;
+  cont.innerHTML = WAVE_OPTIONS.map((v, i) =>
+    `<button class="log-wave-btn${v === _logWaves ? ' active' : ''}" id="logWave${i}" onclick="selectLogWaves(${JSON.stringify(v)})">${v}</button>`
+  ).join('');
+}
+
+function selectLogWaves(v) {
+  _logWaves = (_logWaves === v) ? null : v; // toggle off if tapping the active one
+  WAVE_OPTIONS.forEach((opt, i) => {
+    const btn = document.getElementById(`logWave${i}`);
+    if (btn) btn.classList.toggle('active', opt === _logWaves);
+  });
+}
+
 function selectLogTod(tod) {
   _logTod = tod;
   ['dawn','morning','afternoon'].forEach(t => {
@@ -4671,12 +4703,13 @@ function commitLogSession() {
   const board     = document.getElementById('logBoard')?.value?.trim() || '';
   const startTime = document.getElementById('logStartTime')?.value || '';
   const endTime   = document.getElementById('logEndTime')?.value || '';
+  const waves     = _logWaves; // preset bucket: 1, 2, 3, '5+', '10+' or null
 
   const all = getSessions();
   if (_editingSessionId != null) {
     // Edit existing — keep original timestamp, algo score, and conditions snapshot
     const idx = all.findIndex(s => s.id === _editingSessionId);
-    if (idx >= 0) all[idx] = { ...all[idx], break: b.name, startTime, endTime, myScore: _logScore, board, note };
+    if (idx >= 0) all[idx] = { ...all[idx], break: b.name, startTime, endTime, myScore: _logScore, board, waves, note };
   } else {
     all.unshift({
       id:         Date.now(),
@@ -4687,6 +4720,7 @@ function commitLogSession() {
       // Base (uncalibrated) algo score — calibration bias is measured against this.
       algoScore:  cachedData ? scoreBreak(b, cachedData.forecast, false, false) : null,
       board,
+      waves,
       note,
       conditions: captureConditions(b),
     });
@@ -4707,6 +4741,8 @@ function commitLogSession() {
   if (noteEl) noteEl.value = '';
   const boardEl = document.getElementById('logBoard');
   if (boardEl) boardEl.value = '';
+  _logWaves = null;
+  renderLogWavesPicker();
   fillBoardSuggestions();
 
   recomputeCalibration();
@@ -4735,6 +4771,8 @@ function editSession(id) {
   if (noteEl) noteEl.value = s.note || '';
   const boardEl = document.getElementById('logBoard');
   if (boardEl) boardEl.value = s.board || '';
+  _logWaves = s.waves ?? null;
+  renderLogWavesPicker();
   selectLogScore(s.myScore);
   const submitBtn = document.getElementById('logSubmitBtn');
   if (submitBtn) submitBtn.textContent = 'UPDATE SESSION';
@@ -4810,7 +4848,7 @@ function renderSessionLog() {
         <div style="flex:1;min-width:0;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fff;line-height:1.15;">${s.break}</div>
-          ${s.board ? `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:3px;">🏄 ${s.board.replace(/</g, '&lt;')}</div>` : ''}
+          ${(s.board || s.waves != null) ? `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:3px;">${s.board ? `<span>🏄 ${s.board.replace(/</g, '&lt;')}</span>` : ''}${s.waves != null ? `<span>🌊 ${s.waves} wave${s.waves === 1 ? '' : 's'}</span>` : ''}</div>` : ''}
           ${condLine ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px;">${condLine}</div>` : ''}
           ${s.note ? `<div style="font-size:12px;color:var(--text);margin-top:5px;font-style:italic;word-break:break-word;">"${s.note}"</div>` : ''}
         </div>
