@@ -259,6 +259,49 @@
     color: var(--accent);
   }
 
+  /* Break selector — score chips (all breaks visible) */
+  .break-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 20px 10px;
+  }
+  .break-chip {
+    flex: 0 0 calc(33.333% - 4px);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 9px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .break-chip-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .break-chip-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 19px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .break-chip.active {
+    border-color: var(--accent);
+    background: var(--surface2);
+  }
+  .break-chip.active .break-chip-name { color: #fff; }
+
   /* Break selector buttons overlaid on photo */
   .station-btn-photo {
     display: inline-block;
@@ -943,23 +986,8 @@
     </div>
   </header>
 
-  <!-- Break selector — horizontal scrolling bar above the photo -->
-  <div class="station-toggle-wrap" style="margin-top:6px;">
-    <div class="station-toggle" style="margin:0 20px;background:transparent;border:none;border-radius:0;padding:2px 0;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
-      <button class="station-btn-photo active" id="btn0" onclick="setBreak(0, true)">Groyne</button>
-      <button class="station-btn-photo" id="btn1" onclick="setBreak(1, true)">First Pt.</button>
-      <button class="station-btn-photo" id="btn2" onclick="setBreak(2, true)">Nationals</button>
-      <button class="station-btn-photo" id="btn3" onclick="setBreak(3, true)">Tea Tree</button>
-      <button class="station-btn-photo" id="btn4" onclick="setBreak(4, true)">Granite</button>
-      <button class="station-btn-photo" id="btn5" onclick="setBreak(5, true)">Sunshine</button>
-      <button class="station-btn-photo" id="btn6" onclick="setBreak(6, true)">Castaways</button>
-      <button class="station-btn-photo" id="btn7" onclick="setBreak(7, true)">D.I.</button>
-    </div>
-    <div class="station-toggle-fade" style="background:linear-gradient(to right,transparent,var(--bg,#060810) 70%);right:20px;"></div>
-    <div class="station-toggle-fade-left" id="stFadeLeft" style="background:linear-gradient(to left,transparent,var(--bg,#060810) 70%);left:20px;opacity:0;"></div>
-    <button class="scroll-arrow scroll-arrow-left" id="scrollLeft" onclick="scrollBreaks(-120)" style="display:none;">‹</button>
-    <button class="scroll-arrow scroll-arrow-right" id="scrollRight" onclick="scrollBreaks(120)">›</button>
-  </div>
+  <!-- Break selector — score chips (all breaks visible, colour-coded by score) -->
+  <div id="breakChips" class="break-chips"></div>
 
   <!-- Break photo -->
   <div id="breakPhotoWrap" style="margin: 8px 20px 0; height: 108px; border-radius: 10px; overflow: hidden; position: relative;">
@@ -1268,7 +1296,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.8';
+const APP_VERSION = '10.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1890,9 +1918,6 @@ function setBreak(index, fromUser = false) {
     const btn = document.getElementById(`btn${i}`);
     if (!btn) return;
     btn.classList.toggle('active', i === index);
-    if (i === index) {
-      btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
   });
   const b = BREAKS[index];
   _currentBreakName = b.name;
@@ -2830,12 +2855,9 @@ function conditionNote(breakData, forecast) {
 
 ///////////////////////////////////////////////////
 function updateBreakIndicators(forecast, isLive = isActiveHours()) {
-  // Clear all existing dots first to avoid stale state between mode switches
-  BREAKS.forEach((_, i) => {
-    const btn = document.getElementById(`btn${i}`);
-    btn.querySelectorAll('.break-dot').forEach(d => d.remove());
-    btn.style.color = '';
-  });
+  // Make sure the chips exist (e.g. after BREAKS changed from the worker)
+  const cont = document.getElementById('breakChips');
+  if (cont && cont.children.length !== BREAKS.length) renderBreakChips();
 
   // Score each break the same way the visible panel does: live score in day
   // mode, canonical tomorrow inputs at night — so the pick matches the UI.
@@ -2847,24 +2869,12 @@ function updateBreakIndicators(forecast, isLive = isActiveHours()) {
   BREAKS.forEach((b, i) => {
     const score = scoreNow(b);
     if (score > bestScore) { bestScore = score; bestBreak = b; }
+    const nameEl  = document.querySelector(`#btn${i} .break-chip-name`);
+    if (nameEl) nameEl.textContent = breakBtnLabel(b);
+    const scoreEl = document.getElementById(`chipScore${i}`);
+    if (scoreEl) { scoreEl.textContent = score; scoreEl.style.color = scoreColor(score); }
     const btn = document.getElementById(`btn${i}`);
-    btn.childNodes[0].textContent = breakBtnLabel(b);
-    if (score >= 7) {
-      btn.title = 'Firing!';
-      const icon = document.createElement('span');
-      icon.className = 'break-dot';
-      icon.textContent = '🔥';
-      icon.style.cssText = 'margin-left:4px;font-size:10px;';
-      btn.appendChild(icon);
-    } else if (score >= 5) {
-      btn.title = 'Decent conditions';
-      const icon = document.createElement('span');
-      icon.className = 'break-dot';
-      icon.style.cssText = 'display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:5px;vertical-align:middle;opacity:0.85;';
-      btn.appendChild(icon);
-    } else {
-      btn.title = 'Not ideal';
-    }
+    if (btn) btn.title = score >= 7 ? 'Firing!' : score >= 5 ? 'Decent conditions' : 'Not ideal';
   });
 
   // Best break banner — prefer non-advanced breaks unless no good alternative
@@ -3051,6 +3061,19 @@ const BREAK_BTN_LABELS = {
   'Double Island': 'D.I.',
 };
 function breakBtnLabel(b) { return BREAK_BTN_LABELS[b.name] || b.subtitle; }
+
+// Build the break-selector chips (one per break: name + live score, colour-coded).
+// Scores are filled/refreshed by updateBreakIndicators once forecast data loads.
+function renderBreakChips() {
+  const cont = document.getElementById('breakChips');
+  if (!cont) return;
+  cont.innerHTML = BREAKS.map((b, i) =>
+    `<button class="break-chip${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i}, true)">
+      <span class="break-chip-name">${breakBtnLabel(b)}</span>
+      <span class="break-chip-score" id="chipScore${i}" style="color:var(--muted);">–</span>
+    </button>`
+  ).join('');
+}
 
 // Local calibration overrides — applied on top of whatever the worker serves.
 // Edit here to tweak scoring without redeploying the worker.
@@ -3487,14 +3510,8 @@ function renderAll(data) {
   if (data.breaks && Array.isArray(data.breaks) && data.breaks.length > 0) {
     BREAKS = applyBreakPatches(data.breaks);
   }
-  // Keep the photo selector in sync with BREAKS (the static HTML may have fewer
-  // buttons than the frontend defines, e.g. after adding a break)
-  const toggle = document.querySelector('.station-toggle');
-  if (toggle && BREAKS.length !== toggle.querySelectorAll('.station-btn-photo').length) {
-    toggle.innerHTML = BREAKS.map((b, i) =>
-      `<button class="station-btn-photo${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i}, true)">${breakBtnLabel(b)}</button>`
-    ).join('');
-  }
+  // Keep the selector chips in sync with BREAKS (worker may add/remove breaks)
+  renderBreakChips();
   // Attach current and tomorrow period from Open-Meteo to forecast for scoreBreak
   if (data.swell && data.swell.hourly) {
     // Open-Meteo times are Brisbane local (timezone=Australia/Brisbane in worker URL)
@@ -5234,6 +5251,9 @@ function scheduleNextLoad() {
     scheduleNextLoad();
   }, msUntilNext);
 }
+
+// Render the selector chips immediately (scores fill in once data loads)
+renderBreakChips();
 
 // Initial load — always fetch, but night mode only renders future day forecasts
 if (isActiveHours()) {
