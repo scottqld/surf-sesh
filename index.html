@@ -246,6 +246,29 @@
   }
   .break-chip.is-best .break-chip-name { color: #ffe08a; }
 
+  /* Break dropdown — shown on non-conditions tabs instead of the score chips */
+  .break-select {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 8px 20px 10px;
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 36px 9px 12px;
+    color: #fff;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  .break-select:focus { outline: none; border-color: var(--accent); }
+
   /* WARNING BANNER */
   .warning-banner {
     margin: 0 20px 12px;
@@ -907,8 +930,9 @@
     </div>
   </header>
 
-  <!-- Break selector — score chips (all breaks visible, colour-coded by score) -->
+  <!-- Break selector — score chips (conditions tab only) + simple dropdown (other tabs) -->
   <div id="breakChips" class="break-chips"></div>
+  <select id="breakSelect" class="break-select" style="display:none;" aria-label="Select break" onchange="setBreak(+this.value, true)"></select>
 
   <!-- Break photo -->
   <div id="breakPhotoWrap" style="margin: 8px 20px 0; height: 108px; border-radius: 10px; overflow: hidden; position: relative;">
@@ -1217,7 +1241,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '11.2';
+const APP_VERSION = '11.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1840,6 +1864,8 @@ function setBreak(index, fromUser = false) {
     if (!btn) return;
     btn.classList.toggle('active', i === index);
   });
+  const sel = document.getElementById('breakSelect');
+  if (sel && sel.value !== String(index)) sel.value = String(index);
   const b = BREAKS[index];
   _currentBreakName = b.name;
   _currentBreakNotes = b.notes || '';
@@ -3006,6 +3032,15 @@ function renderBreakChips() {
       <span class="break-chip-score" id="chipScore${i}" style="color:var(--muted);">–</span>
     </button>`
   ).join('');
+
+  // Dropdown (used on non-conditions tabs) mirrors the same break list
+  const sel = document.getElementById('breakSelect');
+  if (sel) {
+    sel.innerHTML = BREAKS.map((b, i) =>
+      `<option value="${i}"${i === currentBreak ? ' selected' : ''}>${b.name}</option>`
+    ).join('');
+    sel.value = String(currentBreak);
+  }
 }
 
 // Local calibration overrides — applied on top of whatever the worker serves.
@@ -5093,6 +5128,12 @@ function switchTab(tab) {
   document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
   const scoreBadge = document.getElementById('photoScoreBadge');
   if (scoreBadge && tab !== 'conditions') scoreBadge.style.display = 'none';
+  // Score chips only on the main (conditions) tab; a simple dropdown elsewhere
+  const chipsEl  = document.getElementById('breakChips');
+  const selectEl = document.getElementById('breakSelect');
+  const onMain   = tab === 'conditions';
+  if (chipsEl)  chipsEl.style.display  = onMain ? '' : 'none';
+  if (selectEl) selectEl.style.display = onMain ? 'none' : 'block';
   if (tab === 'planner' && cachedData?.swell) {
     setTimeout(() => renderSwellChart(cachedData.swell), 50);
   }
