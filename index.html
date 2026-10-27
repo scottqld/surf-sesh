@@ -157,87 +157,7 @@
     min-width: 0;
   }
 
-  /* STATION TOGGLE */
-  .station-toggle {
-    margin: 16px 20px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    display: flex;
-    flex-wrap: wrap;          /* wrap breaks onto 2 rows — no horizontal scroll */
-    justify-content: center;
-    gap: 2px 4px;
-  }
-
-  .station-toggle::-webkit-scrollbar { display: none; }
-  /* Scroll affordances no longer needed now the selector wraps */
-  .scroll-arrow, .station-toggle-fade, .station-toggle-fade-left { display: none !important; }
-
-  .station-toggle-wrap {
-    position: relative;
-  }
-
-  .station-toggle-wrap .station-toggle {
-    margin: 16px 20px;
-  }
-
-  .scroll-arrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    z-index: 10;
-    line-height: 1;
-    transition: opacity 0.2s;
-  }
-
-  .scroll-arrow-left { left: 22px; }
-  .scroll-arrow-right { right: 22px; }
-
-  .station-toggle-fade {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to right, transparent, var(--surface) 70%);
-    border-radius: 0 8px 8px 0;
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 6px;
-    transition: opacity 0.2s;
-  }
-
-  .station-toggle-fade::after {
-    content: '›';
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-  }
-
-  .station-toggle-fade-left {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    border-radius: 8px 0 0 8px;
-    pointer-events: none;
-    transition: opacity 0.2s;
-  }
-
+  /* TIDE STATION TOGGLE (Noosa / Mooloolaba) */
   .station-btn {
     display: inline-block;
     padding: 10px 14px;
@@ -281,6 +201,7 @@
     transition: border-color 0.15s, background 0.15s;
   }
   .break-chip-name {
+    flex: 1 1 auto;
     font-family: 'DM Mono', monospace;
     font-size: 10px;
     letter-spacing: 0.2px;
@@ -289,6 +210,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+  }
+  .break-chip-star {
+    flex-shrink: 0;
+    color: #f5c451;
+    font-size: 11px;
+    line-height: 1;
   }
   .break-chip-score {
     font-family: 'Bebas Neue', sans-serif;
@@ -301,29 +228,6 @@
     background: var(--surface2);
   }
   .break-chip.active .break-chip-name { color: #fff; }
-
-  /* Break selector buttons overlaid on photo */
-  .station-btn-photo {
-    display: inline-block;
-    padding: 7px 14px;
-    background: none;
-    border: none;
-    color: rgba(255,255,255,0.6);
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-    vertical-align: middle;
-  }
-  .station-btn-photo.active {
-    color: #fff;
-    text-shadow: 0 0 12px rgba(0,229,160,0.6);
-    border-bottom: 2px solid var(--high);
-    padding-bottom: 5px;
-  }
 
   /* WARNING BANNER */
   .warning-banner {
@@ -1296,7 +1200,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.9';
+const APP_VERSION = '11.0';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -2886,6 +2790,11 @@ function updateBreakIndicators(forecast, isLive = isActiveHours()) {
   const bestAll    = all.length    ? all.reduce((a, s) => s.score > a.score ? s : a, { score: -1 })    : scores.reduce((a, s) => s.score > a.score ? s : a, { score: -1 });
   const pick = (bestNonAdv.score >= bestAll.score - 2) ? bestNonAdv : bestAll;
   _bestPick = pick.b ? { idx: pick.idx, score: pick.score, name: pick.b.name, adv: !!pick.b.advanced } : null;
+  // Star the best break in the selector chips (matches the best-break banner pick)
+  BREAKS.forEach((_, i) => {
+    const star = document.getElementById(`chipStar${i}`);
+    if (star) star.style.display = (_bestPick && i === _bestPick.idx) ? '' : 'none';
+  });
   renderBestBreakBanner();
   return pick.idx ?? 0;
 }
@@ -3069,6 +2978,7 @@ function renderBreakChips() {
   if (!cont) return;
   cont.innerHTML = BREAKS.map((b, i) =>
     `<button class="break-chip${i === currentBreak ? ' active' : ''}" id="btn${i}" onclick="setBreak(${i}, true)">
+      <span class="break-chip-star" id="chipStar${i}" style="display:none;" title="Best right now">★</span>
       <span class="break-chip-name">${breakBtnLabel(b)}</span>
       <span class="break-chip-score" id="chipScore${i}" style="color:var(--muted);">–</span>
     </button>`
@@ -5158,8 +5068,6 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(`tab-${tab}`)?.classList.add('active');
   document.getElementById(`tabBtn-${tab}`)?.classList.add('active');
-  const toggleWrap = document.querySelector('.station-toggle-wrap');
-  if (toggleWrap) toggleWrap.style.display = '';
   const scoreBadge = document.getElementById('photoScoreBadge');
   if (scoreBadge && tab !== 'conditions') scoreBadge.style.display = 'none';
   if (tab === 'planner' && cachedData?.swell) {
@@ -5176,34 +5084,6 @@ function switchTab(tab) {
     renderBoardsManager();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function scrollBreaks(delta) {
-  const toggle = document.querySelector('.station-toggle');
-  if (!toggle) return;
-  toggle.scrollBy({ left: delta, behavior: 'smooth' });
-}
-
-const stToggle = document.querySelector('.station-toggle');
-const stFade = document.querySelector('.station-toggle-fade');
-if (stToggle && stFade) {
-  const updateArrows = () => {
-    const atEnd = stToggle.scrollLeft + stToggle.clientWidth >= stToggle.scrollWidth - 4;
-    const atStart = stToggle.scrollLeft <= 4;
-    stFade.style.opacity = atEnd ? '0' : '1';
-    const leftFade = document.getElementById('stFadeLeft');
-    if (leftFade) leftFade.style.opacity = atStart ? '0' : '1';
-    const leftArrow = document.getElementById('scrollLeft');
-    const rightArrow = document.getElementById('scrollRight');
-    if (leftArrow) leftArrow.style.display = atStart ? 'none' : 'flex';
-    if (rightArrow) rightArrow.style.display = atEnd ? 'none' : 'flex';
-  };
-  stToggle.addEventListener('scroll', updateArrows);
-  // Convert vertical wheel to horizontal scroll
-  stToggle.addEventListener('wheel', (e) => {
-    if (e.deltaY !== 0) { e.preventDefault(); stToggle.scrollBy({ left: e.deltaY, behavior: 'auto' }); }
-  }, { passive: false });
-  updateArrows();
 }
 
 // Smart scheduler — loads data hourly, but only between 4am and 6pm Brisbane time (UTC+10)
