@@ -1085,6 +1085,9 @@
       </div>
       <div id="sessionLog" style="padding:0 20px 20px;"></div>
 
+      <div class="section-label">BY BOARD</div>
+      <div id="boardStatsPanel" style="padding:0 20px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log sessions with a board to see averages.</div>
+
       <div class="section-label">CALIBRATION</div>
       <div id="calibrationPanel" style="padding:0 20px 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log 3+ sessions per break to see accuracy stats.</div>
 
@@ -1253,7 +1256,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.6';
+const APP_VERSION = '10.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -2130,7 +2133,7 @@ function setBreak(index, fromUser = false) {
     if (cachedData) generateAiSummary(b, cachedData.forecast, score);
     if (cachedData) renderDITripGate(cachedData.forecast, cachedData.swell);
     if (cachedData) { const sparkEl = document.getElementById('weekSparkline'); if (sparkEl) sparkEl.innerHTML = buildSparklineHTML(cachedData.forecast, true); }
-    if (currentTab === 'log') { const d = document.getElementById('logBreakDisplay'); if (d && BREAKS[currentBreak]) d.textContent = BREAKS[currentBreak].name; renderSessionLog(); renderCalibration(); }
+    if (currentTab === 'log') { const d = document.getElementById('logBreakDisplay'); if (d && BREAKS[currentBreak]) d.textContent = BREAKS[currentBreak].name; renderSessionLog(); renderCalibration(); renderBoardStats(); }
   });
 }
 
@@ -4626,6 +4629,7 @@ function commitLogSession() {
   syncCalibrationToServer();
   renderSessionLog();
   renderCalibration();
+  renderBoardStats();
   if (cachedData) setBreak(currentBreak); // apply any updated calibration to visible scores
 }
 
@@ -4662,6 +4666,7 @@ function deleteSession(id) {
   syncCalibrationToServer();
   renderSessionLog();
   renderCalibration();
+  renderBoardStats();
   if (cachedData) setBreak(currentBreak);
 }
 
@@ -4972,6 +4977,37 @@ function renderCalibration() {
     : `${toggle}<div style="padding:0 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Need 3+ sessions per break to calculate bias.</div>`;
 }
 
+// Per-board average rating across all logged sessions (most-surfed first).
+function renderBoardStats() {
+  const panel = document.getElementById('boardStatsPanel');
+  if (!panel) return;
+  const byBoard = {};
+  getSessions().forEach(s => {
+    const b = (s.board || '').trim();
+    if (b) (byBoard[b] = byBoard[b] || []).push(s);
+  });
+  const rows = Object.entries(byBoard)
+    .map(([board, arr]) => ({ board, n: arr.length, avg: arr.reduce((a, s) => a + s.myScore, 0) / arr.length }))
+    .sort((a, b) => b.n - a.n || b.avg - a.avg)
+    .map(({ board, n, avg }) => {
+      const col = avg >= 7 ? 'var(--high)' : avg >= 5 ? 'var(--accent)' : 'var(--muted)';
+      const esc = board.replace(/</g, '&lt;');
+      return `<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;color:#fff;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:1px;">${n} session${n === 1 ? '' : 's'}</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right;">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:${col};line-height:1;">${avg.toFixed(1)}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">/10 avg</span>
+        </div>
+      </div>`;
+    });
+  panel.innerHTML = rows.length
+    ? `<div style="padding:0 20px;">${rows.join('')}</div>`
+    : `<div style="padding:0 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log sessions with a board to see averages.</div>`;
+}
+
 // ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────
 if (typeof ResizeObserver !== 'undefined') {
   const chartContainer = document.getElementById('swellChart')?.parentElement;
@@ -5050,6 +5086,7 @@ function switchTab(tab) {
     initLogTab();
     renderSessionLog();
     renderCalibration();
+    renderBoardStats();
   }
   if (tab === 'settings') {
     initAlertSettings();
