@@ -1182,6 +1182,18 @@
         <div id="alertPermStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:8px;text-align:center;"></div>
       </div>
 
+      <div class="section-label">YOUR BOARDS</div>
+      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:10px;">Add the boards in your quiver — they'll be ready to pick when you log a session.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="text" id="newBoardInput" autocomplete="off" placeholder="e.g. 9'1 log"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addBoardFromInput();}"
+            style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+          <button onclick="addBoardFromInput()" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;letter-spacing:1px;cursor:pointer;">ADD</button>
+        </div>
+        <div id="boardsList"></div>
+      </div>
+
       <div class="section-label">ABOUT</div>
       <div style="margin:0 20px 24px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 16px;text-align:center;">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#fff;line-height:1;">SURF<span style="color:var(--accent);">SESH</span></div>
@@ -1256,7 +1268,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '10.7';
+const APP_VERSION = '10.8';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4512,14 +4524,68 @@ function initLogTab() {
   fillBoardSuggestions();
 }
 
-// Autocomplete the board field with boards from previous logs (most-used first).
+// ─── BOARDS / QUIVER ────────────────────────────────────────────────────────
+// The user's own list of boards, plus any typed into past logs. Managed in
+// Settings and offered as autocomplete when logging a session.
+const BOARDS_STORE_KEY = 'surfsesh_boards_v1';
+
+function getBoards() {
+  try { const a = JSON.parse(localStorage.getItem(BOARDS_STORE_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+function saveBoards(arr) {
+  try { localStorage.setItem(BOARDS_STORE_KEY, JSON.stringify(arr)); } catch {}
+}
+function addBoardFromInput() {
+  const input = document.getElementById('newBoardInput');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+  const boards = getBoards();
+  // Case-insensitive de-dupe
+  if (!boards.some(b => b.toLowerCase() === name.toLowerCase())) {
+    boards.push(name);
+    saveBoards(boards);
+  }
+  input.value = '';
+  renderBoardsManager();
+  fillBoardSuggestions();
+}
+function removeBoard(name) {
+  saveBoards(getBoards().filter(b => b !== name));
+  renderBoardsManager();
+  fillBoardSuggestions();
+}
+function renderBoardsManager() {
+  const list = document.getElementById('boardsList');
+  if (!list) return;
+  const boards = getBoards();
+  list.innerHTML = boards.length
+    ? boards.map(b => {
+        const esc = b.replace(/</g, '&lt;');
+        const js  = b.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+          <span style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🏄 ${esc}</span>
+          <button onclick="removeBoard('${js}')" style="flex-shrink:0;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 4px;line-height:1;opacity:0.5;" title="Remove">×</button>
+        </div>`;
+      }).join('')
+    : `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">No boards yet — add one above.</div>`;
+}
+
+// Autocomplete the log board field with the user's quiver first, then any
+// other boards seen in past logs (most-used first).
 function fillBoardSuggestions() {
   const dl = document.getElementById('boardSuggestions');
   if (!dl) return;
+  const ordered = [];
+  const seen = new Set();
+  getBoards().forEach(b => { const t = b.trim(); if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); ordered.push(t); } });
   const counts = {};
   getSessions().forEach(s => { const b = (s.board || '').trim(); if (b) counts[b] = (counts[b] || 0) + 1; });
-  const boards = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-  dl.innerHTML = boards.map(b => `<option value="${b.replace(/"/g, '&quot;')}"></option>`).join('');
+  Object.keys(counts).sort((a, b) => counts[b] - counts[a]).forEach(b => {
+    if (!seen.has(b.toLowerCase())) { seen.add(b.toLowerCase()); ordered.push(b); }
+  });
+  dl.innerHTML = ordered.map(b => `<option value="${b.replace(/"/g, '&quot;')}"></option>`).join('');
 }
 
 function selectLogScore(n) {
@@ -5090,6 +5156,7 @@ function switchTab(tab) {
   }
   if (tab === 'settings') {
     initAlertSettings();
+    renderBoardsManager();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
