@@ -1327,7 +1327,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.7';
+const APP_VERSION = '12.8';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4063,8 +4063,15 @@ function renderForecast(forecast, tideData, swellData) {
         label:    'TOMORROW',
         sublabel: (tomorrow.day || '').toUpperCase(),
       });
+      // Sweep outlook for tomorrow, scored for the currently-selected break
+      const tmrwSweepCond = {
+        swellDir:    tmrwSwellDir,
+        swellHeight: forecast._swellHeightByDay?.[1] ?? extractHeight(shortDir(tomorrow.swell || '')),
+        period:      forecast._periodTomorrow ?? null,
+      };
+      const tmrwSweep = _sweepOutlookHTML(BREAKS[currentBreak]?.name, tmrwSweepCond, 'tomorrow');
       const plannerCard = document.getElementById('tomorrowPlannerCard');
-      if (plannerCard) plannerCard.innerHTML = tmrwBlock;
+      if (plannerCard) plannerCard.innerHTML = tmrwBlock + tmrwSweep;
     }
   }
 
@@ -5651,22 +5658,29 @@ function predictSweep(breakName, cond) {
   return { enough: true, n: train.length, posN, prob, sevExp, note };
 }
 
-// Compact sweep-outlook line for the Conditions page, using the break's live
-// forecast conditions. Returns '' (stays silent) until the break has enough logs.
-function sweepOutlookHTML(b) {
-  if (!cachedData) return '';
-  const p = predictSweep(b.name, captureConditions(b));
+// Compact sweep-outlook line from a break name + a conditions object (swell
+// height / period / direction). Returns '' (stays silent) until the break has
+// enough logs. `when` labels which forecast the call is for (e.g. 'tomorrow').
+function _sweepOutlookHTML(breakName, cond, when) {
+  const p = predictSweep(breakName, cond);
   if (!p || !p.enough || p.prob == null) return '';
   const pct = Math.round(p.prob * 100);
   let color, label;
   if (p.prob >= 0.6)       { color = 'var(--warn)';   label = p.sevExp >= 1.3 ? 'Strong sweep likely' : 'Sweep likely'; }
   else if (p.prob >= 0.33) { color = 'var(--accent)'; label = 'Sweep possible'; }
   else                     { color = 'var(--muted)';  label = 'Little sweep expected'; }
+  const whenTag = when ? `<span style="color:var(--muted);opacity:0.7;"> (${when})</span>` : '';
   return `<div style="margin-top:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace;font-size:10px;line-height:1.5;background:var(--surface);">
-    <span style="color:${color};">🌀 ${label}</span>
+    <span style="color:${color};">🌀 ${label}</span>${whenTag}
     <span style="color:var(--muted);"> · ${pct}% likelihood from ${p.n} past session${p.n === 1 ? '' : 's'} here</span>
     ${p.note ? `<div style="color:var(--muted);margin-top:3px;opacity:0.85;">${p.note}</div>` : ''}
   </div>`;
+}
+
+// Conditions page: uses the break's live (today) forecast conditions.
+function sweepOutlookHTML(b) {
+  if (!cachedData) return '';
+  return _sweepOutlookHTML(b.name, captureConditions(b));
 }
 
 // ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────
