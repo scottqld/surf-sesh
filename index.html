@@ -1327,7 +1327,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.6';
+const APP_VERSION = '12.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -2198,6 +2198,7 @@ function setBreak(index, fromUser = false) {
 
   document.getElementById('breakNotes').innerHTML =
     `${contextStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">${contextStr.replace(/^ · /, '')}</div>` : ''}
+    ${cachedData ? sweepOutlookHTML(b) : ''}
     <div id="aiSummary" style="margin-top:10px;font-size:12px;color:var(--accent);font-style:italic;min-height:0;"></div>`;
 
   requestAnimationFrame(() => {
@@ -5595,6 +5596,77 @@ function renderInsights() {
   const cE = document.getElementById('insightsConditions');
   if (a)  a.innerHTML  = _renderAccuracy();
   if (cE) cE.innerHTML = _renderConditions();
+}
+
+// ─── SWEEP PREDICTOR ────────────────────────────────────────────────────────
+// Learns, per break, from your logged day-of-surf sessions that recorded both a
+// captured `conditions` snapshot AND a sweep call. Scores the forecast by
+// distance-weighting past sessions in (swell height, period, swell direction)
+// space — the main drivers of drift/current at the Noosa points. Transparent
+// and self-explaining: with few logs it simply reflects your nearest sessions.
+const _COMPASS_DEG = { N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5,
+  S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5 };
+function _angDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+const SWEEP_MIN_TRAIN = 4; // need at least this many logged-with-conditions sessions here
+
+function predictSweep(breakName, cond) {
+  if (!cond) return null;
+  const train = getSessions().filter(s => s.break === breakName && s.conditions && s.sweep);
+  if (train.length < SWEEP_MIN_TRAIN) return { enough: false, n: train.length };
+  const sev  = s => s.sweep === 'Strong' ? 2 : s.sweep === 'Slight' ? 1 : 0;
+  const posN = train.filter(s => sev(s) > 0).length;
+  const fh = cond.swellHeight, fp = cond.period;
+  const fd = cond.swellDir != null ? _COMPASS_DEG[cond.swellDir] : null;
+
+  let wsum = 0, pw = 0, sw = 0;
+  train.forEach(s => {
+    const c = s.conditions; let d = 0, used = 0;
+    if (fh != null && c.swellHeight != null) { d += ((fh - c.swellHeight) / 0.5) ** 2; used++; }
+    if (fp != null && c.period      != null) { d += ((fp - c.period)      / 3)   ** 2; used++; }
+    if (fd != null && c.swellDir != null && _COMPASS_DEG[c.swellDir] != null) {
+      d += (_angDiff(fd, _COMPASS_DEG[c.swellDir]) / 45) ** 2; used++;
+    }
+    if (!used) return;
+    const w = 1 / (1 + d);
+    wsum += w; pw += w * (sev(s) > 0 ? 1 : 0); sw += w * sev(s);
+  });
+  if (wsum === 0) return { enough: true, n: train.length, posN, prob: null };
+
+  const prob = pw / wsum, sevExp = sw / wsum;
+  let note = '';
+  if (posN === 0) {
+    note = `No sweep across your ${train.length} logged sessions here.`;
+  } else {
+    const pos  = train.filter(s => sev(s) > 0);
+    const avgH = pos.reduce((a, s) => a + (s.conditions.swellHeight || 0), 0) / posN;
+    const avgP = pos.reduce((a, s) => a + (s.conditions.period || 0), 0) / posN;
+    const freq = {}; pos.forEach(s => { const dd = s.conditions.swellDir; if (dd) freq[dd] = (freq[dd] || 0) + 1; });
+    const topDir = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const bits = [];
+    if (avgH) bits.push(`~${avgH.toFixed(1)}m`);
+    if (avgP) bits.push(`${Math.round(avgP)}s`);
+    if (topDir) bits.push(`${topDir} swell`);
+    note = `Your sweep here mostly came with ${bits.join(' · ')}.`;
+  }
+  return { enough: true, n: train.length, posN, prob, sevExp, note };
+}
+
+// Compact sweep-outlook line for the Conditions page, using the break's live
+// forecast conditions. Returns '' (stays silent) until the break has enough logs.
+function sweepOutlookHTML(b) {
+  if (!cachedData) return '';
+  const p = predictSweep(b.name, captureConditions(b));
+  if (!p || !p.enough || p.prob == null) return '';
+  const pct = Math.round(p.prob * 100);
+  let color, label;
+  if (p.prob >= 0.6)       { color = 'var(--warn)';   label = p.sevExp >= 1.3 ? 'Strong sweep likely' : 'Sweep likely'; }
+  else if (p.prob >= 0.33) { color = 'var(--accent)'; label = 'Sweep possible'; }
+  else                     { color = 'var(--muted)';  label = 'Little sweep expected'; }
+  return `<div style="margin-top:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace;font-size:10px;line-height:1.5;background:var(--surface);">
+    <span style="color:${color};">🌀 ${label}</span>
+    <span style="color:var(--muted);"> · ${pct}% likelihood from ${p.n} past session${p.n === 1 ? '' : 's'} here</span>
+    ${p.note ? `<div style="color:var(--muted);margin-top:3px;opacity:0.85;">${p.note}</div>` : ''}
+  </div>`;
 }
 
 // ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────
