@@ -1196,6 +1196,22 @@
         </div>
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:8px;">MONITOR THESE AREAS</div>
         <div id="alertBreakList"></div>
+
+        <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
+          <label class="alert-toggle" style="align-items:center;">
+            <span style="display:flex;flex-direction:column;gap:2px;">
+              <span>🌀 Sweep warning</span>
+              <span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);">Evening heads-up when a break you log is likely sweepy tomorrow · learns from your sessions</span>
+            </span>
+            <input type="checkbox" class="alert-check" id="alertSweep" onchange="saveAlertSettings()">
+          </label>
+          <div id="sweepAlertHourRow" style="display:none;align-items:center;gap:8px;margin-top:10px;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;flex-shrink:0;">SEND AT</span>
+            <select id="sweepAlertHour" onchange="saveAlertSettings()"
+              style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;appearance:none;"></select>
+          </div>
+        </div>
+
         <button onclick="requestAlertPermission()" id="alertPermBtn"
           style="width:100%;margin-top:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;cursor:pointer;display:none;">
           ENABLE NOTIFICATIONS
@@ -1327,7 +1343,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.8';
+const APP_VERSION = '12.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4614,7 +4630,7 @@ async function syncCalibrationToServer() {
     await fetch(`${WORKER_URL}/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), calibration: CALIBRATION_OFFSETS }),
+      body: JSON.stringify({ subscription: sub.toJSON(), calibration: CALIBRATION_OFFSETS, sweepModel: buildSweepModel(), sweepAlert: getSweepAlert() }),
     });
   } catch { /* offline / not subscribed — client-side calibration still applies */ }
 }
@@ -5181,7 +5197,12 @@ function saveAlertSettings() {
   // Collect active wind sectors; all 8 (or none) means "any wind" → store [].
   const activeDirs = [...document.querySelectorAll('#alertWindDirs .wind-chip.active')].map(c => c.dataset.dir);
   const windDirs = activeDirs.length >= 8 ? [] : activeDirs;
-  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ threshold, regions, fromHour, toHour, minSurfFt, windDirs }));
+  const sweepAlert = !!document.getElementById('alertSweep')?.checked;
+  const sweepAlertHour = parseInt(document.getElementById('sweepAlertHour')?.value ?? '18');
+  const sweepRow = document.getElementById('sweepAlertHourRow');
+  if (sweepRow) sweepRow.style.display = sweepAlert ? 'flex' : 'none';
+  const prev = getAlertSettings();
+  localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ ...prev, threshold, regions, fromHour, toHour, minSurfFt, windDirs, sweepAlert, sweepAlertHour }));
   // Immediate confirmation; the debounced sync below replaces it with the
   // synced/needs-permission result.
   const stat = document.getElementById('alertPermStatus');
@@ -5205,7 +5226,7 @@ async function syncAlertsToServer() {
     await fetch(`${WORKER_URL}/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, regions: regions || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17, minSurfFt: minSurfFt ?? 0, windDirs: windDirs || [] } }),
+      body: JSON.stringify({ subscription: sub.toJSON(), alerts: { threshold: threshold ?? 7, regions: regions || {}, fromHour: fromHour ?? 5, toHour: toHour ?? 17, minSurfFt: minSurfFt ?? 0, windDirs: windDirs || [] }, sweepModel: buildSweepModel(), sweepAlert: getSweepAlert() }),
     });
     if (stat) { stat.textContent = '✓ Saved & synced — alerts active on this device'; stat.style.color = 'var(--high)'; }
   } catch (e) {
@@ -5245,6 +5266,12 @@ function initAlertSettings() {
   const minSurfEl = document.getElementById('alertMinSurf');
   if (minSurfEl) minSurfEl.value = settings.minSurfFt ?? 0;
   renderWindChips(settings.windDirs);
+
+  const sweepEl = document.getElementById('alertSweep');
+  if (sweepEl) sweepEl.checked = !!settings.sweepAlert;
+  fillHourSelect(document.getElementById('sweepAlertHour'), settings.sweepAlertHour ?? 18);
+  const sweepRow = document.getElementById('sweepAlertHourRow');
+  if (sweepRow) sweepRow.style.display = settings.sweepAlert ? 'flex' : 'none';
 
   const list = document.getElementById('alertBreakList');
   if (!list) return;
@@ -5681,6 +5708,31 @@ function _sweepOutlookHTML(breakName, cond, when) {
 function sweepOutlookHTML(b) {
   if (!cachedData) return '';
   return _sweepOutlookHTML(b.name, captureConditions(b));
+}
+
+// Compact per-break sweep training synced to the worker so it can push a
+// "sweepy tomorrow" warning the evening before. Only breaks with enough
+// logged day-of-surf sessions (conditions + a sweep call) are included.
+function buildSweepModel() {
+  const byBreak = {};
+  getSessions().forEach(s => {
+    if (!s.conditions || !s.sweep) return;
+    const c = s.conditions;
+    (byBreak[s.break] = byBreak[s.break] || []).push({
+      h: c.swellHeight ?? null, p: c.period ?? null, d: c.swellDir ?? null,
+      sev: s.sweep === 'Strong' ? 2 : s.sweep === 'Slight' ? 1 : 0,
+    });
+  });
+  const model = {};
+  for (const [name, arr] of Object.entries(byBreak)) {
+    if (arr.length >= SWEEP_MIN_TRAIN) model[name] = arr.slice(-40);
+  }
+  return model;
+}
+// Sweep push-alert preference (stored alongside the swell-alert settings).
+function getSweepAlert() {
+  const a = getAlertSettings();
+  return { enabled: !!a.sweepAlert, hour: a.sweepAlertHour ?? 18, minProb: 0.6 };
 }
 
 // ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────

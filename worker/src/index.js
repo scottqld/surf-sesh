@@ -197,6 +197,56 @@ function calOffset(rec, name) {
   return Number.isFinite(v) ? v : 0;
 }
 
+// ─── SWEEP PREDICTOR (mirrors index.html predictSweep) ───────────────────────
+// Scores a forecast against a break's synced training (array of {h,p,d,sev})
+// by distance-weighting past sessions in swell height / period / direction.
+const COMPASS_DEG = Object.fromEntries(COMPASS.map((c, i) => [c, i * 22.5]));
+function angDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+const SWEEP_MIN_TRAIN = 4;
+function predictSweepW(train, cond) {
+  if (!Array.isArray(train) || train.length < SWEEP_MIN_TRAIN || !cond) return null;
+  const fh = cond.swellHeight, fp = cond.period;
+  const fd = cond.swellDir != null ? COMPASS_DEG[cond.swellDir] : null;
+  let wsum = 0, pw = 0, sw = 0;
+  for (const t of train) {
+    let d = 0, used = 0;
+    if (fh != null && t.h != null) { d += ((fh - t.h) / 0.5) ** 2; used++; }
+    if (fp != null && t.p != null) { d += ((fp - t.p) / 3)   ** 2; used++; }
+    if (fd != null && t.d != null && COMPASS_DEG[t.d] != null) { d += (angDiff(fd, COMPASS_DEG[t.d]) / 45) ** 2; used++; }
+    if (!used) continue;
+    const w = 1 / (1 + d);
+    wsum += w; pw += w * (t.sev > 0 ? 1 : 0); sw += w * t.sev;
+  }
+  if (wsum === 0) return null;
+  return { prob: pw / wsum, sevExp: sw / wsum };
+}
+
+// Bound a client-supplied sweep model so bad/huge data can't be stored/run.
+function sanitizeSweepModel(m) {
+  if (!m || typeof m !== 'object') return {};
+  const out = {};
+  for (const [name, arr] of Object.entries(m)) {
+    if (!Array.isArray(arr)) continue;
+    const clean = arr.slice(0, 60).map(e => ({
+      h:   typeof e.h === 'number' && isFinite(e.h) ? e.h : null,
+      p:   typeof e.p === 'number' && isFinite(e.p) ? e.p : null,
+      d:   typeof e.d === 'string' ? e.d.slice(0, 3) : null,
+      sev: e.sev === 2 ? 2 : e.sev === 1 ? 1 : 0,
+    }));
+    if (clean.length >= SWEEP_MIN_TRAIN) out[String(name).slice(0, 48)] = clean;
+  }
+  return out;
+}
+function sanitizeSweepAlert(a) {
+  if (!a || typeof a !== 'object') return null;
+  const hour = Math.max(0, Math.min(23, Math.round(Number(a.hour))));
+  return {
+    enabled: !!a.enabled,
+    hour: Number.isFinite(hour) ? hour : 18,
+    minProb: Math.max(0.3, Math.min(0.95, Number(a.minProb) || 0.6)),
+  };
+}
+
 // ─── FORECAST ENRICHMENT FOR SCORING ─────────────────────────────────────────
 function getBrisbaneDate(offsetHours = 0) {
   return new Date(Date.now() + (10 + offsetHours) * 3600000);
@@ -493,7 +543,11 @@ async function handleCron(env) {
     const to   = Math.min(17, a.toHour   ?? 17);
     return brisbaneHour >= from && brisbaneHour <= to;
   });
-  if (!morningDue.length && !nightlyDue.length && !alertSubs.length) return;
+  // Sweep alerts fire once, at each device's chosen evening hour (default 6pm).
+  const sweepDue = subs.filter(r =>
+    r.sweepAlert?.enabled && r.sweepModel && Object.keys(r.sweepModel).length &&
+    brisbaneHour === (r.sweepAlert.hour ?? 18));
+  if (!morningDue.length && !nightlyDue.length && !alertSubs.length && !sweepDue.length) return;
 
   // Fetch + enrich surf data once for everyone
   const allData = await buildAll();
@@ -688,6 +742,45 @@ async function handleCron(env) {
       hits.forEach(h => { sent[h.br.region || 'Other'] = now; });
       const { key, ...stored } = rec;
       await env.PUSH_SUBSCRIPTIONS.put(key, JSON.stringify({ ...stored, alertsSent: sent }));
+    } catch (e) {
+      if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
+    }
+  }
+
+  // ── Sweep warning: evening heads-up when a logged break is likely sweepy tomorrow ──
+  const SWEEP_COOLDOWN_MS = 20 * 60 * 60 * 1000; // at most one per ~day
+  const tmrwSw = swellAt(allData.swell?.hourly, 1, MORNING_HOUR);
+  for (const rec of sweepDue) {
+    if (!tmrwSw) break; // no tomorrow swell data → nothing to score for anyone
+    const now = Date.now();
+    if (now - (rec.sweepAlertSent || 0) < SWEEP_COOLDOWN_MS) continue;
+    const minProb = rec.sweepAlert.minProb ?? 0.6;
+    const cond = { swellHeight: tmrwSw.h, period: tmrwSw.p, swellDir: tmrwSw.dir };
+    const hits = [];
+    for (const [name, train] of Object.entries(rec.sweepModel)) {
+      const p = predictSweepW(train, cond);
+      if (p && p.prob >= minProb) hits.push({ name, prob: p.prob, strong: p.sevExp >= 1.3 });
+    }
+    if (!hits.length) continue;
+    hits.sort((x, y) => y.prob - x.prob);
+    const top   = hits[0];
+    const label = top.strong ? 'Strong sweep likely' : 'Sweep likely';
+    const tSummary = [
+      tmrwSw.h != null ? `${tmrwSw.h.toFixed(1)}m` : '', tmrwSw.dir || '',
+      tmrwSw.p != null ? `@ ${Math.round(tmrwSw.p)}s` : '',
+    ].filter(Boolean).join(' ');
+    const line1 = hits.length > 1
+      ? `Sweepy: ${hits.map(h => `${h.name} ${Math.round(h.prob * 100)}%`).join(', ')}`
+      : `${Math.round(top.prob * 100)}% from your logged sessions here`;
+    const payload = {
+      title: `🌀 ${label} tomorrow — ${top.name}`,
+      body: [line1, tSummary ? `Tomorrow: ${tSummary}` : ''].filter(Boolean).join('\n'),
+      icon: ICON, badge: ICON, url: APP_URL,
+    };
+    try {
+      await sendPush(rec.subscription, payload, env);
+      const { key, ...stored } = rec;
+      await env.PUSH_SUBSCRIPTIONS.put(key, JSON.stringify({ ...stored, sweepAlertSent: now }));
     } catch (e) {
       if (e.message === 'subscription_expired') await env.PUSH_SUBSCRIPTIONS.delete(rec.key);
     }
@@ -961,12 +1054,14 @@ export default {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Push not configured' }), { status: 503, headers: corsHeaders });
         }
-        const { subscription, preferredHour, nightlyHour, alerts, calibration } = await request.json();
+        const { subscription, preferredHour, nightlyHour, alerts, calibration, sweepModel, sweepAlert } = await request.json();
         const fields = {};
         if (preferredHour !== undefined) fields.preferredHour = preferredHour; // null = morning report off
         if (nightlyHour  !== undefined) fields.nightlyHour  = nightlyHour;  // null = nightly report off
         if (alerts !== undefined) fields.alerts = alerts; // { threshold, breaks: { name: bool } }
         if (calibration !== undefined) fields.calibration = sanitizeCalibration(calibration); // { breakName: offset } from logged sessions
+        if (sweepModel !== undefined) fields.sweepModel = sanitizeSweepModel(sweepModel); // { breakName: [{h,p,d,sev}] } from logged sessions
+        if (sweepAlert !== undefined) fields.sweepAlert = sanitizeSweepAlert(sweepAlert); // { enabled, hour, minProb }
         await storeSubscription(env, subscription, fields);
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
 
