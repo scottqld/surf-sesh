@@ -1327,7 +1327,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.5';
+const APP_VERSION = '12.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -5523,43 +5523,71 @@ function _renderAccuracy() {
   `;
 }
 
-function _renderConditions() {
-  const s = _insSessions().filter(x => x.conditions);
-  if (s.length < 3) {
-    return `<div class="ins-empty">Log a few sessions <b>on the day you surf</b> and SurfSesh will show which swell, wind and tide line up with your best sessions.<br><br>${s.length}/3 ready so far.</div>`;
-  }
-  const period = _factorBlock('SWELL PERIOD', '🌊',
-    _bucketRows(s, x => x.conditions.period, [
-      { key: 'Short <8s',        test: v => v < 8 },
-      { key: 'Mid 8–11s',        test: v => v >= 8 && v < 11 },
-      { key: 'Groundswell 11s+', test: v => v >= 11 },
-    ]), { keepOrder: true });
-  const sheight = _factorBlock('SWELL SIZE', '📐',
-    _bucketRows(s, x => x.conditions.swellHeight, [
-      { key: 'Small <1m',   test: v => v < 1 },
-      { key: 'Mid 1–1.5m',  test: v => v >= 1 && v < 1.5 },
-      { key: 'Big 1.5m+',   test: v => v >= 1.5 },
-    ]), { keepOrder: true });
-  const sdir   = _factorBlock('SWELL DIRECTION', '🧭', _groupRows(s, x => x.conditions.swellDir));
-  const wspeed = _factorBlock('WIND STRENGTH', '💨',
-    _bucketRows(s, x => x.conditions.windKmh, [
-      { key: 'Calm <8km/h',    test: v => v < 8 },
-      { key: 'Light 8–15',     test: v => v >= 8 && v < 15 },
-      { key: 'Fresh 15–25',    test: v => v >= 15 && v < 25 },
-      { key: 'Strong 25+',     test: v => v >= 25 },
-    ]), { keepOrder: true });
-  const wdir   = _factorBlock('WIND DIRECTION', '🧭', _groupRows(s, x => x.conditions.windDir));
-  const tstate = _factorBlock('TIDE MOVEMENT', '🌙',
-    _groupRows(s, x => x.conditions.tide ? (x.conditions.tide.rising ? 'Rising / pushing' : 'Falling / dropping') : null));
-  const theight = _factorBlock('TIDE HEIGHT', '〰️',
-    _bucketRows(s, x => x.conditions.tide ? x.conditions.tide.current : null, [
-      { key: 'Low <0.6m',    test: v => v < 0.6 },
-      { key: 'Mid 0.6–1.2m', test: v => v >= 0.6 && v < 1.2 },
-      { key: 'High 1.2m+',   test: v => v >= 1.2 },
-    ]), { keepOrder: true });
+// Average rating ordered by a fixed label list (categorical factors you log yourself)
+function _orderedRows(sessions, keyFn, order) {
+  return _groupRows(sessions, keyFn).sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+}
 
-  const blocks = [period, sheight, sdir, wspeed, wdir, tstate, theight].filter(Boolean).join('');
-  return blocks + `<div class="ins-foot">From ${s.length} session${s.length === 1 ? '' : 's'} with captured conditions. Bars show your average rating per bucket; ★ marks your highest-rated (min 2 sessions). Small samples are noisy — treat as a hint, not gospel.</div>`;
+function _renderConditions() {
+  const all  = _insSessions();
+  const s    = all.filter(x => x.conditions);     // forecast-derived: day-of-surf only
+  const nSweep = all.filter(x => x.sweep).length; // your own calls: any session
+  const nSize  = all.filter(x => x.size).length;
+
+  if (s.length < 3 && nSweep < 2 && nSize < 2) {
+    return `<div class="ins-empty">Log a few sessions and SurfSesh will show which conditions line up with your best surfs — swell, wind and tide from sessions logged <b>on the day you surf</b>, plus the sweep and size <b>you</b> record on any session.<br><br>Forecast factors ${s.length}/3 · your sweep/size ${Math.max(nSweep, nSize)}/2 so far.</div>`;
+  }
+
+  // ── Forecast-derived: swell / wind / tide (needs the captured conditions) ──
+  let forecastBlocks = '';
+  if (s.length >= 3) {
+    const period = _factorBlock('SWELL PERIOD', '🌊',
+      _bucketRows(s, x => x.conditions.period, [
+        { key: 'Short <8s',        test: v => v < 8 },
+        { key: 'Mid 8–11s',        test: v => v >= 8 && v < 11 },
+        { key: 'Groundswell 11s+', test: v => v >= 11 },
+      ]), { keepOrder: true });
+    const sheight = _factorBlock('SWELL SIZE (forecast)', '📐',
+      _bucketRows(s, x => x.conditions.swellHeight, [
+        { key: 'Small <1m',   test: v => v < 1 },
+        { key: 'Mid 1–1.5m',  test: v => v >= 1 && v < 1.5 },
+        { key: 'Big 1.5m+',   test: v => v >= 1.5 },
+      ]), { keepOrder: true });
+    const sdir   = _factorBlock('SWELL DIRECTION', '🧭', _groupRows(s, x => x.conditions.swellDir));
+    const wspeed = _factorBlock('WIND STRENGTH', '💨',
+      _bucketRows(s, x => x.conditions.windKmh, [
+        { key: 'Calm <8km/h',    test: v => v < 8 },
+        { key: 'Light 8–15',     test: v => v >= 8 && v < 15 },
+        { key: 'Fresh 15–25',    test: v => v >= 15 && v < 25 },
+        { key: 'Strong 25+',     test: v => v >= 25 },
+      ]), { keepOrder: true });
+    const wdir   = _factorBlock('WIND DIRECTION', '🧭', _groupRows(s, x => x.conditions.windDir));
+    const tstate = _factorBlock('TIDE MOVEMENT', '🌙',
+      _groupRows(s, x => x.conditions.tide ? (x.conditions.tide.rising ? 'Rising / pushing' : 'Falling / dropping') : null));
+    const theight = _factorBlock('TIDE HEIGHT', '〰️',
+      _bucketRows(s, x => x.conditions.tide ? x.conditions.tide.current : null, [
+        { key: 'Low <0.6m',    test: v => v < 0.6 },
+        { key: 'Mid 0.6–1.2m', test: v => v >= 0.6 && v < 1.2 },
+        { key: 'High 1.2m+',   test: v => v >= 1.2 },
+      ]), { keepOrder: true });
+    forecastBlocks =
+      `<div class="ins-sub-label" style="margin-top:2px;">FROM THE FORECAST · ${s.length} day-of-surf session${s.length === 1 ? '' : 's'}</div>` +
+      [period, sheight, sdir, wspeed, wdir, tstate, theight].filter(Boolean).join('');
+  }
+
+  // ── Your own calls: sweep + size (logged on any session) ──
+  const sweep = _factorBlock('SWEEP', '🌀',
+    _orderedRows(all, x => x.sweep ? (x.sweep === 'None' ? 'No sweep' : x.sweep + ' sweep') : null,
+      ['No sweep', 'Slight sweep', 'Strong sweep']), { keepOrder: true });
+  const size  = _factorBlock('SIZE YOU CALLED', '📏',
+    _orderedRows(all, x => x.size ? x.size + 'ft' : null,
+      SIZE_OPTIONS.map(o => o + 'ft')), { keepOrder: true });
+  const ownBlocks = (sweep || size)
+    ? `<div class="ins-sub-label" style="margin-top:2px;">YOUR OWN CALLS · sweep &amp; size you logged</div>${sweep}${size}`
+    : '';
+
+  return forecastBlocks + ownBlocks +
+    `<div class="ins-foot">Bars show your average rating per bucket; ★ marks your highest-rated (min 2 sessions). Forecast factors use the swell/wind/tide captured on day-of-surf sessions; sweep &amp; size use what you logged on any session. Small samples are noisy — treat as a hint, not gospel.</div>`;
 }
 
 function renderInsights() {
