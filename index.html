@@ -1223,8 +1223,42 @@
       </div>
     </div>
 
+    <!-- TAB: INSIGHTS -->
+    <div class="tab-section" id="tab-insights">
+      <div class="section-label">FORECAST vs YOU</div>
+      <div id="insightsAccuracy" style="padding:0 20px 20px;"></div>
+      <div class="section-label">WHAT SUITS YOU</div>
+      <div id="insightsConditions" style="padding:0 20px 28px;"></div>
+    </div>
+
   </div>
 </div>
+
+<style>
+  #tab-insights .ins-empty{font-family:'DM Mono',monospace;font-size:11px;line-height:1.6;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
+  #tab-insights .ins-stat{flex:1;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 6px;}
+  #tab-insights .ins-stat-num{font-family:'Bebas Neue',sans-serif;font-size:30px;color:var(--accent);line-height:1;}
+  #tab-insights .ins-stat-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:1px;margin-top:5px;}
+  #tab-insights .ins-stat-sub{font-family:'DM Mono',monospace;font-size:8px;color:var(--text);opacity:0.65;margin-top:3px;}
+  #tab-insights .ins-note{font-family:'DM Mono',monospace;font-size:11px;line-height:1.6;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;}
+  #tab-insights .ins-note b{color:var(--accent);}
+  #tab-insights .ins-sub-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1.5px;margin-bottom:4px;}
+  #tab-insights .ins-miss{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+  #tab-insights .ins-miss-break{font-family:'Bebas Neue',sans-serif;font-size:16px;color:#fff;line-height:1.1;}
+  #tab-insights .ins-miss-when{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:1px;}
+  #tab-insights .ins-miss-gap{font-family:'Bebas Neue',sans-serif;font-size:22px;flex-shrink:0;line-height:1;}
+  #tab-insights .ins-factor{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+  #tab-insights .ins-factor-title{font-family:'DM Mono',monospace;font-size:10px;color:var(--text);letter-spacing:1px;margin-bottom:11px;}
+  #tab-insights .ins-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  #tab-insights .ins-bar-key{flex:0 0 40%;font-family:'DM Mono',monospace;font-size:10px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #tab-insights .ins-bar-track{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;}
+  #tab-insights .ins-bar-fill{height:100%;border-radius:4px;transition:width 0.4s;}
+  #tab-insights .ins-bar-val{flex-shrink:0;font-family:'DM Mono',monospace;font-size:10px;color:#fff;min-width:40px;text-align:right;}
+  #tab-insights .ins-bar-n{color:var(--muted);font-size:8px;margin-left:2px;}
+  #tab-insights .ins-tip{font-family:'DM Mono',monospace;font-size:9px;line-height:1.5;color:var(--muted);margin-top:9px;padding-top:9px;border-top:1px solid var(--border);}
+  #tab-insights .ins-tip b{color:var(--high);}
+  #tab-insights .ins-foot{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);line-height:1.5;margin-top:10px;opacity:0.8;}
+</style>
 
 <!-- Bottom sheets live at body level (not inside .app) so they stack above the
      tab bar and refresh button — .app's z-index:1 stacking context would
@@ -1273,6 +1307,10 @@
     </svg>
     LOG
   </button>
+  <button class="tab-btn" id="tabBtn-insights" onclick="switchTab('insights')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="10"/></svg>
+    INSIGHTS
+  </button>
   <button class="tab-btn" id="tabBtn-settings" onclick="switchTab('settings')">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     SETTINGS
@@ -1289,7 +1327,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.4';
+const APP_VERSION = '12.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -5379,6 +5417,158 @@ function renderBoardStats() {
     : `<div style="padding:0 20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log sessions with a board to see averages.</div>`;
 }
 
+// ─── INSIGHTS (forecast accuracy + condition correlation) ───────────────────
+// All on-device from logged sessions. Forecast accuracy uses the algoScore
+// captured at log time; condition correlation uses the `conditions` snapshot —
+// both only exist on sessions logged on the day they were surfed.
+function _insSessions() { return getSessions().filter(s => s.myScore != null); }
+
+function _pearson(xs, ys) {
+  const n = xs.length; if (n < 2) return null;
+  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0, dx = 0, dy = 0;
+  for (let i = 0; i < n; i++) { const a = xs[i] - mx, b = ys[i] - my; num += a * b; dx += a * a; dy += b * b; }
+  if (dx === 0 || dy === 0) return null;
+  return num / Math.sqrt(dx * dy);
+}
+
+// Bucketed average rating for an ordered set of ranges
+function _bucketRows(sessions, valFn, buckets) {
+  const groups = buckets.map(b => ({ key: b.key, scores: [] }));
+  sessions.forEach(s => {
+    const v = valFn(s); if (v == null || isNaN(v)) return;
+    const b = buckets.find(b => b.test(v)); if (!b) return;
+    groups.find(g => g.key === b.key).scores.push(s.myScore);
+  });
+  return groups.filter(g => g.scores.length)
+    .map(g => ({ key: g.key, n: g.scores.length, avg: g.scores.reduce((a, b) => a + b, 0) / g.scores.length }));
+}
+
+// Average rating grouped by a categorical key (e.g. compass direction)
+function _groupRows(sessions, keyFn) {
+  const m = {};
+  sessions.forEach(s => { const k = keyFn(s); if (!k) return; (m[k] = m[k] || []).push(s.myScore); });
+  return Object.entries(m).map(([key, arr]) => ({ key, n: arr.length, avg: arr.reduce((a, b) => a + b, 0) / arr.length }));
+}
+
+function _factorBlock(title, icon, rows, opts = {}) {
+  if (!rows.length) return '';
+  const minN = opts.minN || 2;
+  const eligible = rows.filter(r => r.n >= minN);
+  const best = eligible.length ? eligible.reduce((a, b) => b.avg > a.avg ? b : a) : null;
+  const sorted = opts.keepOrder ? rows : [...rows].sort((a, b) => b.avg - a.avg);
+  const bars = sorted.map(r => {
+    const w   = Math.max(5, Math.round(r.avg / 10 * 100));
+    const col = r.avg >= 7 ? 'var(--high)' : r.avg >= 5 ? 'var(--accent)' : 'var(--muted)';
+    const star = best && r.key === best.key ? ' <span style="color:var(--high);">★</span>' : '';
+    return `<div class="ins-bar-row">
+      <div class="ins-bar-key">${r.key}${star}</div>
+      <div class="ins-bar-track"><div class="ins-bar-fill" style="width:${w}%;background:${col};"></div></div>
+      <div class="ins-bar-val">${r.avg.toFixed(1)}<span class="ins-bar-n">·${r.n}</span></div>
+    </div>`;
+  }).join('');
+  const tip = best ? `<div class="ins-tip">★ Best with <b>${best.key}</b> — ${best.avg.toFixed(1)}/10 across ${best.n} session${best.n === 1 ? '' : 's'}</div>` : '';
+  return `<div class="ins-factor"><div class="ins-factor-title">${icon} ${title}</div>${bars}${tip}</div>`;
+}
+
+function _renderAccuracy() {
+  const s = _insSessions().filter(x => x.algoScore != null);
+  if (s.length < 2) {
+    return `<div class="ins-empty">Log sessions <b>on the day you surf</b> so SurfSesh captures that day's forecast, then it will show how closely the forecast tracks your own ratings.<br><br>${s.length}/2 ready so far.</div>`;
+  }
+  const diffs   = s.map(x => x.myScore - x.algoScore);
+  const mae     = diffs.reduce((a, d) => a + Math.abs(d), 0) / s.length;
+  const bias    = diffs.reduce((a, d) => a + d, 0) / s.length;
+  const within1 = Math.round(diffs.filter(d => Math.abs(d) <= 1).length / s.length * 100);
+  const r       = s.length >= 5 ? _pearson(s.map(x => x.algoScore), s.map(x => x.myScore)) : null;
+
+  const agree = mae < 1 ? 'tight match' : mae < 2 ? 'fairly close' : 'often off';
+  const biasTxt = Math.abs(bias) < 0.4
+    ? 'No consistent lean — the forecast lands about where you do.'
+    : bias > 0
+      ? `You rate sessions <b>${bias.toFixed(1)} higher</b> than the forecast on average — it tends to under-sell your surfs.`
+      : `The forecast rates sessions <b>${Math.abs(bias).toFixed(1)} higher</b> than you do — it tends to over-sell conditions.`;
+
+  const stat = (num, label, sub) => `<div class="ins-stat">
+      <div class="ins-stat-num">${num}</div>
+      <div class="ins-stat-label">${label}</div>
+      ${sub ? `<div class="ins-stat-sub">${sub}</div>` : ''}
+    </div>`;
+
+  const misses = [...s]
+    .sort((a, b) => Math.abs(b.myScore - b.algoScore) - Math.abs(a.myScore - a.algoScore))
+    .slice(0, 3)
+    .map(m => {
+      const gap  = m.myScore - m.algoScore;
+      const when = new Date(m.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+      return `<div class="ins-miss">
+        <div style="flex:1;min-width:0;">
+          <div class="ins-miss-break">${m.break}</div>
+          <div class="ins-miss-when">${when} · forecast ${m.algoScore.toFixed(1)} → you ${m.myScore}</div>
+        </div>
+        <div class="ins-miss-gap" style="color:${gap > 0 ? 'var(--high)' : 'var(--muted)'};">${gap > 0 ? '+' : ''}${gap.toFixed(1)}</div>
+      </div>`;
+    }).join('');
+
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+      ${stat(within1 + '%', 'WITHIN 1 PT', agree)}
+      ${stat((bias > 0 ? '+' : '') + bias.toFixed(1), 'YOUR LEAN', `±${mae.toFixed(1)} typical`)}
+      ${r != null ? stat((r >= 0 ? '+' : '') + r.toFixed(2), 'CORRELATION', Math.abs(r) > 0.6 ? 'strong' : Math.abs(r) > 0.3 ? 'some' : 'weak') : ''}
+    </div>
+    <div class="ins-note">${biasTxt}</div>
+    <div class="ins-sub-label">BIGGEST GAPS</div>
+    ${misses}
+    <div class="ins-foot">From ${s.length} session${s.length === 1 ? '' : 's'} logged on the day surfed. Turn on Auto-calibration in the Log tab to nudge future scores toward your ratings.</div>
+  `;
+}
+
+function _renderConditions() {
+  const s = _insSessions().filter(x => x.conditions);
+  if (s.length < 3) {
+    return `<div class="ins-empty">Log a few sessions <b>on the day you surf</b> and SurfSesh will show which swell, wind and tide line up with your best sessions.<br><br>${s.length}/3 ready so far.</div>`;
+  }
+  const period = _factorBlock('SWELL PERIOD', '🌊',
+    _bucketRows(s, x => x.conditions.period, [
+      { key: 'Short <8s',        test: v => v < 8 },
+      { key: 'Mid 8–11s',        test: v => v >= 8 && v < 11 },
+      { key: 'Groundswell 11s+', test: v => v >= 11 },
+    ]), { keepOrder: true });
+  const sheight = _factorBlock('SWELL SIZE', '📐',
+    _bucketRows(s, x => x.conditions.swellHeight, [
+      { key: 'Small <1m',   test: v => v < 1 },
+      { key: 'Mid 1–1.5m',  test: v => v >= 1 && v < 1.5 },
+      { key: 'Big 1.5m+',   test: v => v >= 1.5 },
+    ]), { keepOrder: true });
+  const sdir   = _factorBlock('SWELL DIRECTION', '🧭', _groupRows(s, x => x.conditions.swellDir));
+  const wspeed = _factorBlock('WIND STRENGTH', '💨',
+    _bucketRows(s, x => x.conditions.windKmh, [
+      { key: 'Calm <8km/h',    test: v => v < 8 },
+      { key: 'Light 8–15',     test: v => v >= 8 && v < 15 },
+      { key: 'Fresh 15–25',    test: v => v >= 15 && v < 25 },
+      { key: 'Strong 25+',     test: v => v >= 25 },
+    ]), { keepOrder: true });
+  const wdir   = _factorBlock('WIND DIRECTION', '🧭', _groupRows(s, x => x.conditions.windDir));
+  const tstate = _factorBlock('TIDE MOVEMENT', '🌙',
+    _groupRows(s, x => x.conditions.tide ? (x.conditions.tide.rising ? 'Rising / pushing' : 'Falling / dropping') : null));
+  const theight = _factorBlock('TIDE HEIGHT', '〰️',
+    _bucketRows(s, x => x.conditions.tide ? x.conditions.tide.current : null, [
+      { key: 'Low <0.6m',    test: v => v < 0.6 },
+      { key: 'Mid 0.6–1.2m', test: v => v >= 0.6 && v < 1.2 },
+      { key: 'High 1.2m+',   test: v => v >= 1.2 },
+    ]), { keepOrder: true });
+
+  const blocks = [period, sheight, sdir, wspeed, wdir, tstate, theight].filter(Boolean).join('');
+  return blocks + `<div class="ins-foot">From ${s.length} session${s.length === 1 ? '' : 's'} with captured conditions. Bars show your average rating per bucket; ★ marks your highest-rated (min 2 sessions). Small samples are noisy — treat as a hint, not gospel.</div>`;
+}
+
+function renderInsights() {
+  const a  = document.getElementById('insightsAccuracy');
+  const cE = document.getElementById('insightsConditions');
+  if (a)  a.innerHTML  = _renderAccuracy();
+  if (cE) cE.innerHTML = _renderConditions();
+}
+
 // ─── SWELL ALERTS && CALIBRATION ────────────────────────────────────────────
 if (typeof ResizeObserver !== 'undefined') {
   const chartContainer = document.getElementById('swellChart')?.parentElement;
@@ -5475,6 +5665,7 @@ function switchTab(tab) {
     initAlertSettings();
     renderBoardsManager();
   }
+  if (tab === 'insights') renderInsights();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
