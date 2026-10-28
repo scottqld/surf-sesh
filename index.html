@@ -1083,6 +1083,14 @@
           <div class="condition-label" style="margin-bottom:8px;">WAVES CAUGHT <span style="opacity:0.5;">(optional)</span></div>
           <div id="logWavesPicker" style="display:flex;gap:6px;"></div>
         </div>
+        <div style="margin-bottom:14px;">
+          <div class="condition-label" style="margin-bottom:8px;">SWEEP <span style="opacity:0.5;">(optional)</span></div>
+          <div id="logSweepPicker" style="display:flex;gap:6px;"></div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div class="condition-label" style="margin-bottom:8px;">SIZE <span style="opacity:0.5;">(ft, optional)</span></div>
+          <div id="logSizePicker" style="display:flex;gap:6px;"></div>
+        </div>
         <div style="margin-bottom:16px;">
           <div class="condition-label" style="margin-bottom:6px;">NOTE <span style="opacity:0.5;">(optional)</span></div>
           <textarea id="logNote" class="log-note" placeholder="Clean 3ft dawn session, light S wind…"></textarea>
@@ -1281,7 +1289,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.3';
+const APP_VERSION = '12.4';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4479,13 +4487,19 @@ async function loadNightMode() {
 
 const SESSION_STORE_KEY = 'surfcall_sessions_v1';
 let _logScore = null;
-let _logWaves = null; // selected waves-caught bucket (1, 2, 3, '5+', '10+') or null
-const WAVE_OPTIONS = [0, 1, 2, 3, '5+', '10+'];
+let _logWaves = null; // selected waves-caught bucket (0, 1, 2, 3, '5+', '10+') or null
+let _logSweep = null; // your sweep/current call: 'None' | 'Slight' | 'Strong'
+let _logSize  = null; // your observed size bucket (ft): '<1'..'6+'
+const WAVE_OPTIONS  = [0, 1, 2, 3, '5+', '10+'];
+const SWEEP_OPTIONS = ['None', 'Slight', 'Strong'];
+const SIZE_OPTIONS  = ['<1', '1-2', '2-3', '3-4', '4-6', '6+'];
 let _logTod   = null; // legacy — older records only
 let _editingSessionId = null; // legacy — top-form edit; editing is now inline
 let _inlineEditId = null;     // id of the session being edited inline in the list
 let _ieScore = null;          // inline-edit draft rating
 let _ieWaves = null;          // inline-edit draft waves bucket
+let _ieSweep = null;          // inline-edit draft sweep
+let _ieSize  = null;          // inline-edit draft size
 let _logShowAll = true; // Past Sessions scope: show every break by default, narrow via toggle
 
 function toggleLogScope() {
@@ -4604,11 +4618,15 @@ function initLogTab() {
   if (!picker) return;
   _logScore = null;
   _logWaves = null;
+  _logSweep = null;
+  _logSize  = null;
   defaultLogTimes();
   picker.innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(n =>
     `<button class="log-score-btn" id="logScore${n}" onclick="selectLogScore(${n})">${n}</button>`
   ).join('');
   renderLogWavesPicker();
+  renderPills('logSweepPicker', SWEEP_OPTIONS, _logSweep, 'selectLogSweep');
+  renderPills('logSizePicker',  SIZE_OPTIONS,  _logSize,  'selectLogSize');
   fillBoardSuggestions();
 }
 
@@ -4702,6 +4720,24 @@ function selectLogWaves(v) {
   });
 }
 
+// Generic quick-tap pill picker (sweep, size) — tap again to clear.
+// Buttons carry no quoted values in their onclick (index only), so string
+// options can't break the markup.
+function renderPills(containerId, options, selected, fnName) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = options.map((v, i) =>
+    `<button class="log-wave-btn${v === selected ? ' active' : ''}" onclick="${fnName}(${i})">${v}</button>`
+  ).join('');
+}
+function paintPills(containerId, options, selected) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  [...c.querySelectorAll('button')].forEach((b, i) => b.classList.toggle('active', options[i] === selected));
+}
+function selectLogSweep(i) { const v = SWEEP_OPTIONS[i]; _logSweep = (_logSweep === v) ? null : v; paintPills('logSweepPicker', SWEEP_OPTIONS, _logSweep); }
+function selectLogSize(i)  { const v = SIZE_OPTIONS[i];  _logSize  = (_logSize  === v) ? null : v; paintPills('logSizePicker',  SIZE_OPTIONS,  _logSize);  }
+
 function selectLogTod(tod) {
   _logTod = tod;
   ['dawn','morning','afternoon'].forEach(t => {
@@ -4760,7 +4796,9 @@ function commitLogSession() {
   const endTime   = document.getElementById('logEndTime')?.value || '';
   const dateStr   = document.getElementById('logDate')?.value || localDateStr();
   const isToday   = dateStr === localDateStr();
-  const waves     = _logWaves; // preset bucket: 1, 2, 3, '5+', '10+' or null
+  const waves     = _logWaves; // preset bucket: 0, 1, 2, 3, '5+', '10+' or null
+  const sweep     = _logSweep; // 'None' | 'Slight' | 'Strong' or null
+  const size      = _logSize;  // ft bucket or null
 
   const all = getSessions();
   // Each submit is a new record — log as many sessions per day as you like.
@@ -4776,6 +4814,8 @@ function commitLogSession() {
     algoScore:  (isToday && cachedData) ? scoreBreak(b, cachedData.forecast, false, false) : null,
     board,
     waves,
+    sweep,
+    size,
     note,
     conditions: isToday ? captureConditions(b) : null,
   });
@@ -4796,7 +4836,11 @@ function commitLogSession() {
   const boardEl = document.getElementById('logBoard');
   if (boardEl) boardEl.value = '';
   _logWaves = null;
+  _logSweep = null;
+  _logSize  = null;
   renderLogWavesPicker();
+  renderPills('logSweepPicker', SWEEP_OPTIONS, _logSweep, 'selectLogSweep');
+  renderPills('logSizePicker',  SIZE_OPTIONS,  _logSize,  'selectLogSize');
   fillBoardSuggestions();
 
   recomputeCalibration();
@@ -4816,12 +4860,14 @@ function editInline(id) {
   _inlineEditId = id;
   _ieScore = s.myScore ?? null;
   _ieWaves = s.waves ?? null;
+  _ieSweep = s.sweep ?? null;
+  _ieSize  = s.size ?? null;
   renderSessionLog();
   document.getElementById(`sessionCard${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function cancelInline() {
-  _inlineEditId = null; _ieScore = null; _ieWaves = null;
+  _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null;
   renderSessionLog();
 }
 
@@ -4838,6 +4884,24 @@ function ieSelectWaves(id, v) {
   WAVE_OPTIONS.forEach((opt, i) => {
     const b = document.getElementById(`ieWave${id}_${i}`);
     if (b) b.classList.toggle('active', opt === _ieWaves);
+  });
+}
+
+function ieSelectSweep(id, i) {
+  const v = SWEEP_OPTIONS[i];
+  _ieSweep = (_ieSweep === v) ? null : v;
+  SWEEP_OPTIONS.forEach((opt, k) => {
+    const b = document.getElementById(`ieSweep${id}_${k}`);
+    if (b) b.classList.toggle('active', opt === _ieSweep);
+  });
+}
+
+function ieSelectSize(id, i) {
+  const v = SIZE_OPTIONS[i];
+  _ieSize = (_ieSize === v) ? null : v;
+  SIZE_OPTIONS.forEach((opt, k) => {
+    const b = document.getElementById(`ieSize${id}_${k}`);
+    if (b) b.classList.toggle('active', opt === _ieSize);
   });
 }
 
@@ -4858,9 +4922,9 @@ function saveInline(id) {
   const note      = document.getElementById(`ieNote${id}`)?.value?.trim() || '';
   const dateStr   = document.getElementById(`ieDate${id}`)?.value || localDateStr(new Date(all[idx].ts));
   const ts        = tsFromDateTime(dateStr, startTime);
-  all[idx] = { ...all[idx], ts, break: brk, startTime, endTime, myScore: _ieScore, board, waves: _ieWaves, note };
+  all[idx] = { ...all[idx], ts, break: brk, startTime, endTime, myScore: _ieScore, board, waves: _ieWaves, sweep: _ieSweep, size: _ieSize, note };
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
-  _inlineEditId = null; _ieScore = null; _ieWaves = null;
+  _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null;
   recomputeCalibration();
   syncCalibrationToServer();
   renderSessionLog();
@@ -4883,6 +4947,12 @@ function inlineEditCardHTML(s) {
   const waveBtns = WAVE_OPTIONS.map((v, i) =>
     `<button class="log-wave-btn${v === _ieWaves ? ' active' : ''}" id="ieWave${id}_${i}" onclick="ieSelectWaves(${id},WAVE_OPTIONS[${i}])">${v}</button>`
   ).join('');
+  const sweepBtns = SWEEP_OPTIONS.map((v, i) =>
+    `<button class="log-wave-btn${v === _ieSweep ? ' active' : ''}" id="ieSweep${id}_${i}" onclick="ieSelectSweep(${id},${i})">${v}</button>`
+  ).join('');
+  const sizeBtns = SIZE_OPTIONS.map((v, i) =>
+    `<button class="log-wave-btn${v === _ieSize ? ' active' : ''}" id="ieSize${id}_${i}" onclick="ieSelectSize(${id},${i})">${v}</button>`
+  ).join('');
   const field = "width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;";
   return `<div id="sessionCard${id}" style="padding:14px;margin:8px 0;background:rgba(0,212,255,0.05);border:1px solid var(--accent);border-radius:12px;">
     <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:1.5px;margin-bottom:10px;">EDITING SESSION</div>
@@ -4899,6 +4969,10 @@ function inlineEditCardHTML(s) {
     <input type="text" id="ieBoard${id}" list="boardSuggestions" autocomplete="off" value="${escAttr(s.board)}" placeholder="e.g. 9'1 log" style="${field}margin-bottom:10px;">
     <div class="condition-label" style="margin-bottom:6px;">WAVES CAUGHT <span style="opacity:0.5;">(optional)</span></div>
     <div style="display:flex;gap:6px;margin-bottom:10px;">${waveBtns}</div>
+    <div class="condition-label" style="margin-bottom:6px;">SWEEP <span style="opacity:0.5;">(optional)</span></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;">${sweepBtns}</div>
+    <div class="condition-label" style="margin-bottom:6px;">SIZE <span style="opacity:0.5;">(ft, optional)</span></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;">${sizeBtns}</div>
     <div class="condition-label" style="margin-bottom:6px;">NOTE <span style="opacity:0.5;">(optional)</span></div>
     <textarea id="ieNote${id}" class="log-note" placeholder="Clean 3ft dawn session…" style="margin-bottom:12px;">${escText(s.note)}</textarea>
     <div style="display:flex;gap:8px;">
@@ -4909,7 +4983,7 @@ function inlineEditCardHTML(s) {
 }
 
 function deleteSession(id) {
-  if (_inlineEditId === id) { _inlineEditId = null; _ieScore = null; _ieWaves = null; }
+  if (_inlineEditId === id) { _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null; }
   const sessions = getSessions().filter(s => s.id !== id);
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(sessions));
   recomputeCalibration();
@@ -4978,7 +5052,17 @@ function renderSessionLog() {
         <div style="flex:1;min-width:0;">
           <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fff;line-height:1.15;">${s.break}</div>
-          ${(s.board || s.waves != null) ? `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:3px;">${s.board ? `<span>🏄 ${s.board.replace(/</g, '&lt;')}</span>` : ''}${s.waves != null ? `<span>🌊 ${s.waves} wave${s.waves === 1 ? '' : 's'}</span>` : ''}</div>` : ''}
+          ${(() => {
+            const chips = [
+              s.board ? `🏄 ${s.board.replace(/</g, '&lt;')}` : null,
+              s.waves != null ? `🌊 ${s.waves} wave${s.waves === 1 ? '' : 's'}` : null,
+              s.size ? `📏 ${s.size}ft` : null,
+              s.sweep ? `🌀 ${s.sweep === 'None' ? 'no sweep' : s.sweep + ' sweep'}` : null,
+            ].filter(Boolean);
+            return chips.length
+              ? `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:3px;">${chips.map(c => `<span>${c}</span>`).join('')}</div>`
+              : '';
+          })()}
           ${condLine ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:3px;">${condLine}</div>` : ''}
           ${s.note ? `<div style="font-size:12px;color:var(--text);margin-top:5px;font-style:italic;word-break:break-word;">"${s.note}"</div>` : ''}
         </div>
