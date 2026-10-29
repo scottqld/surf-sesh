@@ -1079,8 +1079,10 @@
           <div class="condition-label" id="logTimeLabel" style="margin-bottom:8px;">SESSION TIME</div>
           <div style="display:flex;align-items:center;gap:8px;">
             <input type="time" id="logStartTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
-            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
-            <input type="time" id="logEndTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+            <span id="logEndWrap" style="display:contents;">
+              <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
+              <input type="time" id="logEndTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+            </span>
           </div>
         </div>
         <div style="margin-bottom:14px;" id="logRowRating">
@@ -1357,7 +1359,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.1';
+const APP_VERSION = '13.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4702,6 +4704,8 @@ function setLogSurfed(on) {
   });
   const timeLabel = document.getElementById('logTimeLabel');
   if (timeLabel) timeLabel.textContent = _logSurfed ? 'SESSION TIME' : 'TIME CHECKED';
+  const endWrap = document.getElementById('logEndWrap'); // a check has no end-time
+  if (endWrap) endWrap.style.display = _logSurfed ? 'contents' : 'none';
   const submitBtn = document.getElementById('logSubmitBtn');
   if (submitBtn && _editingSessionId == null) submitBtn.textContent = _logSurfed ? 'LOG SESSION' : 'LOG OBSERVATION';
 }
@@ -4891,7 +4895,7 @@ function commitLogSession() {
   const b         = BREAKS[currentBreak];
   const note      = document.getElementById('logNote')?.value?.trim() || '';
   const startTime = document.getElementById('logStartTime')?.value || '';
-  const endTime   = document.getElementById('logEndTime')?.value || '';
+  const endTime   = _logSurfed ? (document.getElementById('logEndTime')?.value || '') : '';
   const dateStr   = document.getElementById('logDate')?.value || localDateStr();
   const isToday   = dateStr === localDateStr();
   const sweep     = _logSweep; // 'None' | 'Slight' | 'Strong' or null
