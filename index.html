@@ -632,6 +632,13 @@
     cursor: pointer; transition: all 0.15s; line-height: 1;
   }
   .log-wave-btn.active { background: rgba(0,212,255,0.15); color: var(--accent); border-color: var(--accent); }
+  .log-mode-btn {
+    flex: 1; padding: 11px 6px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.5px;
+    cursor: pointer; transition: all 0.15s; line-height: 1;
+  }
+  .log-mode-btn.active { background: rgba(0,212,255,0.15); color: var(--accent); border-color: var(--accent); }
   .log-note {
     width: 100%; background: var(--surface2); border: 1px solid var(--border);
     border-radius: 8px; color: var(--text); font-family: 'DM Sans', sans-serif;
@@ -1058,28 +1065,35 @@
           <select id="logBreakSelect" aria-label="Break for this session" onchange="setBreak(+this.value, true); renderSessionLog();"></select>
         </div>
         <div style="margin-bottom:14px;">
+          <div class="condition-label" style="margin-bottom:8px;">WHAT ARE YOU LOGGING</div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" id="logModeSurfed" class="log-mode-btn active" onclick="setLogSurfed(true)">🏄 Surfed</button>
+            <button type="button" id="logModeChecked" class="log-mode-btn" onclick="setLogSurfed(false)">👀 Checked only</button>
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
           <div class="condition-label" style="margin-bottom:8px;">DATE</div>
           <input type="date" id="logDate" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
         </div>
         <div style="margin-bottom:14px;">
-          <div class="condition-label" style="margin-bottom:8px;">SESSION TIME</div>
+          <div class="condition-label" id="logTimeLabel" style="margin-bottom:8px;">SESSION TIME</div>
           <div style="display:flex;align-items:center;gap:8px;">
             <input type="time" id="logStartTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
             <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
             <input type="time" id="logEndTime" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
           </div>
         </div>
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:14px;" id="logRowRating">
           <div class="condition-label" style="margin-bottom:8px;">YOUR RATING</div>
           <div id="logScorePicker" style="display:flex;gap:4px;"></div>
         </div>
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:14px;" id="logRowBoard">
           <div class="condition-label" style="margin-bottom:6px;">BOARD <span style="opacity:0.5;">(optional)</span></div>
           <input type="text" id="logBoard" list="boardSuggestions" autocomplete="off" placeholder="e.g. 9'1 log, 6'2 shortboard…"
             style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
           <datalist id="boardSuggestions"></datalist>
         </div>
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:14px;" id="logRowWaves">
           <div class="condition-label" style="margin-bottom:8px;">WAVES CAUGHT <span style="opacity:0.5;">(optional)</span></div>
           <div id="logWavesPicker" style="display:flex;gap:6px;"></div>
         </div>
@@ -1343,7 +1357,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '12.9';
+const APP_VERSION = '13.0';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4548,6 +4562,7 @@ async function loadNightMode() {
 // ────────────────────────────────────────────────────────────────────────────
 
 const SESSION_STORE_KEY = 'surfcall_sessions_v1';
+let _logSurfed = true; // true = surfed (rate it); false = checked the surf but didn't go out
 let _logScore = null;
 let _logWaves = null; // selected waves-caught bucket (0, 1, 2, 3, '5+', '10+') or null
 let _logSweep = null; // your sweep/current call: 'None' | 'Slight' | 'Strong'
@@ -4671,6 +4686,26 @@ function renderLogBreakSelect() {
   sel.value = String(currentBreak);
 }
 
+// Switch the log form between "surfed" (rate it) and "checked only" (observation,
+// no rating). In checked-only mode the rating/board/waves inputs are hidden —
+// you still record sweep, size, note and (for today) the conditions snapshot, so
+// the observation can feed the sweep predictor even though you didn't paddle out.
+function setLogSurfed(on) {
+  _logSurfed = !!on;
+  const surfedBtn  = document.getElementById('logModeSurfed');
+  const checkedBtn = document.getElementById('logModeChecked');
+  if (surfedBtn)  surfedBtn.classList.toggle('active', _logSurfed);
+  if (checkedBtn) checkedBtn.classList.toggle('active', !_logSurfed);
+  ['logRowRating', 'logRowBoard', 'logRowWaves'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = _logSurfed ? '' : 'none';
+  });
+  const timeLabel = document.getElementById('logTimeLabel');
+  if (timeLabel) timeLabel.textContent = _logSurfed ? 'SESSION TIME' : 'TIME CHECKED';
+  const submitBtn = document.getElementById('logSubmitBtn');
+  if (submitBtn && _editingSessionId == null) submitBtn.textContent = _logSurfed ? 'LOG SESSION' : 'LOG OBSERVATION';
+}
+
 function initLogTab() {
   // Break picker for the new session reflects the current break
   renderLogBreakSelect();
@@ -4682,6 +4717,7 @@ function initLogTab() {
   _logWaves = null;
   _logSweep = null;
   _logSize  = null;
+  setLogSurfed(true);
   defaultLogTimes();
   picker.innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(n =>
     `<button class="log-score-btn" id="logScore${n}" onclick="selectLogScore(${n})">${n}</button>`
@@ -4841,7 +4877,8 @@ function captureConditions(b) {
 }
 
 function commitLogSession() {
-  if (!_logScore) {
+  // A surfed session needs a rating; a "checked only" observation does not.
+  if (_logSurfed && !_logScore) {
     // Briefly flash the picker to prompt the user
     const picker = document.getElementById('logScorePicker');
     if (picker) {
@@ -4853,27 +4890,32 @@ function commitLogSession() {
 
   const b         = BREAKS[currentBreak];
   const note      = document.getElementById('logNote')?.value?.trim() || '';
-  const board     = document.getElementById('logBoard')?.value?.trim() || '';
   const startTime = document.getElementById('logStartTime')?.value || '';
   const endTime   = document.getElementById('logEndTime')?.value || '';
   const dateStr   = document.getElementById('logDate')?.value || localDateStr();
   const isToday   = dateStr === localDateStr();
-  const waves     = _logWaves; // preset bucket: 0, 1, 2, 3, '5+', '10+' or null
   const sweep     = _logSweep; // 'None' | 'Slight' | 'Strong' or null
   const size      = _logSize;  // ft bucket or null
+  // Rating, board and waves only apply when you actually surfed.
+  const board     = _logSurfed ? (document.getElementById('logBoard')?.value?.trim() || '') : '';
+  const waves     = _logSurfed ? _logWaves : null; // preset bucket: 0, 1, 2, 3, '5+', '10+' or null
 
   const all = getSessions();
   // Each submit is a new record — log as many sessions per day as you like.
   // The conditions snapshot + algo score reflect *current* data, so they're only
-  // captured for a session logged for today; backdated sessions store neither.
+  // captured for a record logged for today; backdated records store neither.
+  // A "checked only" observation carries no rating (so no algoScore, which would
+  // otherwise poison calibration), but still snapshots conditions + your sweep
+  // call so it can train the sweep predictor.
   all.unshift({
     id:         Date.now(),
     ts:         tsFromDateTime(dateStr, startTime),
     break:      b.name,
+    surfed:     _logSurfed,
     startTime, endTime,
-    myScore:    _logScore,
+    myScore:    _logSurfed ? _logScore : null,
     // Base (uncalibrated) algo score — calibration bias is measured against this.
-    algoScore:  (isToday && cachedData) ? scoreBreak(b, cachedData.forecast, false, false) : null,
+    algoScore:  (_logSurfed && isToday && cachedData) ? scoreBreak(b, cachedData.forecast, false, false) : null,
     board,
     waves,
     sweep,
@@ -4903,6 +4945,7 @@ function commitLogSession() {
   renderLogWavesPicker();
   renderPills('logSweepPicker', SWEEP_OPTIONS, _logSweep, 'selectLogSweep');
   renderPills('logSizePicker',  SIZE_OPTIONS,  _logSize,  'selectLogSize');
+  setLogSurfed(true); // back to the default mode for the next entry
   fillBoardSuggestions();
 
   recomputeCalibration();
@@ -4968,23 +5011,29 @@ function ieSelectSize(id, i) {
 }
 
 function saveInline(id) {
-  if (!_ieScore) {
+  const all = getSessions();
+  const idx = all.findIndex(x => x.id === id);
+  if (idx < 0) { _inlineEditId = null; return renderSessionLog(); }
+  const didSurf = all[idx].surfed !== false;
+  // A surfed session still needs a rating; a "checked only" observation does not.
+  if (didSurf && !_ieScore) {
     const row = document.getElementById(`ieScoreRow${id}`);
     if (row) { row.style.outline = '1px solid var(--accent)'; setTimeout(() => { row.style.outline = ''; }, 700); }
     return;
   }
-  const all = getSessions();
-  const idx = all.findIndex(x => x.id === id);
-  if (idx < 0) { _inlineEditId = null; return renderSessionLog(); }
   const biEl      = document.getElementById(`ieBreak${id}`);
   const brk       = (biEl && BREAKS[+biEl.value]) ? BREAKS[+biEl.value].name : all[idx].break;
   const startTime = document.getElementById(`ieStart${id}`)?.value || '';
-  const endTime   = document.getElementById(`ieEnd${id}`)?.value || '';
-  const board     = document.getElementById(`ieBoard${id}`)?.value?.trim() || '';
+  const endTime   = didSurf ? (document.getElementById(`ieEnd${id}`)?.value || '') : '';
+  const board     = didSurf ? (document.getElementById(`ieBoard${id}`)?.value?.trim() || '') : '';
   const note      = document.getElementById(`ieNote${id}`)?.value?.trim() || '';
   const dateStr   = document.getElementById(`ieDate${id}`)?.value || localDateStr(new Date(all[idx].ts));
   const ts        = tsFromDateTime(dateStr, startTime);
-  all[idx] = { ...all[idx], ts, break: brk, startTime, endTime, myScore: _ieScore, board, waves: _ieWaves, sweep: _ieSweep, size: _ieSize, note };
+  all[idx] = { ...all[idx], ts, break: brk, startTime, endTime,
+    myScore: didSurf ? _ieScore : null,
+    board,
+    waves: didSurf ? _ieWaves : null,
+    sweep: _ieSweep, size: _ieSize, note };
   localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
   _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null;
   recomputeCalibration();
@@ -5016,21 +5065,22 @@ function inlineEditCardHTML(s) {
     `<button class="log-wave-btn${v === _ieSize ? ' active' : ''}" id="ieSize${id}_${i}" onclick="ieSelectSize(${id},${i})">${v}</button>`
   ).join('');
   const field = "width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;";
+  const didSurf = s.surfed !== false;
   return `<div id="sessionCard${id}" style="padding:14px;margin:8px 0;background:rgba(0,212,255,0.05);border:1px solid var(--accent);border-radius:12px;">
-    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:1.5px;margin-bottom:10px;">EDITING SESSION</div>
+    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:1.5px;margin-bottom:10px;">${didSurf ? 'EDITING SESSION' : 'EDITING OBSERVATION · 👀 CHECKED, NO SURF'}</div>
     <select id="ieBreak${id}" style="${field}appearance:none;-webkit-appearance:none;cursor:pointer;margin-bottom:8px;">${breakOpts}</select>
     <input type="date" id="ieDate${id}" value="${escAttr(localDateStr(new Date(s.ts)))}" style="${field}margin-bottom:8px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
       <input type="time" id="ieStart${id}" value="${escAttr(s.startTime)}" style="flex:1;min-width:0;${field}">
-      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
-      <input type="time" id="ieEnd${id}" value="${escAttr(s.endTime)}" style="flex:1;min-width:0;${field}">
+      ${didSurf ? `<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);flex-shrink:0;">to</span>
+      <input type="time" id="ieEnd${id}" value="${escAttr(s.endTime)}" style="flex:1;min-width:0;${field}">` : ''}
     </div>
-    <div class="condition-label" style="margin-bottom:6px;">RATING</div>
+    ${didSurf ? `<div class="condition-label" style="margin-bottom:6px;">RATING</div>
     <div id="ieScoreRow${id}" style="display:flex;gap:3px;margin-bottom:10px;border-radius:6px;">${scoreBtns}</div>
     <div class="condition-label" style="margin-bottom:6px;">BOARD <span style="opacity:0.5;">(optional)</span></div>
     <input type="text" id="ieBoard${id}" list="boardSuggestions" autocomplete="off" value="${escAttr(s.board)}" placeholder="e.g. 9'1 log" style="${field}margin-bottom:10px;">
     <div class="condition-label" style="margin-bottom:6px;">WAVES CAUGHT <span style="opacity:0.5;">(optional)</span></div>
-    <div style="display:flex;gap:6px;margin-bottom:10px;">${waveBtns}</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;">${waveBtns}</div>` : ''}
     <div class="condition-label" style="margin-bottom:6px;">SWEEP <span style="opacity:0.5;">(optional)</span></div>
     <div style="display:flex;gap:6px;margin-bottom:10px;">${sweepBtns}</div>
     <div class="condition-label" style="margin-bottom:6px;">SIZE <span style="opacity:0.5;">(ft, optional)</span></div>
@@ -5090,10 +5140,11 @@ function renderSessionLog() {
   logEl.innerHTML = sessions.map((s, i) => {
     if (s.id === _inlineEditId) return inlineEditCardHTML(s);
     const d        = new Date(s.ts);
+    const didSurf  = s.surfed !== false; // legacy records (no flag) were all surfed
     const fmt12    = (hhmm) => { if (!hhmm) return ''; const [h, m] = hhmm.split(':').map(Number); const ampm = h < 12 ? 'am' : 'pm'; return `${(h % 12) || 12}:${String(m).padStart(2,'0')}${ampm}`; };
     // New records store start/end times; fall back to the old time-of-day label
     const todLabel = s.startTime
-      ? `${fmt12(s.startTime)}–${fmt12(s.endTime) || '?'}`
+      ? `${fmt12(s.startTime)}${didSurf ? '–' + (fmt12(s.endTime) || '?') : ''}`
       : ({ dawn: '🌅 Dawn', morning: '☀️ Morning', afternoon: '🌤️ Arvo' }[s.tod] || '');
     const dateStr  = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
     const myColor  = s.myScore >= 7 ? 'var(--high)' : s.myScore >= 5 ? 'var(--accent)' : 'var(--muted)';
@@ -5112,7 +5163,7 @@ function renderSessionLog() {
     return `<div style="padding:12px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}${didSurf ? '' : ' · <span style="color:var(--accent);">👀 CHECKED</span>'}</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fff;line-height:1.15;">${s.break}</div>
           ${(() => {
             const chips = [
@@ -5129,8 +5180,10 @@ function renderSessionLog() {
           ${s.note ? `<div style="font-size:12px;color:var(--text);margin-top:5px;font-style:italic;word-break:break-word;">"${s.note}"</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:${myColor};line-height:1;">${s.myScore}<span style="font-size:13px;color:var(--muted);">/10</span></div>
-          ${s.algoScore !== null
+          ${didSurf
+            ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:${myColor};line-height:1;">${s.myScore}<span style="font-size:13px;color:var(--muted);">/10</span></div>`
+            : `<div style="font-size:26px;line-height:1;" title="Checked, didn't surf">👀</div>`}
+          ${didSurf && s.algoScore !== null
             ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);">app ${s.algoScore}${diffStr ? ` <span style="color:${diffColor};">${diffStr}</span>` : ''}</div>`
             : ''}
           <div style="display:flex;gap:2px;margin-top:2px;">
@@ -5399,13 +5452,15 @@ function renderTotals() {
   const panel = document.getElementById('totalsPanel');
   if (!panel) return;
   const sessions = getSessions();
-  const totalSessions = sessions.length;
-  const wavesSessions = sessions.filter(s => s.waves != null);
+  const surfed   = sessions.filter(s => s.surfed !== false); // legacy records count as surfed
+  const checks   = sessions.length - surfed.length;          // "checked only" observations
+  const totalSessions = surfed.length;
+  const wavesSessions = surfed.filter(s => s.waves != null);
   const totalWaves = wavesSessions.reduce((a, s) => a + waveBucketToNum(s.waves), 0);
   // Buckets are minimums (5+/10+), so the sum is a lower bound → show a "+"
   const approx = wavesSessions.some(s => typeof s.waves === 'string' && s.waves.includes('+'));
 
-  if (!totalSessions) {
+  if (!sessions.length) {
     panel.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">Log a session to see your totals.</div>`;
     return;
   }
@@ -5418,6 +5473,7 @@ function renderTotals() {
   panel.innerHTML = `<div style="display:flex;gap:10px;">
       ${stat(totalSessions, 'SESSIONS')}
       ${stat(totalWaves > 0 && approx ? totalWaves + '+' : totalWaves, 'WAVES CAUGHT')}
+      ${checks > 0 ? stat(checks, 'CHECKS') : ''}
     </div>`;
 }
 
