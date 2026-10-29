@@ -1357,7 +1357,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.0';
+const APP_VERSION = '13.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -5619,11 +5619,52 @@ function _orderedRows(sessions, keyFn, order) {
   return _groupRows(sessions, keyFn).sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 }
 
+// Frequency tally ordered by a fixed label list. Counts every session incl.
+// "checked only" observations (which have no rating), and carries the average
+// rating of the surfed subset in each bucket so the bar can show both.
+function _tallyRows(sessions, keyFn, order) {
+  const m = {};
+  sessions.forEach(s => {
+    const k = keyFn(s); if (!k) return;
+    const g = m[k] || (m[k] = { key: k, n: 0, rated: [] });
+    g.n++;
+    if (s.myScore != null) g.rated.push(s.myScore);
+  });
+  return Object.values(m)
+    .map(g => ({ key: g.key, n: g.n, ratedN: g.rated.length,
+      avg: g.rated.length ? g.rated.reduce((a, b) => a + b, 0) / g.rated.length : null }))
+    .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+}
+
+// Bar block for a frequency tally: bar length = how often you logged that call
+// (checks included), colour + trailing value = your average rating when you
+// surfed it; ★ marks the highest-rated bucket (min 2 surfed sessions).
+function _tallyBlock(title, icon, rows) {
+  if (!rows.length) return '';
+  const maxN  = Math.max(...rows.map(r => r.n));
+  const rated = rows.filter(r => r.ratedN >= 2 && r.avg != null);
+  const best  = rated.length ? rated.reduce((a, b) => b.avg > a.avg ? b : a) : null;
+  const bars = rows.map(r => {
+    const w   = Math.max(6, Math.round(r.n / maxN * 100));
+    const col = r.avg == null ? 'var(--muted)' : r.avg >= 7 ? 'var(--high)' : r.avg >= 5 ? 'var(--accent)' : 'var(--muted)';
+    const star = best && r.key === best.key ? ' <span style="color:var(--high);">★</span>' : '';
+    const ratingTag = r.avg != null ? `<span class="ins-bar-n"> · ${r.avg.toFixed(1)}/10</span>` : '';
+    return `<div class="ins-bar-row">
+      <div class="ins-bar-key">${r.key}${star}</div>
+      <div class="ins-bar-track"><div class="ins-bar-fill" style="width:${w}%;background:${col};"></div></div>
+      <div class="ins-bar-val">${r.n}×${ratingTag}</div>
+    </div>`;
+  }).join('');
+  const tip = best ? `<div class="ins-tip">★ Best surf with <b>${best.key}</b> — ${best.avg.toFixed(1)}/10 across ${best.ratedN} surfed session${best.ratedN === 1 ? '' : 's'}</div>` : '';
+  return `<div class="ins-factor"><div class="ins-factor-title">${icon} ${title}</div>${bars}${tip}</div>`;
+}
+
 function _renderConditions() {
-  const all  = _insSessions();
-  const s    = all.filter(x => x.conditions);     // forecast-derived: day-of-surf only
-  const nSweep = all.filter(x => x.sweep).length; // your own calls: any session
-  const nSize  = all.filter(x => x.size).length;
+  const all     = _insSessions();                      // surfed (rated) sessions
+  const ownPool = getSessions();                       // every entry incl. checks
+  const s    = all.filter(x => x.conditions);          // forecast-derived: day-of-surf only
+  const nSweep = ownPool.filter(x => x.sweep).length;  // your own calls: any entry, checks included
+  const nSize  = ownPool.filter(x => x.size).length;
 
   if (s.length < 3 && nSweep < 2 && nSize < 2) {
     return `<div class="ins-empty">Log a few sessions and SurfSesh will show which conditions line up with your best surfs — swell, wind and tide from sessions logged <b>on the day you surf</b>, plus the sweep and size <b>you</b> record on any session.<br><br>Forecast factors ${s.length}/3 · your sweep/size ${Math.max(nSweep, nSize)}/2 so far.</div>`;
@@ -5666,19 +5707,21 @@ function _renderConditions() {
       [period, sheight, sdir, wspeed, wdir, tstate, theight].filter(Boolean).join('');
   }
 
-  // ── Your own calls: sweep + size (logged on any session) ──
-  const sweep = _factorBlock('SWEEP', '🌀',
-    _orderedRows(all, x => x.sweep ? (x.sweep === 'None' ? 'No sweep' : x.sweep + ' sweep') : null,
-      ['No sweep', 'Slight sweep', 'Strong sweep']), { keepOrder: true });
-  const size  = _factorBlock('SIZE YOU CALLED', '📏',
-    _orderedRows(all, x => x.size ? x.size + 'ft' : null,
-      SIZE_OPTIONS.map(o => o + 'ft')), { keepOrder: true });
+  // ── Your own calls: sweep + size — counted across every entry, checks too ──
+  const nChecks = ownPool.filter(x => x.surfed === false).length;
+  const sweep = _tallyBlock('SWEEP', '🌀',
+    _tallyRows(ownPool, x => x.sweep ? (x.sweep === 'None' ? 'No sweep' : x.sweep + ' sweep') : null,
+      ['No sweep', 'Slight sweep', 'Strong sweep']));
+  const size  = _tallyBlock('SIZE YOU CALLED', '📏',
+    _tallyRows(ownPool, x => x.size ? x.size + 'ft' : null,
+      SIZE_OPTIONS.map(o => o + 'ft')));
+  const checksTag = nChecks ? ` · incl. ${nChecks} check${nChecks === 1 ? '' : 's'}` : '';
   const ownBlocks = (sweep || size)
-    ? `<div class="ins-sub-label" style="margin-top:2px;">YOUR OWN CALLS · sweep &amp; size you logged</div>${sweep}${size}`
+    ? `<div class="ins-sub-label" style="margin-top:2px;">YOUR OWN CALLS · sweep &amp; size you logged${checksTag}</div>${sweep}${size}`
     : '';
 
   return forecastBlocks + ownBlocks +
-    `<div class="ins-foot">Bars show your average rating per bucket; ★ marks your highest-rated (min 2 sessions). Forecast factors use the swell/wind/tide captured on day-of-surf sessions; sweep &amp; size use what you logged on any session. Small samples are noisy — treat as a hint, not gospel.</div>`;
+    `<div class="ins-foot">Forecast bars show your average rating per bucket (★ = highest, min 2). Your sweep &amp; size bars show how often you logged each call — checks included — with your average surfed rating alongside when there is one. Small samples are noisy — treat as a hint, not gospel.</div>`;
 }
 
 function renderInsights() {
