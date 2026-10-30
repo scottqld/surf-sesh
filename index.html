@@ -1359,7 +1359,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.2';
+const APP_VERSION = '13.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1685,6 +1685,50 @@ function selectForecastTab(tabIdx) {
       el.style.display  = 'flex';
     }
   }
+
+  // Keep the break-selector chip scores in step with the day being viewed.
+  updateChipScoresForDay(realDayIdx, day, forecast);
+}
+
+/**
+ * Repaint the break-selector chip scores for a specific forecast day so the
+ * score beside each break tracks whichever day tab is selected. Today in
+ * daylight uses the live score (matching the NOW card); any other day uses that
+ * day's canonical forecast inputs. The ★ moves to the best break for that day.
+ */
+function updateChipScoresForDay(realDayIdx, day, forecast) {
+  if (!forecast || !day) return;
+  const liveToday = realDayIdx === 0 && isActiveHours();
+  const scoreFor  = b => liveToday
+    ? scoreBreak(b, forecast, true)
+    : scoreBreak(b, { forecasts: [day], ...dayScoreAux(forecast, realDayIdx) });
+
+  let bestScore = -1, bestIdx = -1;
+  const scores = BREAKS.map((b, i) => {
+    const s = scoreFor(b);
+    if (s > bestScore) { bestScore = s; bestIdx = i; }
+    return s;
+  });
+
+  // On today keep the nuanced "best right now" pick (_bestPick, set by
+  // updateBreakIndicators — it weighs advanced/capped breaks); future days use a
+  // plain highest-score pick. Only star it when it's actually worth a look.
+  const starIdx = liveToday
+    ? ((_bestPick && _bestPick.score > 4) ? _bestPick.idx : -1)
+    : (bestScore > 4 ? bestIdx : -1);
+  const bestTitle = liveToday ? 'Best right now' : 'Best this day';
+
+  BREAKS.forEach((_, i) => {
+    const score = scores[i];
+    const scoreEl = document.getElementById(`chipScore${i}`);
+    if (scoreEl) { scoreEl.textContent = score; scoreEl.style.color = scoreColor(score); }
+    const btn = document.getElementById(`btn${i}`);
+    if (btn) btn.title = score >= 7 ? 'Firing!' : score >= 5 ? 'Decent conditions' : 'Not ideal';
+    const isBest = i === starIdx;
+    const star = document.getElementById(`chipStar${i}`);
+    if (star) { star.style.display = isBest ? '' : 'none'; star.title = bestTitle; }
+    if (btn) btn.classList.toggle('is-best', isBest);
+  });
 }
 
 /**
