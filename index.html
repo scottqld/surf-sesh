@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.5';
+const APP_VERSION = '13.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1398,8 +1398,11 @@ function getBreakImg(index) {
 let BREAKS = [
   {
     name: 'The Groyne', subtitle: 'Groyne', region: 'Noosa National Park',
-    notes: 'Beach break at the river mouth groyne. Best NE swell with S–SW offshore wind. Works at most tides but tends to be fast on low tide. Good learner wave on smaller days. Note: banks currently running very straight — waves closing out rather than peeling. Score penalised until banks improve.',
-    maxScore: 6, sizeCap: 8, bankPenalty: 3, tide: { ideal: 'mid-high', avoid: 'low' }, exposure: 0.50,
+    notes: 'Beach break at the river mouth groyne. Best NE swell with S–SW offshore wind. Works at most tides but tends to be fast on low tide. Good learner wave on smaller days. Banks currently reshaped and peeling again.',
+    // bankPenalty is a BEACH-BREAK lever only — sandbanks shift with sand movement,
+    // so revisit it as the banks change. Point breaks are geologically stable and
+    // never carry one. Banks reshaped (confirmed 2026-11): penalty cleared, cap restored.
+    maxScore: 9, sizeCap: 8, bankPenalty: 0, tide: { ideal: 'mid-high', avoid: 'low' }, exposure: 0.50,
     ideal:      { swellDirs: ['NE','ENE','E'],        windDirs: ['S','SSW','SW','WSW'],            swellMin: 0.8, swellMax: 1.2, periodMin: 8 },
     acceptable: { swellDirs: ['NNE','ESE','SE'],      windDirs: ['W','SSE','SE'],                  swellMin: 0.4, swellMax: 1.5, periodMin: 6 },
     avoid:      { swellDirs: ['N','NW','S'],          windDirs: ['N','NNE','NE','ENE','E'],        swellMin: 0,   swellMax: 9,   periodMin: 0, windPenalty: 2 },
@@ -2550,12 +2553,21 @@ function scoreBreak(breakData, forecast, isCurrent = false, applyCalib = true) {
     else if (kmh < 12) windPenalty = Math.ceil(windPenalty / 2);
   }
 
-  // Wind speed penalty — only applies when wind is not comfortably offshore
+  // Wind speed penalty — onshore/cross wind hurts sooner than offshore.
   const windIsIdeal = windDir && ideal.windDirs.includes(windDir);
   let windSpeedPenalty = 0;
   if (!windIsIdeal && windSpeedKts !== null) {
     if (windSpeedKts > 30) windSpeedPenalty = 2;
     else if (windSpeedKts > 20) windSpeedPenalty = 1;
+  }
+  // Strong wind degrades the surface even when it's offshore — a 30kt+ "offshore"
+  // chops the face, sandblasts you and makes the paddle-out brutal, and at exposed
+  // breaks it's rarely cleanly offshore anyway. Bite only once it's honking, and a
+  // touch harder at the exposed breaks (Granite etc.).
+  if (windSpeedKts !== null) {
+    const exposedBoost = breakData.exposure > 0.6 ? 1 : 0;
+    if (windSpeedKts > 32)      windSpeedPenalty = Math.max(windSpeedPenalty, 2 + exposedBoost);
+    else if (windSpeedKts > 24) windSpeedPenalty = Math.max(windSpeedPenalty, 1 + exposedBoost);
   }
 
   // Cross-swell penalty
@@ -2646,7 +2658,13 @@ function scoreBreakExplain(breakData, forecast) {
     else if (kmh < 12) windPenalty = Math.ceil(windPenalty / 2);
   }
   const windIsIdeal     = windDir && ideal.windDirs.includes(windDir);
-  const windSpeedPenalty = (!windIsIdeal && windSpeedKts !== null) ? (windSpeedKts > 30 ? 2 : windSpeedKts > 20 ? 1 : 0) : 0;
+  let windSpeedPenalty = (!windIsIdeal && windSpeedKts !== null) ? (windSpeedKts > 30 ? 2 : windSpeedKts > 20 ? 1 : 0) : 0;
+  // Strong wind degrades the surface even when offshore (mirror of scoreBreak).
+  if (windSpeedKts !== null) {
+    const exposedBoost = breakData.exposure > 0.6 ? 1 : 0;
+    if (windSpeedKts > 32)      windSpeedPenalty = Math.max(windSpeedPenalty, 2 + exposedBoost);
+    else if (windSpeedKts > 24) windSpeedPenalty = Math.max(windSpeedPenalty, 1 + exposedBoost);
+  }
   const hasCrossSwell   = /cross.?swell|moderate cross|secondary swell|confused/i.test(current.swell || '');
   const crossSwellPenalty = hasCrossSwell ? 1 : 0;
   const bankPenalty     = breakData.bankPenalty || 0;
@@ -5039,7 +5057,10 @@ function commitLogSession() {
     startTime, endTime,
     myScore:    _logSurfed ? _logScore : null,
     // Base (uncalibrated) algo score — calibration bias is measured against this.
-    algoScore:  (_logSurfed && isToday && cachedData) ? scoreBreak(b, cachedData.forecast, false, false) : null,
+    // Use the LIVE wind (isCurrent) when logging a session today during surfable
+    // hours, so a glassy dawn isn't scored with the afternoon's onshore forecast
+    // — that was making clean early sessions log as ~0 and skewing calibration.
+    algoScore:  (_logSurfed && isToday && cachedData) ? scoreBreak(b, cachedData.forecast, isActiveHours(), false) : null,
     board,
     waves,
     sweep,
