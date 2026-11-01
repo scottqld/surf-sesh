@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.4';
+const APP_VERSION = '13.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -1735,6 +1735,18 @@ function updateChipScoresForDay(realDayIdx, day, forecast) {
     if (star) { star.style.display = isBest ? '' : 'none'; star.title = bestTitle; }
     if (btn) btn.classList.toggle('is-best', isBest);
   });
+
+  // Keep the hero header rating (beside the break name) in step with the viewed
+  // day — same score as the current break's chip, so the header, chip and day
+  // panel always agree.
+  const heroScore = scores[currentBreak];
+  const nameScore = document.getElementById('breakNameScore');
+  if (nameScore && heroScore != null) {
+    const c = scoreColor(heroScore);
+    nameScore.style.color   = c;
+    nameScore.innerHTML     = `${heroScore}<small>${scoreLabel(heroScore, true)}</small>`;
+    nameScore.style.display = 'inline-flex';
+  }
 }
 
 /**
