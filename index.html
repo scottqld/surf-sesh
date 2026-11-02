@@ -1309,7 +1309,7 @@
       <button onclick="closeAboutBreak()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;">✕</button>
     </div>
     <div id="aboutBreakScroll" style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:max(36px, env(safe-area-inset-bottom, 0px) + 20px);">
-      <p id="aboutBreakBody" style="font-size:13px;line-height:1.7;color:var(--text);margin:0;"></p>
+      <div id="aboutBreakBody" style="font-size:13px;line-height:1.7;color:var(--text);margin:0;"></div>
     </div>
   </div>
 </div>
@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.6';
+const APP_VERSION = '13.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -2365,9 +2365,39 @@ Data: score ${score}/10, swell ${swell}${period ? ' @ ' + period : ''}, wind ${w
 let _currentBreakNotes = '';
 let _currentBreakName = '';
 
+// Build a "Best conditions" card straight from the break's scoring config, so
+// what it advertises can never drift from what actually scores well.
+function bestConditionsHTML(b) {
+  if (!b) return '';
+  const dirs = arr => (arr && arr.length) ? arr.join(' / ') : '—';
+  const tideMap = { 'low-mid': 'Low–mid', 'mid-high': 'Mid–high', 'all': 'All tides' };
+  const i = b.ideal || {}, a = b.acceptable || {};
+  const sizeStr = (i.swellMin != null && i.swellMax != null) ? `${i.swellMin}–${i.swellMax}m` : '—';
+  const periodStr = i.periodMin ? `${i.periodMin}s+${i.periodMin >= 10 ? ' groundswell' : ''}` : '—';
+  const tideStr = tideMap[b.tide?.ideal] || '—';
+  const kind = b.pointBreak ? 'Point break' : 'Beach break';
+  const row = (label, value, sub) => `
+    <div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--muted);flex-shrink:0;width:58px;padding-top:2px;">${label}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text);min-width:0;">${value}${sub ? `<span style="color:var(--muted);font-size:10px;"> · ${sub}</span>` : ''}</span>
+    </div>`;
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px 14px 10px;margin-bottom:14px;">
+      <div class="condition-label" style="margin:12px 0 6px;">BEST CONDITIONS <span style="opacity:0.5;">· ${kind}</span></div>
+      ${row('SWELL',  dirs(i.swellDirs), a.swellDirs?.length ? 'also ' + dirs(a.swellDirs) : '')}
+      ${row('WIND',   dirs(i.windDirs) + ' <span style="color:var(--muted);font-size:10px;">(offshore)</span>', a.windDirs?.length ? 'ok ' + dirs(a.windDirs) : '')}
+      ${row('SIZE',   sizeStr)}
+      ${row('PERIOD', periodStr)}
+      ${row('TIDE',   tideStr, b.tide?.avoid ? 'avoid ' + b.tide.avoid : '')}
+    </div>`;
+}
+
 function openAboutBreak() {
   document.getElementById('aboutBreakTitle').textContent = _currentBreakName;
-  document.getElementById('aboutBreakBody').textContent = _currentBreakNotes;
+  const b = BREAKS.find(x => x.name === _currentBreakName);
+  const notes = String(_currentBreakNotes ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  document.getElementById('aboutBreakBody').innerHTML =
+    bestConditionsHTML(b) +
+    `<p style="font-size:13px;line-height:1.7;color:var(--text);margin:0;">${notes}</p>`;
   const modal = document.getElementById('aboutBreakModal');
   const sheet = modal.querySelector('div');
   const scroll = document.getElementById('aboutBreakScroll');
