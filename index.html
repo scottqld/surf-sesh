@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.8';
+const APP_VERSION = '13.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -6199,7 +6199,8 @@ function scheduleNextLoad() {
     if (isActiveHours()) {
       // Clean up night mode UI before full load
       document.body.classList.remove('night-mode');
-      document.getElementById('currentConditionsLabel').textContent = 'CURRENT CONDITIONS';
+      const ccLabel = document.getElementById('currentConditionsLabel');
+      if (ccLabel) ccLabel.textContent = 'CURRENT CONDITIONS';
       const currentCard = document.getElementById('currentCard');
       if (currentCard) { currentCard.innerHTML = ''; currentCard.style.display = ''; }
       loadData(false);
