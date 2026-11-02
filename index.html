@@ -313,7 +313,8 @@
     font-size: 10px;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--accent2);
+    font-weight: 600;
     padding: 20px 20px 10px;
   }
 
@@ -1445,7 +1446,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.9';
+const APP_VERSION = '15.0';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -3849,7 +3850,7 @@ function renderPickOfWeek(forecast, sessions) {
   el.innerHTML = `<div onclick="setBreak(${best.breakIdx}, true);switchTab('conditions');" style="background:linear-gradient(135deg, rgba(249,115,22,0.10), var(--surface));border:1px solid ${sColor};border-radius:14px;padding:16px;cursor:pointer;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
       <div style="min-width:0;flex:1;">
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--high);letter-spacing:1.5px;margin-bottom:3px;">★ ${String(best.day).toUpperCase()}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent2);letter-spacing:1.5px;margin-bottom:3px;">★ ${String(best.day).toUpperCase()}</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--text);line-height:1.1;">${best.break.name}</div>
         ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:5px;">${tags.map(t => `<span>${t}</span>`).join('')}</div>` : ''}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:4px;">🕐 ${timeHint}</div>
