@@ -948,11 +948,62 @@
   }
   input:checked + .toggle-slider { background:var(--accent); }
   input:checked + .toggle-slider:before { transform:translateX(20px); }
+
+  /* Passcode / name gate */
+  .lock-screen {
+    position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center;
+    padding:24px; background:var(--bg,#05080c);
+  }
+  .lock-card {
+    width:100%; max-width:340px; background:var(--surface,#0d141c); border:1px solid var(--border);
+    border-radius:16px; padding:28px 22px; text-align:center;
+  }
+  .lock-brand { font-weight:800; font-size:26px; letter-spacing:1px; margin-bottom:20px; }
+  .lock-brand span { color:var(--accent); }
+  .lock-title { font-size:16px; font-weight:700; margin-bottom:6px; }
+  .lock-sub { font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.4; }
+  .lock-input {
+    width:100%; box-sizing:border-box; background:var(--surface2,#111a24); border:1px solid var(--border);
+    color:var(--text,#e8eef4); border-radius:10px; padding:13px 14px; font-size:16px; text-align:center;
+    letter-spacing:1px; outline:none;
+  }
+  .lock-input:focus { border-color:var(--accent); }
+  .lock-err { min-height:16px; color:#ff6b6b; font-size:12px; margin:8px 0 4px; }
+  .lock-btn {
+    width:100%; background:var(--accent); color:#04121a; border:none; border-radius:10px;
+    padding:13px; font-size:14px; font-weight:800; letter-spacing:1px; cursor:pointer; margin-top:4px;
+  }
+  .lock-btn:disabled { opacity:.5; cursor:default; }
 </style>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "973be145b9d84f478f21eb5a635fc5dc"}'></script><!-- End Cloudflare Web Analytics -->
   <link rel="icon" type="image/png" href="icon-192.png">
 </head>
 <body>
+<!-- Group-passcode gate + device name. Shown on a device until it has both a
+     verified passcode and a chosen name, so every logged session has a creator. -->
+<div id="lockScreen" class="lock-screen" style="display:none;">
+  <div class="lock-card">
+    <div class="lock-brand">SURF<span>SESH</span></div>
+    <div id="lockStepPass">
+      <div class="lock-title">Enter the group passcode</div>
+      <div class="lock-sub">Ask whoever set up SurfSesh for the code.</div>
+      <input id="lockPassInput" class="lock-input" type="password" inputmode="text"
+             autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Passcode"
+             onkeydown="if(event.key==='Enter')submitPasscode()">
+      <div id="lockPassErr" class="lock-err"></div>
+      <button id="lockPassBtn" class="lock-btn" onclick="submitPasscode()">UNLOCK</button>
+    </div>
+    <div id="lockStepName" style="display:none;">
+      <div class="lock-title">Pick your name</div>
+      <div class="lock-sub">Shown on every session you log. You can change it later in Settings.</div>
+      <input id="lockNameInput" class="lock-input" maxlength="24" type="text"
+             autocomplete="off" spellcheck="false" placeholder="e.g. Scotty"
+             onkeydown="if(event.key==='Enter')submitLockName()">
+      <div id="lockNameErr" class="lock-err"></div>
+      <button id="lockNameBtn" class="lock-btn" onclick="submitLockName()">START</button>
+    </div>
+  </div>
+</div>
 <div id="ptrIndicator" style="position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-40px);z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;opacity:0;pointer-events:none;">
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v4M8 2L5.5 4.5M8 2L10.5 4.5" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/><path d="M8 14v-4M8 14L5.5 11.5M8 14L10.5 11.5" stroke="var(--muted)" stroke-width="1.5" stroke-linecap="round"/></svg>
 </div>
@@ -1379,7 +1430,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.5';
+const APP_VERSION = '14.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4951,6 +5002,70 @@ function clientId() {
   } catch { return 'anon'; }
 }
 
+// ─── GROUP PASSCODE GATE ────────────────────────────────────────────────────
+// A single shared passcode (verified server-side so it never sits in the public
+// source) unlocks the app on a device; the Worker also requires it on every
+// session write, keeping the shared log closed to randoms. Paired with a chosen
+// name so every logged session records who created it.
+const PASS_KEY = 'surfsesh_pass_v1';
+function getPass() { try { return localStorage.getItem(PASS_KEY) || ''; } catch { return ''; } }
+function setPass(p) { try { localStorage.setItem(PASS_KEY, p); } catch {} }
+
+async function submitPasscode() {
+  const inp = document.getElementById('lockPassInput');
+  const err = document.getElementById('lockPassErr');
+  const btn = document.getElementById('lockPassBtn');
+  const val = (inp?.value || '').trim();
+  if (!val) { if (err) err.textContent = 'Enter the passcode.'; return; }
+  if (err) err.textContent = '';
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`${WORKER_URL}/auth/check`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode: val }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) { setPass(val); gotoLockNameStep(); }
+    else if (err) err.textContent = 'Wrong passcode.';
+  } catch {
+    if (err) err.textContent = 'Can’t reach the server — check your connection.';
+  } finally { if (btn) btn.disabled = false; }
+}
+
+function gotoLockNameStep() {
+  if (getUserName()) { closeLock(); return; }
+  const p = document.getElementById('lockStepPass');
+  const n = document.getElementById('lockStepName');
+  if (p) p.style.display = 'none';
+  if (n) n.style.display = '';
+  setTimeout(() => document.getElementById('lockNameInput')?.focus(), 50);
+}
+
+function submitLockName() {
+  const inp = document.getElementById('lockNameInput');
+  const err = document.getElementById('lockNameErr');
+  const val = (inp?.value || '').trim();
+  if (val.length < 2) { if (err) err.textContent = 'Enter at least 2 characters.'; return; }
+  saveUserName(val);
+  closeLock();
+}
+
+function closeLock() {
+  const el = document.getElementById('lockScreen');
+  if (el) el.style.display = 'none';
+}
+
+// Show the gate until this device has BOTH a verified passcode and a name.
+function maybeShowLock() {
+  const hasPass = !!getPass(), hasName = !!getUserName();
+  if (hasPass && hasName) return;
+  const el = document.getElementById('lockScreen');
+  if (!el) return;
+  el.style.display = 'flex';
+  if (hasPass && !hasName) gotoLockNameStep();
+  else setTimeout(() => document.getElementById('lockPassInput')?.focus(), 50);
+}
+
 // ─── USER PROFILE ───────────────────────────────────────────────────────────
 // A lightweight display name (no login): stamped on each session this device
 // logs so the shared log shows who surfed. Stored per-device, synced per record.
@@ -5007,7 +5122,7 @@ async function pushSessions(records) {
   try {
     const res = await fetch(`${WORKER_URL}/sessions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-surfsesh-pass': getPass() },
       body: JSON.stringify({ sessions: recs }),
     });
     if (!res.ok) throw new Error('push failed');
@@ -6576,6 +6691,9 @@ function scheduleNextLoad() {
     scheduleNextLoad();
   }, msUntilNext);
 }
+
+// Gate the app behind the shared passcode + a chosen name (once per device).
+maybeShowLock();
 
 // Render the selector chips immediately (scores fill in once data loads)
 renderBreakChips();

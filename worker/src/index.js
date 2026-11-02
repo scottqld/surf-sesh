@@ -499,6 +499,15 @@ async function deleteSubscription(env, endpoint) {
   await env.PUSH_SUBSCRIPTIONS.delete(key);
 }
 
+// Shared group-passcode gate. Session writes require it; reads stay open. If
+// GROUP_PASSCODE is unset the gate is disabled (fail-open), so a missing secret
+// can never lock everyone out of logging.
+function passValid(env, provided) {
+  const expected = env.GROUP_PASSCODE;
+  if (!expected) return true;
+  return typeof provided === 'string' && provided === expected;
+}
+
 // ─── SESSION LOG (central, shared across all users + devices) ────────────────
 // Stored in the same KV namespace under a `sess:` prefix, one record per key.
 // Records carry `updatedAt` for last-write-wins; deletes arrive as tombstones
@@ -1034,7 +1043,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, x-surfsesh-pass',
       'Content-Type': 'application/json',
     };
 
@@ -1106,6 +1115,11 @@ export default {
         await deleteSubscription(env, endpoint);
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
 
+      } else if (path === '/auth/check' && request.method === 'POST') {
+        const { passcode } = await request.json().catch(() => ({}));
+        const ok = passValid(env, passcode);
+        return new Response(JSON.stringify({ ok }), { status: ok ? 200 : 401, headers: corsHeaders });
+
       } else if (path === '/sessions' && request.method === 'GET') {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Session store not configured' }), { status: 503, headers: corsHeaders });
@@ -1116,6 +1130,9 @@ export default {
       } else if (path === '/sessions' && request.method === 'POST') {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Session store not configured' }), { status: 503, headers: corsHeaders });
+        }
+        if (!passValid(env, request.headers.get('x-surfsesh-pass'))) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
         }
         const body = await request.json();
         const incoming = Array.isArray(body) ? body : (body.sessions || []);
