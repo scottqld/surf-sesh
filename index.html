@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.7';
+const APP_VERSION = '13.8';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -2391,12 +2391,66 @@ function bestConditionsHTML(b) {
     </div>`;
 }
 
+// Layer the user's own logged sessions over the generic config: show what has
+// actually worked at this break, and flag where their experience diverges from
+// the model (e.g. a swell direction the config only calls "workable" that keeps
+// scoring well). Deliberately additive — with sparse data we surface the signal
+// rather than overwrite the config; the count shows how much to trust it.
+function learnedConditionsHTML(b) {
+  if (!b || typeof getSessions !== 'function') return '';
+  const mine = getSessions().filter(s =>
+    s.break === b.name && s.surfed !== false && s.myScore != null &&
+    s.conditions && s.conditions.swellDir);
+  if (!mine.length) return '';
+
+  const best = mine.reduce((a, s) => s.myScore > a.myScore ? s : a, mine[0]);
+  const avg  = Math.round(mine.reduce((t, s) => t + s.myScore, 0) / mine.length * 10) / 10;
+  const c = best.conditions;
+  const tideLbl = c.tide ? ((c.tide.current < 0.5 ? 'low' : c.tide.current < 1.2 ? 'mid' : 'high') + ' tide') : '';
+  const parts = [
+    c.swellDir + (c.swellHeight != null ? ' ' + c.swellHeight.toFixed(1) + 'm' : ''),
+    c.windDir ? c.windDir + ' wind' : '',
+    tideLbl,
+  ].filter(Boolean).join(' · ');
+
+  // Divergence flags vs the scoring config
+  const idealS = b.ideal?.swellDirs || [];
+  const idealW = b.ideal?.windDirs  || [];
+  const notes = [];
+  // A swell direction that scores well for you but isn't in the break's ideal set
+  const goodDirs = [...new Set(mine.filter(s => s.myScore >= 6).map(s => s.conditions.swellDir))]
+    .filter(d => d && !idealS.includes(d));
+  if (goodDirs.length) {
+    notes.push(`You've scored <b style="color:var(--text);">${goodDirs.join(', ')}</b> swell well here — the model rates it only "workable". Worth widening with more logs.`);
+  }
+  if (c.windDir && !idealW.includes(c.windDir) && best.myScore >= 6) {
+    notes.push(`Your best session ran on a <b style="color:var(--text);">${c.windDir}</b> wind, outside the ideal set.`);
+  }
+  const noteHtml = notes.map(n =>
+    `<div style="font-family:'DM Mono',monospace;font-size:10px;line-height:1.5;color:var(--muted);margin-top:8px;">↳ ${n}</div>`
+  ).join('');
+
+  const row = (label, value) => `
+    <div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--muted);flex-shrink:0;width:58px;padding-top:2px;">${label}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text);min-width:0;">${value}</span>
+    </div>`;
+
+  return `<div style="background:rgba(0,212,255,0.05);border:1px solid var(--accent);border-radius:10px;padding:4px 14px 12px;margin-bottom:14px;">
+      <div class="condition-label" style="margin:12px 0 6px;color:var(--accent);">FROM YOUR LOGS <span style="opacity:0.6;">· ${mine.length} session${mine.length === 1 ? '' : 's'}</span></div>
+      ${row('BEST', `${best.myScore}/10 · ${parts}`)}
+      ${row('AVG', `${avg}/10 across your sessions here`)}
+      ${noteHtml}
+    </div>`;
+}
+
 function openAboutBreak() {
   document.getElementById('aboutBreakTitle').textContent = _currentBreakName;
   const b = BREAKS.find(x => x.name === _currentBreakName);
   const notes = String(_currentBreakNotes ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
   document.getElementById('aboutBreakBody').innerHTML =
     bestConditionsHTML(b) +
+    learnedConditionsHTML(b) +
     `<p style="font-size:13px;line-height:1.7;color:var(--text);margin:0;">${notes}</p>`;
   const modal = document.getElementById('aboutBreakModal');
   const sheet = modal.querySelector('div');
