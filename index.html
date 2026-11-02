@@ -958,8 +958,9 @@
     width:100%; max-width:340px; background:var(--surface,#0d141c); border:1px solid var(--border);
     border-radius:16px; padding:28px 22px; text-align:center;
   }
-  .lock-brand { font-weight:800; font-size:26px; letter-spacing:1px; margin-bottom:20px; }
+  .lock-brand { font-weight:800; font-size:26px; letter-spacing:1px; margin-bottom:2px; }
   .lock-brand span { color:var(--accent); }
+  .lock-ver { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:1px; margin-bottom:18px; }
   .lock-title { font-size:16px; font-weight:700; margin-bottom:6px; }
   .lock-sub { font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.4; }
   .lock-input {
@@ -987,6 +988,7 @@
 <div id="lockScreen" class="lock-screen" style="display:none;">
   <div class="lock-card">
     <div class="lock-brand">SURF<span>SESH</span></div>
+    <div class="lock-ver" id="lockVersion">v—</div>
     <!-- SIGN IN -->
     <div id="lockLogin">
       <div class="lock-title">Sign in</div>
@@ -1442,9 +1444,10 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.7';
+const APP_VERSION = '14.8';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
+{ const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
 renderProfile();
 let currentStation = 'noosa';
