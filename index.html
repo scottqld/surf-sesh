@@ -1030,10 +1030,14 @@
 
     <!-- TAB: PLANNER -->
     <div class="tab-section" id="tab-planner">
-    <div class="section-label" style="padding-top:16px;">TOMORROW</div>
+    <div class="section-label" style="padding-top:16px;">PICK OF THE WEEK</div>
+    <div id="pickOfWeek" style="margin:0 20px 0;"></div>
+    <div class="section-label">TOMORROW</div>
     <div id="tomorrowPlannerCard" style="margin:0 20px 0;"></div>
     <div class="section-label">BEST SESSIONS THIS WEEK</div>
     <div id="sessionPlanner" style="padding:0 20px 12px;"></div>
+    <div class="section-label">THE WEEK AT A GLANCE</div>
+    <div id="weekGrid" style="padding:0 20px 14px;"></div>
     <div class="section-label">SWELL TREND — 7 DAYS</div>
     <div class="chart-container">
       <div class="chart-title">
@@ -1375,7 +1379,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.2';
+const APP_VERSION = '14.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -3662,20 +3666,183 @@ function renderDITripGate(forecast, swell) {
     </div>`;
 }
 
+// ─── PLAN TAB: shared helpers (log-matching, board hints, week grid) ─────────
+
+// Full day×break score matrix for the forecast (isCurrent=false, like the list).
+function buildPlannerSessions(forecast) {
+  const out = [];
+  (forecast.forecasts || []).forEach((day, dayIdx) => {
+    const dayForecast = { forecasts: [day], ...dayScoreAux(forecast, dayIdx) };
+    BREAKS.forEach((b, bIdx) => out.push({
+      day: day.day, dayIdx, break: b, breakIdx: bIdx,
+      score: scoreBreak(b, dayForecast), dayForecast,
+    }));
+  });
+  return out;
+}
+
+// The conditions a break sees on a forecast day, shaped like a logged session's
+// `conditions` snapshot so the two can be compared.
+function planForecastConditions(b, dayForecast) {
+  const day0 = dayForecast.forecasts[0] || {};
+  const swellDir = dayForecast._swellDir ?? extractDir(shortDir(day0.swell || ''));
+  const swellHeight = dayForecast._swellHeight ?? extractHeight(shortDir(day0.swell || ''));
+  const period = dayForecast._period ?? null;
+  const wp = day0.windParsed;
+  const windDir = wp?.dir ?? extractDir(shortDir(day0.winds || ''));
+  const windKmh = wp?.kmh ?? null;
+  return { swellDir, swellHeight, period, windDir, windKmh };
+}
+
+function _dirCloseness(a, b) { if (!a || !b) return 0; const d = dirDistance(a, b); return d === 0 ? 1 : d <= 1 ? 0.7 : d === 2 ? 0.4 : 0; }
+
+// Similarity 0..1 between a forecast's conditions and a logged session's snapshot.
+function _condSimilarity(f, c) {
+  let sim = 0, w = 0;
+  if (f.swellDir && c.swellDir)                       { w += 3; sim += 3 * _dirCloseness(f.swellDir, c.swellDir); }
+  if (f.windDir && c.windDir)                         { w += 2; sim += 2 * _dirCloseness(f.windDir, c.windDir); }
+  if (f.swellHeight != null && c.swellHeight != null) { w += 2; sim += 2 * Math.max(0, 1 - Math.abs(f.swellHeight - c.swellHeight) / 0.6); }
+  if (f.period != null && c.period != null)           { w += 1; sim += 1 * Math.max(0, 1 - Math.abs(f.period - c.period) / 4); }
+  return w ? sim / w : 0;
+}
+
+// Best matching past session at this break for the forecast day (shared log).
+function planLogMatch(b, dayForecast) {
+  const f = planForecastConditions(b, dayForecast);
+  const past = getSessions().filter(s => s.break === b.name && s.myScore != null && s.conditions && s.conditions.swellDir);
+  if (!past.length) return null;
+  const scored = past.map(s => ({ s, sim: _condSimilarity(f, s.conditions) }))
+    .filter(x => x.sim >= 0.6)
+    .sort((a, b) => b.sim - a.sim);
+  if (!scored.length) return null;
+  const avg = scored.reduce((a, x) => a + x.s.myScore, 0) / scored.length;
+  return { best: scored[0].s, sim: scored[0].sim, n: scored.length, avg };
+}
+
+// Suggest a board from sessions rated ≥5 in similar conditions at this break,
+// preferring this device's own sessions (a quiver is personal). null if unsure.
+function planBoardSuggestion(b, dayForecast) {
+  const f = planForecastConditions(b, dayForecast);
+  const cid = clientId();
+  const mine = getSessions().filter(s => s.clientId === cid);
+  const base = (mine.length ? mine : getSessions())
+    .filter(s => s.break === b.name && s.board && s.myScore != null && s.conditions && s.conditions.swellDir);
+  const tally = {};
+  base.forEach(s => {
+    const sim = _condSimilarity(f, s.conditions);
+    if (sim < 0.6 || s.myScore < 5) return;
+    tally[s.board] = (tally[s.board] || 0) + sim * s.myScore;
+  });
+  const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+  return top ? { board: top[0] } : null;
+}
+
+// Short positive "why" tags for a good forecast day.
+function planWhyTags(b, dayForecast) {
+  const f = planForecastConditions(b, dayForecast);
+  const tags = [];
+  if (f.swellDir && (b.ideal.swellDirs.includes(f.swellDir) || b.acceptable.swellDirs.includes(f.swellDir))) tags.push(`${f.swellDir} swell`);
+  if (f.windDir && b.ideal.windDirs.includes(f.windDir)) tags.push(`${f.windDir} offshore`);
+  else if (f.windKmh != null && f.windKmh < 12) tags.push('light wind');
+  const sH = f.swellHeight != null ? estimateSurfHeight(f.swellHeight, b.exposure, f.swellDir, b, f.period) : null;
+  if (sH != null) { const ft = Math.round(sH * 3.281 * 2) / 2; if (ft >= 1) tags.push(`~${ft}ft`); }
+  if (f.period != null && f.period >= 11) tags.push(`${Math.round(f.period)}s groundswell`);
+  return tags.slice(0, 4);
+}
+
+// Chip row for a planned session: "like your past 7/10" + board hint. '' if none.
+function planSmartChips(b, dayForecast) {
+  const chips = [];
+  const m = planLogMatch(b, dayForecast);
+  if (m) {
+    const when = new Date(m.best.ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+    const conf = m.sim >= 0.85 && m.n >= 2 ? 'strong match' : 'similar';
+    const who  = (m.best.clientId !== clientId() && m.best.user) ? ' (' + String(m.best.user).replace(/</g, '&lt;') + ')' : '';
+    chips.push(`<span style="color:var(--high);">📊 Like your ${m.best.myScore}/10 · ${when}${who} · ${conf}</span>`);
+  }
+  const bd = planBoardSuggestion(b, dayForecast);
+  if (bd) chips.push(`<span style="color:var(--accent);">🏄 Bring ${String(bd.board).replace(/</g, '&lt;')}</span>`);
+  if (!chips.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:3px 10px;font-family:'DM Mono',monospace;font-size:9px;margin-top:3px;">${chips.join('')}</div>`;
+}
+
+// Pick of the week — the single best forecast window, promoted with the "why".
+function renderPickOfWeek(forecast, sessions) {
+  const el = document.getElementById('pickOfWeek'); if (!el) return;
+  const list = sessions || buildPlannerSessions(forecast);
+  const best = list.slice().sort((a, b) => b.score - a.score || a.dayIdx - b.dayIdx)[0];
+  if (!best || best.score < 5) {
+    el.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">Nothing standout in the 7-day forecast yet — check back as swells fill in.</div>`;
+    return;
+  }
+  const sColor = scoreColor(best.score);
+  const tags = planWhyTags(best.break, best.dayForecast);
+  const timeHint = getBestTimeHint(best.break, best.dayForecast);
+  const smart = planSmartChips(best.break, best.dayForecast);
+  el.innerHTML = `<div onclick="setBreak(${best.breakIdx}, true);switchTab('conditions');" style="background:linear-gradient(135deg, rgba(0,212,255,0.08), var(--surface));border:1px solid ${sColor};border-radius:14px;padding:16px;cursor:pointer;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--high);letter-spacing:1.5px;margin-bottom:3px;">★ ${String(best.day).toUpperCase()}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:#fff;line-height:1.1;">${best.break.name}</div>
+        ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);margin-top:5px;">${tags.map(t => `<span>${t}</span>`).join('')}</div>` : ''}
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-top:4px;">🕐 ${timeHint}</div>
+        ${smart}
+      </div>
+      <div style="text-align:center;flex-shrink:0;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;color:${sColor};line-height:0.9;">${best.score}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:1px;">/10</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Week-at-a-glance grid: breaks (rows) × forecast days (cols), tap a cell to open.
+const _GRID_COLS = {
+  high: { fg: '#00e5a0', bg: 'rgba(0,229,160,0.14)', bd: 'rgba(0,229,160,0.40)' },
+  ok:   { fg: '#00d4ff', bg: 'rgba(0,212,255,0.13)', bd: 'rgba(0,212,255,0.38)' },
+  low:  { fg: '#8a97a5', bg: 'rgba(138,151,165,0.10)', bd: 'rgba(138,151,165,0.26)' },
+};
+function _gridCol(sc) { return sc >= 7 ? _GRID_COLS.high : sc >= 5 ? _GRID_COLS.ok : _GRID_COLS.low; }
+function _breakShort(name) {
+  const map = { 'First Point': '1stPt', 'Nationals': 'Nats', 'Tea Tree': 'TeaTr', 'Granite Bay': 'Granit', 'The Groyne': 'Groyne', 'Castaways Beach': 'Castaw', 'Castaways': 'Castaw', 'Sunshine Beach': 'Sunsh', 'Double Island': 'DblIsl' };
+  return map[name] || String(name).split(' ')[0].slice(0, 6);
+}
+function _dayShort(dayStr) {
+  const parts = String(dayStr || '').split(' ');
+  return (parts[0] || '').slice(0, 3).toUpperCase() + (parts[1] ? '<br>' + parts[1] : '');
+}
+function renderWeekGrid(forecast, sessions) {
+  const el = document.getElementById('weekGrid'); if (!el) return;
+  const days = forecast.forecasts || [];
+  if (!days.length) { el.innerHTML = ''; return; }
+  const list = sessions || buildPlannerSessions(forecast);
+  const byKey = {};
+  list.forEach(s => { byKey[s.breakIdx + ':' + s.dayIdx] = s; });
+  const header = `<div></div>` + days.map(d =>
+    `<div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);text-align:center;line-height:1.2;letter-spacing:0.5px;">${_dayShort(d.day)}</div>`).join('');
+  const rows = BREAKS.map((b, bIdx) => {
+    const label = `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text);display:flex;align-items:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${_breakShort(b.name)}</div>`;
+    const cells = days.map((d, dayIdx) => {
+      const s = byKey[bIdx + ':' + dayIdx];
+      const sc = s ? s.score : 0;
+      const c = _gridCol(sc);
+      return `<div onclick="setBreak(${bIdx}, true);switchTab('conditions');" title="${b.name} · ${String(d.day).replace(/"/g,'')} · ${sc}/10" style="height:34px;border-radius:6px;background:${c.bg};border:1px solid ${c.bd};color:${c.fg};display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:16px;cursor:pointer;">${sc}</div>`;
+    }).join('');
+    return label + cells;
+  }).join('');
+  el.innerHTML = `<div style="display:grid;grid-template-columns:44px repeat(${days.length}, 1fr);gap:3px;align-items:stretch;">${header}${rows}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-top:8px;opacity:0.7;">Tap a cell to open that break · scores are the forecast rating per day.</div>`;
+}
+
 function renderSessionPlanner(forecast, swell) {
   const el = document.getElementById('sessionPlanner');
   if (!el) return;
 
-  const sessions = [];
   const days = forecast.forecasts || [];
-
-  days.forEach((day, dayIdx) => {
-    BREAKS.forEach((b, bIdx) => {
-      const dayForecast = { forecasts: [day], ...dayScoreAux(forecast, dayIdx) };
-      const score = scoreBreak(b, dayForecast);
-      sessions.push({ day: day.day, dayIdx, break: b, breakIdx: bIdx, score, dayForecast });
-    });
-  });
+  const sessions = buildPlannerSessions(forecast);
+  // Pick-of-the-week hero + week grid share the same computed matrix.
+  renderPickOfWeek(forecast, sessions);
+  renderWeekGrid(forecast, sessions);
 
   // Sort: soonest ≥6 session first, then by score for remaining slots
   // This prioritises near-term good days over a perfect day at the end of the week
@@ -3763,6 +3930,7 @@ function renderSessionPlanner(forecast, swell) {
         ${tideStr    ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.7;margin-top:2px;">🌊 ${tideStr}</div>` : ''}
         ${sunriseStr ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.7;margin-top:1px;">🌅 ${sunriseStr} sunrise</div>` : ''}
         <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);opacity:0.6;margin-top:1px;">🕐 ${timeHint}</div>
+        ${planSmartChips(s.break, s.dayForecast)}
       </div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:${sColor};line-height:1;flex-shrink:0;margin-left:12px;">${s.score}<span style="font-size:14px;color:var(--muted);">/10</span></div>
     </div>`;
