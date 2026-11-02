@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.0';
+const APP_VERSION = '14.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4827,6 +4827,7 @@ function _mergeRemote(remote) {
   if (typeof renderSessionLog  === 'function') { try { renderSessionLog(); }  catch {} }
   if (typeof renderCalibration === 'function') { try { renderCalibration(); } catch {} }
   if (typeof renderBoardStats  === 'function') { try { renderBoardStats(); }  catch {} }
+  if (typeof renderInsights === 'function' && typeof currentTab !== 'undefined' && currentTab === 'insights') { try { renderInsights(); } catch {} }
   if (typeof setBreak === 'function' && typeof cachedData !== 'undefined' && cachedData) { try { setBreak(currentBreak); } catch {} }
 }
 
@@ -5867,6 +5868,25 @@ function renderBoardStats() {
 // both only exist on sessions logged on the day they were surfed.
 function _insSessions() { return getSessions().filter(s => s.myScore != null); }
 
+// Re-score a stored conditions snapshot with the CURRENT scoring model, by
+// rebuilding the minimal forecast scoreBreak reads. This keeps the Insights
+// accuracy view honest after the model changes: it compares your ratings to
+// what the model would say *today*, not the algoScore frozen at log time.
+// Base (uncalibrated) by default, matching how forecast accuracy is measured.
+function scoreFromConditions(breakData, c, applyCalib = false) {
+  if (!breakData || !c) return null;
+  const swellText = [c.swellDir, c.swellHeight != null ? c.swellHeight + 'm' : '',
+                     c.period != null ? Math.round(c.period) + 's' : ''].filter(Boolean).join(' ');
+  const windText  = [c.windDir, c.windKmh != null ? Math.round(c.windKmh) + ' km/h' : ''].filter(Boolean).join(' ');
+  const forecast = {
+    forecasts: [{ swell: swellText, winds: windText }],
+    _swellDir: c.swellDir ?? null,
+    _period:   c.period ?? null,
+    _tide:     c.tide ?? null,
+  };
+  return scoreBreak(breakData, forecast, false, applyCalib);
+}
+
 function _pearson(xs, ys) {
   const n = xs.length; if (n < 2) return null;
   const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
@@ -5916,7 +5936,17 @@ function _factorBlock(title, icon, rows, opts = {}) {
 }
 
 function _renderAccuracy() {
-  const s = _insSessions().filter(x => x.algoScore != null);
+  // Re-score every logged snapshot with the CURRENT model so accuracy reflects
+  // today's scoring, not the algoScore captured when each session was logged.
+  // Needs a structured conditions snapshot (day-of-surf capture) to re-score.
+  const s = _insSessions()
+    .filter(x => x.conditions && Object.prototype.hasOwnProperty.call(x.conditions, 'swellDir'))
+    .map(x => {
+      const b = BREAKS.find(br => br.name === x.break);
+      const algo = b ? scoreFromConditions(b, x.conditions) : null;
+      return algo == null ? null : { ...x, algoScore: algo };
+    })
+    .filter(Boolean);
   if (s.length < 2) {
     return `<div class="ins-empty">Log sessions <b>on the day you surf</b> so SurfSesh captures that day's forecast, then it will show how closely the forecast tracks your own ratings.<br><br>${s.length}/2 ready so far.</div>`;
   }
