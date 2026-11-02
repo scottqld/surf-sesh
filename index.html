@@ -920,6 +920,7 @@
     padding: 8px 2px;
     background: none;
     border: none;
+    border-bottom: 2px solid transparent;
     cursor: pointer;
     color: var(--muted);
     font-family: 'DM Mono', monospace;
@@ -927,10 +928,10 @@
     letter-spacing: 1px;
     gap: 3px;
     white-space: nowrap;
-    transition: color 0.2s;
+    transition: color 0.2s, border-color 0.2s;
   }
   .tab-btn svg { width: 20px; height: 20px; }
-  .tab-btn.active { color: var(--accent); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent2); }
   .tab-section { display: none; }
   .tab-section.active { display: block; }
   .app { padding-top: calc(56px + env(safe-area-inset-top)); padding-bottom: 24px; }
@@ -1446,7 +1447,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.0';
+const APP_VERSION = '15.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
