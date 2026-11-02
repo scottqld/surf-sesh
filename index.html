@@ -1447,7 +1447,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.1';
+const APP_VERSION = '15.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -1560,7 +1560,9 @@ let _lastLoadAt = 0;          // epoch ms of the last successful data load
 
 /** Score → CSS colour variable */
 function scoreColor(s) {
-  return s >= 7 ? 'var(--high)' : s >= 5 ? 'var(--accent)' : 'var(--muted)';
+  // Orange score numbers: deeper orange for great, standard orange for fun,
+  // muted for poor (so a low score isn't falsely highlighted).
+  return s >= 7 ? '#ea580c' : s >= 5 ? 'var(--accent2)' : 'var(--muted)';
 }
 
 /** Score → human label. caps=true returns 'GOOD', false returns 'Good'. */
@@ -5028,6 +5030,17 @@ function clientId() {
 const TOKEN_KEY = 'surfsesh_token_v1';
 function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } }
 function setToken(t) { try { localStorage.setItem(TOKEN_KEY, t || ''); } catch {} }
+// The signed-in name encoded in the token payload (base64url JSON {name,iat}),
+// a reliable source of "who's signed in" even if the local name copy is missing.
+function tokenUserName() {
+  const t = getToken();
+  if (!t) return '';
+  try {
+    const b = t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(decodeURIComponent(escape(atob(b + '='.repeat((4 - b.length % 4) % 4)))));
+    return (json && typeof json.name === 'string') ? json.name : '';
+  } catch { return ''; }
+}
 
 function showAuthMode(mode) {
   const login = document.getElementById('lockLogin');
@@ -5126,10 +5139,13 @@ const USER_NAME_KEY = 'surfsesh_user_name_v1';
 function getUserName() {
   try { return (localStorage.getItem(USER_NAME_KEY) || '').trim(); } catch { return ''; }
 }
-// Show the signed-in name in Settings.
+// Show the signed-in name in Settings (fall back to the token's name, and
+// persist it, so "signed in as" is right even if the local name copy was lost).
 function renderProfile() {
+  let name = getUserName();
+  if (!name) { name = tokenUserName(); if (name) saveUserName(name); }
   const el = document.getElementById('profileName');
-  if (el) el.textContent = getUserName() || '—';
+  if (el) el.textContent = name || '—';
 }
 // Save the signed-in name, backfill it onto this device's own past sessions (so
 // the shared log retroactively shows who logged them), and sync those updates.
@@ -6691,6 +6707,7 @@ function switchTab(tab) {
     renderBoardStats();
   }
   if (tab === 'settings') {
+    renderProfile();
     initAlertSettings();
     renderBoardsManager();
   }
