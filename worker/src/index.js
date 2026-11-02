@@ -499,14 +499,58 @@ async function deleteSubscription(env, endpoint) {
   await env.PUSH_SUBSCRIPTIONS.delete(key);
 }
 
-// Shared group-passcode gate. Session writes require it; reads stay open. If
-// GROUP_PASSCODE is unset the gate is disabled (fail-open), so a missing secret
-// can never lock everyone out of logging.
+// Group code — now only an *invite* required to register a new account (reads
+// stay open; writes are gated per-user by a signed token, below). If
+// GROUP_PASSCODE is unset the check passes (fail-open) so a missing secret can't
+// block registration entirely.
 function passValid(env, provided) {
   const expected = env.GROUP_PASSCODE;
   if (!expected) return true;
   return typeof provided === 'string' && provided === expected;
 }
+
+// ─── PER-USER ACCOUNTS (name + PIN) ──────────────────────────────────────────
+// Each user has an account stored under `usr:<normalised name>` holding a
+// PBKDF2 hash of their PIN (never the PIN itself). On login/register the Worker
+// issues an HMAC-signed token; session writes must carry it, and the Worker
+// stamps each record's author from the token so nobody can log as someone else.
+const USER_PREFIX = 'usr:';
+function normName(n) { return String(n || '').trim().toLowerCase(); }
+function toHex(u8) { return Array.from(u8).map(b => b.toString(16).padStart(2, '0')).join(''); }
+function fromHex(h) { const a = new Uint8Array(h.length / 2); for (let i = 0; i < a.length; i++) a[i] = parseInt(h.substr(i * 2, 2), 16); return a; }
+// Constant-time string compare (same length hex digests).
+function timingEq(a, b) { if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; }
+
+async function pbkdf2(pin, saltBytes, iterations = 100000) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: saltBytes, iterations }, key, 256);
+  return new Uint8Array(bits);
+}
+async function hashPin(pin, saltHex) {
+  const salt = saltHex ? fromHex(saltHex) : crypto.getRandomValues(new Uint8Array(16));
+  const hash = await pbkdf2(String(pin), salt);
+  return { saltHex: toHex(salt), hashHex: toHex(hash) };
+}
+
+async function hmacSign(msg, secret) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
+  return b64u(sig);
+}
+async function makeToken(name, secret) {
+  const payload = b64u(new TextEncoder().encode(JSON.stringify({ name, iat: Date.now() })));
+  return `${payload}.${await hmacSign(payload, secret)}`;
+}
+async function verifyToken(token, secret) {
+  if (!token || !secret) return null;
+  const [payload, sig] = String(token).split('.');
+  if (!payload || !sig) return null;
+  if (!timingEq(sig, await hmacSign(payload, secret))) return null;
+  try { return JSON.parse(new TextDecoder().decode(b64uDec(payload)))?.name || null; } catch { return null; }
+}
+
+async function getUser(env, name) { return env.PUSH_SUBSCRIPTIONS.get(USER_PREFIX + normName(name), 'json'); }
+async function putUser(env, rec) { await env.PUSH_SUBSCRIPTIONS.put(USER_PREFIX + normName(rec.name), JSON.stringify(rec)); }
 
 // ─── SESSION LOG (central, shared across all users + devices) ────────────────
 // Stored in the same KV namespace under a `sess:` prefix, one record per key.
@@ -564,7 +608,7 @@ async function handleCron(env) {
   const list = await env.PUSH_SUBSCRIPTIONS.list();
   const subs = [];
   for (const kv of list.keys) {
-    if (kv.name.startsWith(SESS_PREFIX)) continue; // session-log records, not push subs
+    if (kv.name.startsWith(SESS_PREFIX) || kv.name.startsWith(USER_PREFIX)) continue; // session + user records, not push subs
     const rec = await env.PUSH_SUBSCRIPTIONS.get(kv.name, 'json');
     if (rec) subs.push({ key: kv.name, ...rec });
   }
@@ -1043,7 +1087,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-surfsesh-pass',
+      'Access-Control-Allow-Headers': 'Content-Type, x-surfsesh-token',
       'Content-Type': 'application/json',
     };
 
@@ -1120,6 +1164,30 @@ export default {
         const ok = passValid(env, passcode);
         return new Response(JSON.stringify({ ok }), { status: ok ? 200 : 401, headers: corsHeaders });
 
+      } else if (path === '/auth/register' && request.method === 'POST') {
+        // New account: group code (invite) + unique name + chosen PIN → token.
+        const { code, name, pin } = await request.json().catch(() => ({}));
+        if (!passValid(env, code)) return new Response(JSON.stringify({ error: 'bad_code' }), { status: 401, headers: corsHeaders });
+        const nm = String(name || '').trim();
+        if (nm.length < 2 || nm.length > 24) return new Response(JSON.stringify({ error: 'bad_name' }), { status: 400, headers: corsHeaders });
+        if (!/^\d{4,8}$/.test(String(pin || ''))) return new Response(JSON.stringify({ error: 'bad_pin' }), { status: 400, headers: corsHeaders });
+        if (await getUser(env, nm)) return new Response(JSON.stringify({ error: 'name_taken' }), { status: 409, headers: corsHeaders });
+        const { saltHex, hashHex } = await hashPin(pin);
+        await putUser(env, { name: nm, salt: saltHex, pinHash: hashHex, createdAt: Date.now() });
+        const token = env.AUTH_SECRET ? await makeToken(nm, env.AUTH_SECRET) : '';
+        return new Response(JSON.stringify({ ok: true, name: nm, token }), { headers: corsHeaders });
+
+      } else if (path === '/auth/login' && request.method === 'POST') {
+        // Existing account: name + PIN → token. Generic 401 so we don't reveal
+        // whether a name exists vs. a wrong PIN.
+        const { name, pin } = await request.json().catch(() => ({}));
+        const u = await getUser(env, name);
+        if (!u) return new Response(JSON.stringify({ error: 'bad_login' }), { status: 401, headers: corsHeaders });
+        const { hashHex } = await hashPin(pin, u.salt);
+        if (!timingEq(hashHex, u.pinHash)) return new Response(JSON.stringify({ error: 'bad_login' }), { status: 401, headers: corsHeaders });
+        const token = env.AUTH_SECRET ? await makeToken(u.name, env.AUTH_SECRET) : '';
+        return new Response(JSON.stringify({ ok: true, name: u.name, token }), { headers: corsHeaders });
+
       } else if (path === '/sessions' && request.method === 'GET') {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Session store not configured' }), { status: 503, headers: corsHeaders });
@@ -1131,11 +1199,17 @@ export default {
         if (!env.PUSH_SUBSCRIPTIONS) {
           return new Response(JSON.stringify({ error: 'Session store not configured' }), { status: 503, headers: corsHeaders });
         }
-        if (!passValid(env, request.headers.get('x-surfsesh-pass'))) {
-          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
-        }
         const body = await request.json();
         const incoming = Array.isArray(body) ? body : (body.sessions || []);
+        // Per-user gate: a valid token is required, and the token's name is
+        // stamped as each record's author so you can only log as yourself.
+        // (Fail-open only if AUTH_SECRET is unset, so a missing secret can't
+        // block all logging.)
+        if (env.AUTH_SECRET) {
+          const who = await verifyToken(request.headers.get('x-surfsesh-token'), env.AUTH_SECRET);
+          if (!who) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+          for (const s of incoming) if (s && !s.deleted) s.user = who;
+        }
         const count = await upsertSessions(env, incoming);
         return new Response(JSON.stringify({ ok: true, count }), { headers: corsHeaders });
 

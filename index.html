@@ -974,33 +974,47 @@
     padding:13px; font-size:14px; font-weight:800; letter-spacing:1px; cursor:pointer; margin-top:4px;
   }
   .lock-btn:disabled { opacity:.5; cursor:default; }
+  .lock-switch { margin-top:14px; font-size:12px; color:var(--muted); }
+  .lock-switch a { color:var(--accent); cursor:pointer; text-decoration:underline; }
 </style>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "973be145b9d84f478f21eb5a635fc5dc"}'></script><!-- End Cloudflare Web Analytics -->
   <link rel="icon" type="image/png" href="icon-192.png">
 </head>
 <body>
-<!-- Group-passcode gate + device name. Shown on a device until it has both a
-     verified passcode and a chosen name, so every logged session has a creator. -->
+<!-- Per-user login. Each person signs in with their name + PIN; new accounts
+     need the group code to register. Shown until the device holds a valid
+     token, so every logged session is stamped with its author. -->
 <div id="lockScreen" class="lock-screen" style="display:none;">
   <div class="lock-card">
     <div class="lock-brand">SURF<span>SESH</span></div>
-    <div id="lockStepPass">
-      <div class="lock-title">Enter the group passcode</div>
-      <div class="lock-sub">Ask whoever set up SurfSesh for the code.</div>
-      <input id="lockPassInput" class="lock-input" type="password" inputmode="text"
-             autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Passcode"
-             onkeydown="if(event.key==='Enter')submitPasscode()">
-      <div id="lockPassErr" class="lock-err"></div>
-      <button id="lockPassBtn" class="lock-btn" onclick="submitPasscode()">UNLOCK</button>
+    <!-- SIGN IN -->
+    <div id="lockLogin">
+      <div class="lock-title">Sign in</div>
+      <div class="lock-sub">Your name and PIN.</div>
+      <input id="loginName" class="lock-input" type="text" placeholder="Your name"
+             autocomplete="off" autocapitalize="words" spellcheck="false"
+             onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()">
+      <input id="loginPin" class="lock-input" style="margin-top:8px;" type="password"
+             inputmode="numeric" autocomplete="off" placeholder="PIN"
+             onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="loginErr" class="lock-err"></div>
+      <button id="loginBtn" class="lock-btn" onclick="doLogin()">SIGN IN</button>
+      <div class="lock-switch">New here? <a onclick="showAuthMode('register')">Create an account</a></div>
     </div>
-    <div id="lockStepName" style="display:none;">
-      <div class="lock-title">Pick your name</div>
-      <div class="lock-sub">Shown on every session you log. You can change it later in Settings.</div>
-      <input id="lockNameInput" class="lock-input" maxlength="24" type="text"
-             autocomplete="off" spellcheck="false" placeholder="e.g. Scotty"
-             onkeydown="if(event.key==='Enter')submitLockName()">
-      <div id="lockNameErr" class="lock-err"></div>
-      <button id="lockNameBtn" class="lock-btn" onclick="submitLockName()">START</button>
+    <!-- CREATE ACCOUNT -->
+    <div id="lockRegister" style="display:none;">
+      <div class="lock-title">Create your account</div>
+      <div class="lock-sub">Needs the group code, then a name &amp; PIN of your own.</div>
+      <input id="regCode" class="lock-input" type="password" inputmode="text"
+             autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Group code">
+      <input id="regName" class="lock-input" style="margin-top:8px;" type="text" maxlength="24"
+             autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Your name">
+      <input id="regPin" class="lock-input" style="margin-top:8px;" type="password"
+             inputmode="numeric" autocomplete="off" placeholder="Choose a PIN (4–8 digits)"
+             onkeydown="if(event.key==='Enter')doRegister()">
+      <div id="regErr" class="lock-err"></div>
+      <button id="regBtn" class="lock-btn" onclick="doRegister()">CREATE ACCOUNT</button>
+      <div class="lock-switch">Have an account? <a onclick="showAuthMode('login')">Sign in</a></div>
     </div>
   </div>
 </div>
@@ -1195,12 +1209,10 @@
     <div class="tab-section" id="tab-settings">
       <div class="section-label">YOUR PROFILE</div>
       <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
-        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);margin-bottom:4px;">Your name</div>
-        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);line-height:1.5;margin-bottom:10px;">Shown against the sessions you log in the shared log — so the crew can see who surfed. No account, just a name.</div>
-        <input type="text" id="userNameInput" maxlength="24" placeholder="e.g. Scott" autocomplete="off"
-          onchange="saveUserName(this.value)" onblur="saveUserName(this.value)"
-          style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
-        <div id="userNameStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);min-height:14px;margin-top:8px;"></div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);margin-bottom:4px;">Signed in as</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);line-height:1.5;margin-bottom:10px;">Your name is stamped on every session you log, so the crew can see who surfed.</div>
+        <div id="profileName" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--accent);margin-bottom:12px;">—</div>
+        <button onclick="signOut()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;letter-spacing:1px;cursor:pointer;">SIGN OUT</button>
       </div>
 
       <div class="section-label">MORNING SURF REPORT</div>
@@ -1430,11 +1442,11 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.6';
+const APP_VERSION = '14.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
-{ const _uni = document.getElementById('userNameInput'); if (_uni) _uni.value = getUserName(); }
+renderProfile();
 let currentStation = 'noosa';
 let cachedData = null;
 let _hasLoaded = false; // tracks whether initial data load has completed
@@ -5002,51 +5014,76 @@ function clientId() {
   } catch { return 'anon'; }
 }
 
-// ─── GROUP PASSCODE GATE ────────────────────────────────────────────────────
-// A single shared passcode (verified server-side so it never sits in the public
-// source) unlocks the app on a device; the Worker also requires it on every
-// session write, keeping the shared log closed to randoms. Paired with a chosen
-// name so every logged session records who created it.
-const PASS_KEY = 'surfsesh_pass_v1';
-function getPass() { try { return localStorage.getItem(PASS_KEY) || ''; } catch { return ''; } }
-function setPass(p) { try { localStorage.setItem(PASS_KEY, p); } catch {} }
+// ─── PER-USER LOGIN (name + PIN) ────────────────────────────────────────────
+// Each person signs in with their name + PIN; new accounts need the group code
+// to register. The server returns a signed token stored per-device and sent on
+// every session write — the Worker verifies it and stamps the author, so every
+// log records who made it and nobody can log as someone else.
+const TOKEN_KEY = 'surfsesh_token_v1';
+function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } }
+function setToken(t) { try { localStorage.setItem(TOKEN_KEY, t || ''); } catch {} }
 
-async function submitPasscode() {
-  const inp = document.getElementById('lockPassInput');
-  const err = document.getElementById('lockPassErr');
-  const btn = document.getElementById('lockPassBtn');
-  const val = (inp?.value || '').trim();
-  if (!val) { if (err) err.textContent = 'Enter the passcode.'; return; }
+function showAuthMode(mode) {
+  const login = document.getElementById('lockLogin');
+  const reg   = document.getElementById('lockRegister');
+  if (login) login.style.display = mode === 'login' ? '' : 'none';
+  if (reg)   reg.style.display   = mode === 'register' ? '' : 'none';
+  setTimeout(() => document.getElementById(mode === 'register' ? 'regCode' : 'loginName')?.focus(), 50);
+}
+
+const LOGIN_ERRORS = { no_user: 'No account with that name.', bad_pin: 'Wrong PIN.', bad_login: 'Wrong name or PIN.' };
+const REG_ERRORS   = { bad_code: 'Wrong group code.', name_taken: 'That name is taken — sign in instead.', bad_pin: 'PIN must be 4–8 digits.', bad_name: 'Name must be 2–24 characters.' };
+
+async function doLogin() {
+  const name = (document.getElementById('loginName')?.value || '').trim();
+  const pin  = (document.getElementById('loginPin')?.value || '').trim();
+  const err  = document.getElementById('loginErr');
+  const btn  = document.getElementById('loginBtn');
+  if (!name || !pin) { if (err) err.textContent = 'Enter your name and PIN.'; return; }
   if (err) err.textContent = '';
   if (btn) btn.disabled = true;
   try {
-    const res = await fetch(`${WORKER_URL}/auth/check`, {
+    const res = await fetch(`${WORKER_URL}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passcode: val }),
+      body: JSON.stringify({ name, pin }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok) { setPass(val); gotoLockNameStep(); }
-    else if (err) err.textContent = 'Wrong passcode.';
+    if (res.ok && data.ok) onAuthSuccess(data.token, data.name);
+    else if (err) err.textContent = LOGIN_ERRORS[data.error] || 'Sign-in failed.';
   } catch {
     if (err) err.textContent = 'Can’t reach the server — check your connection.';
   } finally { if (btn) btn.disabled = false; }
 }
 
-function gotoLockNameStep() {
-  if (getUserName()) { closeLock(); return; }
-  const p = document.getElementById('lockStepPass');
-  const n = document.getElementById('lockStepName');
-  if (p) p.style.display = 'none';
-  if (n) n.style.display = '';
-  setTimeout(() => document.getElementById('lockNameInput')?.focus(), 50);
+async function doRegister() {
+  const code = (document.getElementById('regCode')?.value || '').trim();
+  const name = (document.getElementById('regName')?.value || '').trim();
+  const pin  = (document.getElementById('regPin')?.value || '').trim();
+  const err  = document.getElementById('regErr');
+  const btn  = document.getElementById('regBtn');
+  if (!code || name.length < 2 || !/^\d{4,8}$/.test(pin)) {
+    if (err) err.textContent = 'Enter the code, a name, and a 4–8 digit PIN.'; return;
+  }
+  if (err) err.textContent = '';
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`${WORKER_URL}/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name, pin }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) onAuthSuccess(data.token, data.name);
+    else if (err) err.textContent = REG_ERRORS[data.error] || 'Couldn’t create account.';
+  } catch {
+    if (err) err.textContent = 'Can’t reach the server — check your connection.';
+  } finally { if (btn) btn.disabled = false; }
 }
 
-function submitLockName() {
-  const inp = document.getElementById('lockNameInput');
-  const err = document.getElementById('lockNameErr');
-  const val = (inp?.value || '').trim();
-  if (val.length < 2) { if (err) err.textContent = 'Enter at least 2 characters.'; return; }
-  saveUserName(val);
+// Store the token + name, backfill the name onto this device's own past
+// sessions (so they show the right author), and close the gate.
+function onAuthSuccess(token, name) {
+  setToken(token || '');
+  saveUserName(name || '');
   closeLock();
 }
 
@@ -5055,15 +5092,25 @@ function closeLock() {
   if (el) el.style.display = 'none';
 }
 
-// Show the gate until this device has BOTH a verified passcode and a name.
+// Clear this device's login and show the gate again (switch users).
+function signOut() {
+  setToken('');
+  try { localStorage.removeItem(USER_NAME_KEY); } catch {}
+  const li = document.getElementById('loginName'); if (li) li.value = '';
+  const pi = document.getElementById('loginPin');  if (pi) pi.value = '';
+  renderProfile();
+  maybeShowLock();
+}
+
+// Show the login gate until this device holds a token (a signed-in user).
 function maybeShowLock() {
-  const hasPass = !!getPass(), hasName = !!getUserName();
-  if (hasPass && hasName) return;
+  if (getToken()) return;
   const el = document.getElementById('lockScreen');
   if (!el) return;
   el.style.display = 'flex';
-  if (hasPass && !hasName) gotoLockNameStep();
-  else setTimeout(() => document.getElementById('lockPassInput')?.focus(), 50);
+  showAuthMode('login');
+  const li = document.getElementById('loginName');
+  if (li && getUserName()) li.value = getUserName(); // prefill after sign-out
 }
 
 // ─── USER PROFILE ───────────────────────────────────────────────────────────
@@ -5073,13 +5120,16 @@ const USER_NAME_KEY = 'surfsesh_user_name_v1';
 function getUserName() {
   try { return (localStorage.getItem(USER_NAME_KEY) || '').trim(); } catch { return ''; }
 }
-// Save the profile name, backfill it onto this device's own past sessions (so the
-// shared log retroactively shows who logged them), and sync those updates.
+// Show the signed-in name in Settings.
+function renderProfile() {
+  const el = document.getElementById('profileName');
+  if (el) el.textContent = getUserName() || '—';
+}
+// Save the signed-in name, backfill it onto this device's own past sessions (so
+// the shared log retroactively shows who logged them), and sync those updates.
 function saveUserName(raw) {
   const name = String(raw || '').trim().slice(0, 24);
   try { localStorage.setItem(USER_NAME_KEY, name); } catch {}
-  const input = document.getElementById('userNameInput');
-  if (input && input.value !== name) input.value = name;
   const cid = clientId();
   const all = getAllSessionsRaw();
   const changed = [];
@@ -5090,10 +5140,7 @@ function saveUserName(raw) {
     }
   });
   if (changed.length) { saveSessionsRaw(all); pushSessions(changed); }
-  const status = document.getElementById('userNameStatus');
-  if (status) status.textContent = name
-    ? `Saved — your sessions show as “${name}”${changed.length ? ` · ${changed.length} updated` : ''}.`
-    : 'Cleared.';
+  renderProfile();
   if (typeof renderSessionLog === 'function') renderSessionLog();
 }
 
@@ -5122,7 +5169,7 @@ async function pushSessions(records) {
   try {
     const res = await fetch(`${WORKER_URL}/sessions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-surfsesh-pass': getPass() },
+      headers: { 'Content-Type': 'application/json', 'x-surfsesh-token': getToken() },
       body: JSON.stringify({ sessions: recs }),
     });
     if (!res.ok) throw new Error('push failed');
