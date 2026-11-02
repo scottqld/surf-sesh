@@ -1138,6 +1138,16 @@
 
     <!-- TAB: SETTINGS -->
     <div class="tab-section" id="tab-settings">
+      <div class="section-label">YOUR PROFILE</div>
+      <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text);margin-bottom:4px;">Your name</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);line-height:1.5;margin-bottom:10px;">Shown against the sessions you log in the shared log — so the crew can see who surfed. No account, just a name.</div>
+        <input type="text" id="userNameInput" maxlength="24" placeholder="e.g. Scott" autocomplete="off"
+          onchange="saveUserName(this.value)" onblur="saveUserName(this.value)"
+          style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+        <div id="userNameStatus" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);min-height:14px;margin-top:8px;"></div>
+      </div>
+
       <div class="section-label">MORNING SURF REPORT</div>
       <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 16px;">
         <div class="toggle-wrap" style="border-bottom:1px solid var(--border);">
@@ -1365,10 +1375,11 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '14.1';
+const APP_VERSION = '14.2';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
+{ const _uni = document.getElementById('userNameInput'); if (_uni) _uni.value = getUserName(); }
 let currentStation = 'noosa';
 let cachedData = null;
 let _hasLoaded = false; // tracks whether initial data load has completed
@@ -4772,6 +4783,37 @@ function clientId() {
   } catch { return 'anon'; }
 }
 
+// ─── USER PROFILE ───────────────────────────────────────────────────────────
+// A lightweight display name (no login): stamped on each session this device
+// logs so the shared log shows who surfed. Stored per-device, synced per record.
+const USER_NAME_KEY = 'surfsesh_user_name_v1';
+function getUserName() {
+  try { return (localStorage.getItem(USER_NAME_KEY) || '').trim(); } catch { return ''; }
+}
+// Save the profile name, backfill it onto this device's own past sessions (so the
+// shared log retroactively shows who logged them), and sync those updates.
+function saveUserName(raw) {
+  const name = String(raw || '').trim().slice(0, 24);
+  try { localStorage.setItem(USER_NAME_KEY, name); } catch {}
+  const input = document.getElementById('userNameInput');
+  if (input && input.value !== name) input.value = name;
+  const cid = clientId();
+  const all = getAllSessionsRaw();
+  const changed = [];
+  const now = Date.now();
+  all.forEach(s => {
+    if (s && !s.deleted && s.clientId === cid && s.user !== name) {
+      s.user = name; s.updatedAt = now; changed.push(s);
+    }
+  });
+  if (changed.length) { saveSessionsRaw(all); pushSessions(changed); }
+  const status = document.getElementById('userNameStatus');
+  if (status) status.textContent = name
+    ? `Saved — your sessions show as “${name}”${changed.length ? ` · ${changed.length} updated` : ''}.`
+    : 'Cleared.';
+  if (typeof renderSessionLog === 'function') renderSessionLog();
+}
+
 // Raw replica includes tombstones (needed for merge); callers see only live records.
 function getAllSessionsRaw() {
   try { return JSON.parse(localStorage.getItem(SESSION_STORE_KEY) || '[]'); }
@@ -5251,6 +5293,7 @@ function commitLogSession() {
   const rec = {
     id:         Date.now(),
     clientId:   clientId(),
+    user:       getUserName(),
     updatedAt:  Date.now(),
     ts:         tsFromDateTime(dateStr, startTime),
     break:      b.name,
@@ -5381,7 +5424,8 @@ function saveInline(id) {
     board,
     waves: didSurf ? _ieWaves : null,
     sweep: _ieSweep, size: _ieSize, note,
-    clientId: all[idx].clientId || clientId(), updatedAt: Date.now() };
+    clientId: all[idx].clientId || clientId(),
+    user: all[idx].user ?? getUserName(), updatedAt: Date.now() };
   saveSessionsRaw(all);
   pushSessions([all[idx]]);
   _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null;
@@ -5517,7 +5561,7 @@ function renderSessionLog() {
     return `<div style="padding:12px 0;${isLast ? '' : 'border-bottom:1px solid var(--border);'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}${didSurf ? '' : ' · <span style="color:var(--accent);">👀 CHECKED</span>'}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:2px;">${dateStr.toUpperCase()}${todLabel ? ' · ' + todLabel : ''}${didSurf ? '' : ' · <span style="color:var(--accent);">👀 CHECKED</span>'}${s.user ? ` · <span style="color:var(--accent);">${String(s.user).replace(/</g,'&lt;')}</span>` : ''}</div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fff;line-height:1.15;">${s.break}</div>
           ${(() => {
             const chips = [
