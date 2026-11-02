@@ -499,6 +499,38 @@ async function deleteSubscription(env, endpoint) {
   await env.PUSH_SUBSCRIPTIONS.delete(key);
 }
 
+// ─── SESSION LOG (central, shared across all users + devices) ────────────────
+// Stored in the same KV namespace under a `sess:` prefix, one record per key.
+// Records carry `updatedAt` for last-write-wins; deletes arrive as tombstones
+// ({ id, deleted:true }) and are retained so they propagate to every device.
+const SESS_PREFIX = 'sess:';
+
+async function listSessions(env) {
+  const out = [];
+  let cursor;
+  do {
+    const page = await env.PUSH_SUBSCRIPTIONS.list({ prefix: SESS_PREFIX, cursor });
+    const recs = await Promise.all(page.keys.map(k => env.PUSH_SUBSCRIPTIONS.get(k.name, 'json')));
+    for (const r of recs) if (r) out.push(r);
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  return out;
+}
+
+// Upsert a batch; skip any record older than what's already stored (stale device).
+async function upsertSessions(env, sessions) {
+  let count = 0;
+  for (const s of sessions) {
+    if (!s || s.id == null) continue;
+    const key = SESS_PREFIX + String(s.id);
+    const existing = await env.PUSH_SUBSCRIPTIONS.get(key, 'json');
+    if (existing && (Number(existing.updatedAt) || 0) > (Number(s.updatedAt) || 0)) continue;
+    await env.PUSH_SUBSCRIPTIONS.put(key, JSON.stringify(s));
+    count++;
+  }
+  return count;
+}
+
 // ─── CRON: best break scoring + push send ────────────────────────────────────
 async function buildAll() {
   const [forecast, tidesNoosa, tidesMooloolaba, swell, buoy, wind] = await Promise.all([
@@ -523,6 +555,7 @@ async function handleCron(env) {
   const list = await env.PUSH_SUBSCRIPTIONS.list();
   const subs = [];
   for (const kv of list.keys) {
+    if (kv.name.startsWith(SESS_PREFIX)) continue; // session-log records, not push subs
     const rec = await env.PUSH_SUBSCRIPTIONS.get(kv.name, 'json');
     if (rec) subs.push({ key: kv.name, ...rec });
   }
@@ -1072,6 +1105,22 @@ export default {
         const { endpoint } = await request.json();
         await deleteSubscription(env, endpoint);
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+
+      } else if (path === '/sessions' && request.method === 'GET') {
+        if (!env.PUSH_SUBSCRIPTIONS) {
+          return new Response(JSON.stringify({ error: 'Session store not configured' }), { status: 503, headers: corsHeaders });
+        }
+        const sessions = await listSessions(env);
+        return new Response(JSON.stringify({ sessions }), { headers: corsHeaders });
+
+      } else if (path === '/sessions' && request.method === 'POST') {
+        if (!env.PUSH_SUBSCRIPTIONS) {
+          return new Response(JSON.stringify({ error: 'Session store not configured' }), { status: 503, headers: corsHeaders });
+        }
+        const body = await request.json();
+        const incoming = Array.isArray(body) ? body : (body.sessions || []);
+        const count = await upsertSessions(env, incoming);
+        return new Response(JSON.stringify({ ok: true, count }), { headers: corsHeaders });
 
       } else {
         return new Response(JSON.stringify({ error: 'Unknown endpoint' }), {

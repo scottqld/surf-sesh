@@ -1365,7 +1365,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '13.9';
+const APP_VERSION = '14.0';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 document.getElementById('settingsVersion').textContent = 'v' + APP_VERSION;
@@ -4750,9 +4750,123 @@ function toggleLogScope() {
   renderSessionLog();
 }
 
-function getSessions() {
+// ─── CENTRAL SESSION SYNC ───────────────────────────────────────────────────
+// Sessions are maintained centrally on the Worker and shared across every user
+// and device: localStorage is just a local replica for instant/offline reads.
+// Each write stamps `updatedAt` + `clientId`, is applied locally at once, and is
+// pushed to the server; merges use last-write-wins by `updatedAt`. Deletes are
+// kept as `{deleted:true}` tombstones so they propagate instead of resurrecting.
+const CLIENT_ID_KEY   = 'surfsesh_client_id_v1';
+const SYNC_QUEUE_KEY  = 'surfsesh_sync_queue_v1';   // ids awaiting push (offline)
+const SYNC_MIGRATED   = 'surfsesh_sync_migrated_v1';
+const SESSION_CAP     = 2000;                        // local replica bound
+
+function clientId() {
+  try {
+    let id = localStorage.getItem(CLIENT_ID_KEY);
+    if (!id) {
+      id = (crypto.randomUUID && crypto.randomUUID()) || ('c' + Date.now() + Math.random().toString(16).slice(2));
+      localStorage.setItem(CLIENT_ID_KEY, id);
+    }
+    return id;
+  } catch { return 'anon'; }
+}
+
+// Raw replica includes tombstones (needed for merge); callers see only live records.
+function getAllSessionsRaw() {
   try { return JSON.parse(localStorage.getItem(SESSION_STORE_KEY) || '[]'); }
   catch { return []; }
+}
+function saveSessionsRaw(arr) {
+  try { localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(arr.slice(0, SESSION_CAP))); } catch {}
+}
+function getSessions() {
+  return getAllSessionsRaw().filter(s => s && !s.deleted);
+}
+
+// Offline push queue (set of ids still to be sent).
+function _loadQueue() { try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '[]'); } catch { return []; } }
+function _saveQueue(ids) { try { localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([...new Set(ids)])); } catch {} }
+function _enqueue(ids) { _saveQueue([..._loadQueue(), ...ids]); }
+function _dequeue(ids) { const drop = new Set(ids.map(String)); _saveQueue(_loadQueue().filter(id => !drop.has(String(id)))); }
+
+// Push given records to the central store; on failure, queue their ids for retry.
+async function pushSessions(records) {
+  const recs = (records || []).filter(Boolean);
+  if (!recs.length) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessions: recs }),
+    });
+    if (!res.ok) throw new Error('push failed');
+    _dequeue(recs.map(r => r.id));
+  } catch {
+    _enqueue(recs.map(r => r.id));
+  }
+}
+
+// Merge remote records into the local replica (last-write-wins by updatedAt),
+// then refresh everything that reads sessions.
+function _mergeRemote(remote) {
+  const byId = {};
+  for (const s of getAllSessionsRaw()) if (s && s.id != null) byId[s.id] = s;
+  let changed = false;
+  for (const r of (remote || [])) {
+    if (!r || r.id == null) continue;
+    const ex = byId[r.id];
+    if (!ex || (Number(r.updatedAt) || 0) >= (Number(ex.updatedAt) || 0)) {
+      if (ex !== r) changed = true;
+      byId[r.id] = r;
+    }
+  }
+  if (!changed) return;
+  saveSessionsRaw(Object.values(byId));
+  recomputeCalibration();
+  if (typeof renderSessionLog  === 'function') { try { renderSessionLog(); }  catch {} }
+  if (typeof renderCalibration === 'function') { try { renderCalibration(); } catch {} }
+  if (typeof renderBoardStats  === 'function') { try { renderBoardStats(); }  catch {} }
+  if (typeof setBreak === 'function' && typeof cachedData !== 'undefined' && cachedData) { try { setBreak(currentBreak); } catch {} }
+}
+
+// One-time: stamp pre-sync local records and queue them so existing logs reach
+// the central store the first time this version runs.
+function migrateSessionsForSync() {
+  try {
+    if (localStorage.getItem(SYNC_MIGRATED)) return;
+    const cid = clientId();
+    const stamped = getAllSessionsRaw().map(s => ({
+      ...s,
+      clientId:  s.clientId || cid,
+      updatedAt: s.updatedAt || (s.ts ? new Date(s.ts).getTime() : Date.now()) || Date.now(),
+    }));
+    if (stamped.length) { saveSessionsRaw(stamped); _enqueue(stamped.map(s => s.id)); }
+    localStorage.setItem(SYNC_MIGRATED, '1');
+  } catch {}
+}
+
+// Flush any queued local changes, then pull the shared store and merge.
+let _syncing = false;
+async function syncSessions() {
+  if (_syncing) return;
+  _syncing = true;
+  try {
+    const q = _loadQueue();
+    if (q.length) {
+      const pending = getAllSessionsRaw().filter(s => q.map(String).includes(String(s.id)));
+      if (pending.length) await pushSessions(pending);
+    }
+    const res = await fetch(`${WORKER_URL}/sessions`);
+    if (res.ok) {
+      const data = await res.json();
+      _mergeRemote(data.sessions || []);
+    }
+  } catch {
+    // offline / worker unreachable — keep local replica, retry on next trigger
+  } finally {
+    _syncing = false;
+  }
 }
 
 // ─── CALIBRATION (logged-session feedback into scoring) ─────────────────────
@@ -5126,15 +5240,17 @@ function commitLogSession() {
   if (board === '__add__') board = '';
   const waves     = _logSurfed ? _logWaves : null; // preset bucket: 0, 1, 2, 3, '5+', '10+' or null
 
-  const all = getSessions();
+  const all = getAllSessionsRaw();
   // Each submit is a new record — log as many sessions per day as you like.
   // The conditions snapshot + algo score reflect *current* data, so they're only
   // captured for a record logged for today; backdated records store neither.
   // A "checked only" observation carries no rating (so no algoScore, which would
   // otherwise poison calibration), but still snapshots conditions + your sweep
   // call so it can train the sweep predictor.
-  all.unshift({
+  const rec = {
     id:         Date.now(),
+    clientId:   clientId(),
+    updatedAt:  Date.now(),
     ts:         tsFromDateTime(dateStr, startTime),
     break:      b.name,
     surfed:     _logSurfed,
@@ -5151,8 +5267,10 @@ function commitLogSession() {
     size,
     note,
     conditions: isToday ? captureConditions(b) : null,
-  });
-  localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
+  };
+  all.unshift(rec);
+  saveSessionsRaw(all);
+  pushSessions([rec]);
 
   // Reset form
   _editingSessionId = null;
@@ -5239,8 +5357,8 @@ function ieSelectSize(id, i) {
 }
 
 function saveInline(id) {
-  const all = getSessions();
-  const idx = all.findIndex(x => x.id === id);
+  const all = getAllSessionsRaw();
+  const idx = all.findIndex(x => x.id === id && !x.deleted);
   if (idx < 0) { _inlineEditId = null; return renderSessionLog(); }
   const didSurf = all[idx].surfed !== false;
   // A surfed session still needs a rating; a "checked only" observation does not.
@@ -5261,8 +5379,10 @@ function saveInline(id) {
     myScore: didSurf ? _ieScore : null,
     board,
     waves: didSurf ? _ieWaves : null,
-    sweep: _ieSweep, size: _ieSize, note };
-  localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(all.slice(0, 200)));
+    sweep: _ieSweep, size: _ieSize, note,
+    clientId: all[idx].clientId || clientId(), updatedAt: Date.now() };
+  saveSessionsRaw(all);
+  pushSessions([all[idx]]);
   _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null;
   recomputeCalibration();
   syncCalibrationToServer();
@@ -5324,8 +5444,13 @@ function inlineEditCardHTML(s) {
 
 function deleteSession(id) {
   if (_inlineEditId === id) { _inlineEditId = null; _ieScore = null; _ieWaves = null; _ieSweep = null; _ieSize = null; }
-  const sessions = getSessions().filter(s => s.id !== id);
-  localStorage.setItem(SESSION_STORE_KEY, JSON.stringify(sessions));
+  const all = getAllSessionsRaw();
+  const idx = all.findIndex(s => s.id === id);
+  const tomb = { id, deleted: true, updatedAt: Date.now(),
+    clientId: (idx >= 0 && all[idx].clientId) || clientId() };
+  if (idx >= 0) all[idx] = tomb; else all.push(tomb);
+  saveSessionsRaw(all);
+  pushSessions([tomb]);
   recomputeCalibration();
   syncCalibrationToServer();
   renderSessionLog();
@@ -6221,10 +6346,16 @@ if (isActiveHours()) {
 
 scheduleNextLoad();
 
+// Pull the shared session log from the central store (and flush any queued local
+// changes) on startup, then keep it current when the app returns to foreground.
+migrateSessionsForSync();
+syncSessions();
+
 // Refresh when the app is brought back to the foreground — the hourly timer is
 // throttled/suspended while backgrounded, so a resumed PWA could show old data.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  syncSessions(); // pick up sessions logged on other devices while we were away
   if (Date.now() - _lastLoadAt < 15 * 60 * 1000) return; // recent enough
   if (isActiveHours()) {
     document.body.classList.remove('night-mode');
