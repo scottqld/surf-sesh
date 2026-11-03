@@ -1455,7 +1455,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '16.2';
+const APP_VERSION = '16.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -1840,9 +1840,10 @@ function updateChipScoresForDay(realDayIdx, day, forecast) {
   const nameScore = document.getElementById('breakNameScore');
   if (nameScore && heroScore != null) {
     const c = scoreColor(heroScore);
-    // The score tracks the day's best conditions, which shift with swell/tide
-    // through the day — so note roughly when that peak lands.
-    const peakHr = peakHourForDay(realDayIdx, BREAKS[currentBreak]);
+    // Conditions shift with swell/tide through the day — note roughly when the
+    // best of it lands. Uses the peak hour within the best window, so the tag
+    // always points inside the BEST WINDOW shown below the forecast.
+    const peakHr = peakHourInWindow(realDayIdx, BREAKS[currentBreak]);
     const fmtHr  = h => h === 12 ? '12pm' : h > 12 ? (h - 12) + 'pm' : h + 'am';
     const timeTag = peakHr != null ? ` <small class="break-name-peak">≈${fmtHr(peakHr)}</small>` : '';
     nameScore.style.color   = c;
@@ -1902,7 +1903,7 @@ function tidesGridHTML(tides) {
  * DAY" timeline uses, so the peak hour and best window line up with those slot
  * scores and the headline. Returns [{ hr, score }] in ascending hour order —
  * empty before the hourly wind outlook has loaded. Shared by computeBestWindow
- * and peakHourForDay so both agree.
+ * and peakHourInWindow so both agree.
  */
 function dayHourScores(realDayIdx, b) {
   const sw   = cachedData?.swell?.hourly;
@@ -1934,8 +1935,8 @@ function dayHourScores(realDayIdx, b) {
  * Returns { start, end } in Brisbane hours, or null. Only genuinely contiguous
  * hours form a window, so a gap in the data can't stitch one together.
  */
-function computeBestWindow(realDayIdx, b) {
-  const hourScores = dayHourScores(realDayIdx, b);
+function computeBestWindow(realDayIdx, b, hourScores) {
+  hourScores = hourScores || dayHourScores(realDayIdx, b);
   if (hourScores.length < 3) return null;
   let bestSum = -1, bestStart = null;
   for (let i = 0; i < hourScores.length - 2; i++) {
@@ -1948,14 +1949,19 @@ function computeBestWindow(realDayIdx, b) {
 }
 
 /**
- * Single peak hour for a day by the FULL score — the highest-scoring daylight
- * hour. Returns the Brisbane hour, or null (e.g. before the wind outlook has
- * loaded). Ties keep the earliest hour.
+ * Peak hour for the headline tag — the highest-scoring hour *inside the best
+ * 3-hour window*, so the tag always points within the window shown below rather
+ * than at a lone spike elsewhere in the day. Falls back to the day's absolute
+ * peak when there's no window (fewer than 3 contiguous scored hours). Returns
+ * the Brisbane hour, or null before the wind outlook has loaded. Ties keep the
+ * earliest hour.
  */
-function peakHourForDay(realDayIdx, b) {
+function peakHourInWindow(realDayIdx, b) {
   const hourScores = dayHourScores(realDayIdx, b);
   if (!hourScores.length) return null;
-  return hourScores.reduce((a, c) => c.score > a.score ? c : a).hr;
+  const w = computeBestWindow(realDayIdx, b, hourScores);
+  const pool = w ? hourScores.filter(h => h.hr >= w.start && h.hr < w.end) : hourScores;
+  return pool.reduce((a, c) => c.score > a.score ? c : a).hr;
 }
 
 /**
