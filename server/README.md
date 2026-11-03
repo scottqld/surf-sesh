@@ -16,8 +16,11 @@ Endpoints (unchanged): `GET /forecast /tides /swell /all`, `POST /ai`,
 `POST|DELETE /subscribe`, `POST /auth/check|register|login`, `GET|POST /sessions`,
 plus `GET /health`. CORS and the `x-surfsesh-token` session gate are identical.
 
-Runs as the **API only**. nginx (host) terminates TLS, serves the static PWA, and
-reverse-proxies `/api/*` here.
+Runs as the **API only**. `tailscale serve` terminates TLS with the tailnet's
+trusted `*.ts.net` cert and proxies to a local nginx that serves the static PWA
+(`/`) and reverse-proxies `/api/*` here. No public domain, port-forwarding, DDNS
+or manual Let's Encrypt — reachability is over the tailnet, so only devices
+signed into it can open the app (a small crew each installs Tailscale once).
 
 ## Layout on the NAS
 Per the storage guidelines, everything lives under `/Volume2/files/apps/surfsesh/`:
@@ -63,12 +66,43 @@ Per the storage guidelines, everything lives under `/Volume2/files/apps/surfsesh
    curl -s localhost:8096/sessions | head # migrated log
    ```
 
-## nginx (host) — sketch
+## Reachability — Tailscale (no domain / no open ports)
+
+In the Tailscale admin console enable **MagicDNS** and **HTTPS Certificates** for
+the tailnet. On the NAS, let `tailscale serve` front a local nginx that does the
+static + `/api` routing:
+
 ```nginx
-location /api/ { proxy_pass http://127.0.0.1:8096/; }   # trailing slash strips /api
-location /     { root /Volume2/files/apps/surfsesh/site; try_files $uri $uri/ /index.html; }
+# nginx vhost on 127.0.0.1:8080 — plain http; Tailscale terminates TLS.
+server {
+  listen 127.0.0.1:8080;
+  root /Volume2/files/apps/surfsesh/site;
+  location /api/ { proxy_pass http://127.0.0.1:8096/; }  # trailing slash strips /api
+  location /     { try_files $uri $uri/ /index.html; }
+}
 ```
-The client's `WORKER_URL` becomes `https://<your-domain>/api` at cutover.
+
+```bash
+# Front nginx over the tailnet with the ts.net cert (persists across reboots):
+tailscale serve --bg https / http://127.0.0.1:8080
+tailscale serve status        # shows https://<nas>.<tailnet>.ts.net
+```
+
+The app's origin becomes `https://<nas>.<tailnet>.ts.net`, so at cutover the
+client's `WORKER_URL` → `https://<nas>.<tailnet>.ts.net/api`. Push alerts still
+arrive on cellular (OS→phone, not via Tailscale); only opening the app and
+syncing need Tailscale active on the device.
+
+> Serving at the **root** `/` (not the old `/surf-sesh/` subpath) means the PWA's
+> base paths change too — `sw.js` `SHELL_URL`, the manifest `start_url`/`scope`,
+> icon paths, and the Worker's old `APP_URL`. The client repoint handles these.
+> (Alternative: nginx `location /surf-sesh/` to keep the old base and touch less.)
+
+## Crew access
+Each person who uses SurfSesh must reach the tailnet: either **share the NAS
+node** with their Tailscale account (`tailscale` admin → Machines → Share), or
+add them as a **user** on your tailnet. They install Tailscale once; thereafter
+the app works like any site while Tailscale is on.
 
 ## Verify / tests
 ```bash
