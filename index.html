@@ -1377,6 +1377,7 @@
   #tab-insights .ins-miss-gap{font-family:'Bebas Neue',sans-serif;font-size:22px;flex-shrink:0;line-height:1;}
   #tab-insights .ins-factor{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
   #tab-insights .ins-factor-title{font-family:'DM Mono',monospace;font-size:10px;color:var(--text);letter-spacing:1px;margin-bottom:11px;}
+  #tab-insights .ins-legend{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);line-height:1.45;margin:-6px 0 12px;}
   #tab-insights .ins-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
   #tab-insights .ins-bar-key{flex:0 0 40%;font-family:'DM Mono',monospace;font-size:10px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   #tab-insights .ins-bar-track{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;}
@@ -1455,7 +1456,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '16.3';
+const APP_VERSION = '16.4';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -6452,6 +6453,7 @@ function _groupRows(sessions, keyFn) {
 function _factorBlock(title, icon, rows, opts = {}) {
   if (!rows.length) return '';
   const minN = opts.minN || 2;
+  const unit = opts.valueUnit || '';   // e.g. '/10' appended to each bar's average
   const eligible = rows.filter(r => r.n >= minN);
   const best = eligible.length ? eligible.reduce((a, b) => b.avg > a.avg ? b : a) : null;
   const sorted = opts.keepOrder ? rows : [...rows].sort((a, b) => b.avg - a.avg);
@@ -6462,11 +6464,12 @@ function _factorBlock(title, icon, rows, opts = {}) {
     return `<div class="ins-bar-row">
       <div class="ins-bar-key">${r.key}${star}</div>
       <div class="ins-bar-track"><div class="ins-bar-fill" style="width:${w}%;background:${col};"></div></div>
-      <div class="ins-bar-val">${r.avg.toFixed(1)}<span class="ins-bar-n">·${r.n}</span></div>
+      <div class="ins-bar-val">${r.avg.toFixed(1)}${unit}<span class="ins-bar-n">·${r.n}</span></div>
     </div>`;
   }).join('');
+  const legend = opts.legend ? `<div class="ins-legend">${opts.legend}</div>` : '';
   const tip = best ? `<div class="ins-tip">★ Best with <b>${best.key}</b> — ${best.avg.toFixed(1)}/10 across ${best.n} session${best.n === 1 ? '' : 's'}</div>` : '';
-  return `<div class="ins-factor"><div class="ins-factor-title">${icon} ${title}</div>${bars}${tip}</div>`;
+  return `<div class="ins-factor"><div class="ins-factor-title">${icon} ${title}</div>${legend}${bars}${tip}</div>`;
 }
 
 function _renderAccuracy() {
@@ -6649,7 +6652,10 @@ function _renderBoards() {
   if (mine.length < 2) {
     return `<div class="ins-empty">Log a few sessions with the board you rode and SurfSesh will show which of <b>your</b> boards goes best — overall and by swell size.<br><br>Your board sessions: ${mine.length}/2 so far.</div>`;
   }
-  const overall = _factorBlock('YOUR BOARDS', '🏄', _groupRows(mine, x => x.board));
+  const overall = _factorBlock('YOUR BOARDS', '🏄', _groupRows(mine, x => x.board), {
+    legend: 'Bar = your average rating out of 10 · the number after the dot = sessions logged on that board. ★ = best (min 2 sessions).',
+    valueUnit: '/10',
+  });
 
   // Best board per swell-size bucket (prefer the captured forecast height, else
   // the size you called), so it answers "what should I take for this size?".
@@ -6674,7 +6680,7 @@ function _renderBoards() {
     </div>`;
   }).join('');
   const bySize = picks
-    ? `<div class="ins-factor"><div class="ins-factor-title">📐 WHAT TO TAKE · BY SIZE</div>${picks}<div class="ins-tip">Your best-rated board in each size range, from your own sessions.</div></div>`
+    ? `<div class="ins-factor"><div class="ins-factor-title">📐 WHAT TO TAKE · BY SIZE</div><div class="ins-legend">Your best-rated board for each swell size · figures are average rating out of 10 · sessions logged.</div>${picks}<div class="ins-tip">Size band is the forecast swell height for the session (or the size you called). From your own sessions only.</div></div>`
     : '';
   return overall + bySize;
 }
