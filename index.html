@@ -1452,7 +1452,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.6';
+const APP_VERSION = '15.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -2489,9 +2489,10 @@ function bestConditionsHTML(b) {
 // rather than overwrite the config; the count shows how much to trust it.
 function learnedConditionsHTML(b) {
   if (!b || typeof getSessions !== 'function') return '';
+  // Personal: "FROM YOUR LOGS" = the signed-in user's own sessions at this break.
   const mine = getSessions().filter(s =>
     s.break === b.name && s.surfed !== false && s.myScore != null &&
-    s.conditions && s.conditions.swellDir);
+    s.conditions && s.conditions.swellDir && _isMine(s));
   if (!mine.length) return '';
 
   const best = mine.reduce((a, s) => s.myScore > a.myScore ? s : a, mine[0]);
@@ -6346,17 +6347,17 @@ function renderBoardStats() {
 // pool — more data, better signal.
 function _insSessions() { return getSessions().filter(s => s.myScore != null); }
 
-// The signed-in user's OWN rated sessions, for insights that are personal (e.g.
-// board choice — your quiver is yours). Matched by account name across devices,
-// falling back to this device's own records when not signed in or unnamed.
-function _mySessions() {
+// Is this session the signed-in user's own? Matched by account name across
+// their devices, falling back to this device's own records when not signed in
+// or a record predates naming. Used for every "you / your"-framed insight.
+function _isMine(s) {
   const me  = getUserName();
   const cid = clientId();
-  return getSessions().filter(s => s.myScore != null && (
-    me ? (s.user === me || (!s.user && s.clientId === cid))
-       : s.clientId === cid
-  ));
+  return me ? (s.user === me || (!s.user && s.clientId === cid)) : s.clientId === cid;
 }
+// The signed-in user's OWN rated sessions, for the personal "you"-framed
+// insights (accuracy, board choice, FROM YOUR LOGS).
+function _mySessions() { return getSessions().filter(s => s.myScore != null && _isMine(s)); }
 
 // Re-score a stored conditions snapshot with the CURRENT scoring model, by
 // rebuilding the minimal forecast scoreBreak reads. This keeps the Insights
@@ -6429,7 +6430,8 @@ function _renderAccuracy() {
   // Re-score every logged snapshot with the CURRENT model so accuracy reflects
   // today's scoring, not the algoScore captured when each session was logged.
   // Needs a structured conditions snapshot (day-of-surf capture) to re-score.
-  const s = _insSessions()
+  // Personal: "your lean" / "forecast vs YOU" is about this user's own ratings.
+  const s = _mySessions()
     .filter(x => x.conditions && Object.prototype.hasOwnProperty.call(x.conditions, 'swellDir'))
     .map(x => {
       const b = BREAKS.find(br => br.name === x.break);
