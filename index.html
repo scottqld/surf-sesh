@@ -1452,7 +1452,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.8';
+const APP_VERSION = '15.9';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -6536,7 +6536,7 @@ function _tallyBlock(title, icon, rows) {
 
 function _renderConditions() {
   const all     = _insSessions();                      // surfed (rated) sessions
-  const ownPool = getSessions();                       // every entry incl. checks
+  const ownPool = getSessions().filter(_isMine);       // YOUR OWN entries incl. checks — personal
   const s    = all.filter(x => x.conditions);          // forecast-derived: day-of-surf only
   const nSweep = ownPool.filter(x => x.sweep).length;  // your own calls: any entry, checks included
   const nSize  = ownPool.filter(x => x.size).length;
