@@ -1455,7 +1455,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '16.0';
+const APP_VERSION = '16.1';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -1934,11 +1934,38 @@ function computeBestWindow(realDayIdx, b) {
   return bestStart !== null ? { start: bestStart, end: bestStart + 3 } : null;
 }
 
-/** Single peak hour for a day (highest hourly surf score), or null. */
+/**
+ * Single peak hour for a day by the FULL score (scoreBreak — wind, tide, swell
+ * direction and size all weighed), not just surf height. Builds the same
+ * synthetic per-hour forecast the intraday "THROUGH THE DAY" timeline uses, so
+ * the peak lands on the same hour those slot scores (and the headline) agree on.
+ * Returns the Brisbane hour of the highest-scoring daylight hour, or null (e.g.
+ * before the hourly wind outlook has loaded). Ties keep the earliest hour.
+ */
 function peakHourForDay(realDayIdx, b) {
-  const hourScores = dayHourScores(realDayIdx, b);
-  if (!hourScores.length) return null;
-  return hourScores.reduce((a, c) => c.score > a.score ? c : a).hr;
+  const sw   = cachedData?.swell?.hourly;
+  const wind = _windOutlook;
+  if (!b || !sw?.time || !wind?.time) return null;
+  const dayStr = getBrisbaneDateStr(realDayIdx);
+  let bestScore = -1, bestHr = null;
+  for (let hr = 5; hr <= 17; hr++) {
+    const tStr  = `${dayStr}T${String(hr).padStart(2, '0')}:00`;
+    const si    = sw.time.indexOf(tStr);
+    const wi    = wind.time.indexOf(tStr);
+    const waveH = si >= 0 ? sw.wave_height?.[si] : null;
+    const wDir  = wi >= 0 && wind.wind_direction_10m ? degToCompass(wind.wind_direction_10m[wi]) : null;
+    if (waveH == null || !wDir) continue;            // need both to score the hour
+    const per   = si >= 0 ? sw.wave_period?.[si] : null;
+    const swDir = si >= 0 && sw.wave_direction ? degToCompass(sw.wave_direction[si]) : null;
+    const wKmh  = wi >= 0 && wind.wind_speed_10m?.[wi] != null ? Math.round(wind.wind_speed_10m[wi]) : null;
+    const fc = {
+      forecasts: [{ swell: `${waveH.toFixed(1)}m`, winds: `${wDir} ${wKmh != null ? wKmh + ' km/h' : ''}`, seas: '' }],
+      _swellDir: swDir, _period: per, _tide: tideAtHour(realDayIdx, hr),
+    };
+    const score = scoreBreak(b, fc);
+    if (score > bestScore) { bestScore = score; bestHr = hr; }
+  }
+  return bestHr;
 }
 
 /**
