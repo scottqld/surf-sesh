@@ -136,6 +136,9 @@
     color: var(--muted);
     margin-left: 3px;
   }
+  .break-name-score small.break-name-peak {
+    color: var(--accent2);
+  }
   .break-name {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 26px;
@@ -1452,7 +1455,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.9';
+const APP_VERSION = '16.0';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -1837,8 +1840,13 @@ function updateChipScoresForDay(realDayIdx, day, forecast) {
   const nameScore = document.getElementById('breakNameScore');
   if (nameScore && heroScore != null) {
     const c = scoreColor(heroScore);
+    // The score tracks the day's best conditions, which shift with swell/tide
+    // through the day — so note roughly when that peak lands.
+    const peakHr = peakHourForDay(realDayIdx, BREAKS[currentBreak]);
+    const fmtHr  = h => h === 12 ? '12pm' : h > 12 ? (h - 12) + 'pm' : h + 'am';
+    const timeTag = peakHr != null ? ` <small class="break-name-peak">≈${fmtHr(peakHr)}</small>` : '';
     nameScore.style.color   = c;
-    nameScore.innerHTML     = `${heroScore}<small>${scoreLabel(heroScore, true)}</small>`;
+    nameScore.innerHTML     = `${heroScore}<small>${scoreLabel(heroScore, true)}</small>${timeTag}`;
     nameScore.style.display = 'inline-flex';
   }
 }
@@ -1891,9 +1899,9 @@ function tidesGridHTML(tides) {
  * Best 3-hour surf window for a given real day (0 = today), from Open-Meteo
  * hourly data. Returns { start, end } in Brisbane hours, or null.
  */
-function computeBestWindow(realDayIdx, b) {
+function dayHourScores(realDayIdx, b) {
   const swHourly = cachedData?.swell?.hourly;
-  if (!swHourly || !b) return null;
+  if (!swHourly || !b) return [];
   const times = swHourly.time;
   const waveH = swHourly.wave_height || swHourly.swell_wave_height || null;
   const waveP = swHourly.swell_wave_period || swHourly.wave_period || null;
@@ -1912,6 +1920,11 @@ function computeBestWindow(realDayIdx, b) {
     const pBonus = p !== null ? (p >= 14 ? 1.3 : p >= 10 ? 1.1 : 1.0) : 1.0;
     hourScores.push({ hr, score: sH * pBonus });
   });
+  return hourScores;
+}
+
+function computeBestWindow(realDayIdx, b) {
+  const hourScores = dayHourScores(realDayIdx, b);
   if (hourScores.length < 3) return null;
   let bestSum = -1, bestStart = null;
   for (let i = 0; i < hourScores.length - 2; i++) {
@@ -1919,6 +1932,13 @@ function computeBestWindow(realDayIdx, b) {
     if (sum > bestSum) { bestSum = sum; bestStart = hourScores[i].hr; }
   }
   return bestStart !== null ? { start: bestStart, end: bestStart + 3 } : null;
+}
+
+/** Single peak hour for a day (highest hourly surf score), or null. */
+function peakHourForDay(realDayIdx, b) {
+  const hourScores = dayHourScores(realDayIdx, b);
+  if (!hourScores.length) return null;
+  return hourScores.reduce((a, c) => c.score > a.score ? c : a).hr;
 }
 
 /**
