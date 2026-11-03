@@ -1350,6 +1350,8 @@
     <div class="tab-section" id="tab-insights">
       <div class="section-label">FORECAST vs YOU</div>
       <div id="insightsAccuracy" style="padding:0 20px 20px;"></div>
+      <div class="section-label">YOUR BOARDS</div>
+      <div id="insightsBoards" style="padding:0 20px 20px;"></div>
       <div class="section-label">WHAT SUITS YOU</div>
       <div id="insightsConditions" style="padding:0 20px 28px;"></div>
     </div>
@@ -1450,7 +1452,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.5';
+const APP_VERSION = '15.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -6340,10 +6342,14 @@ function renderBoardStats() {
 // All on-device from logged sessions. Forecast accuracy uses the algoScore
 // captured at log time; condition correlation uses the `conditions` snapshot —
 // both only exist on sessions logged on the day they were surfed.
-// Insights are personal: only the signed-in user's own rated sessions (matched
-// by account name across their devices; falls back to this device's own
-// sessions when not signed in or a record predates naming).
-function _insSessions() {
+// General insights (accuracy, condition correlations) use the whole shared
+// pool — more data, better signal.
+function _insSessions() { return getSessions().filter(s => s.myScore != null); }
+
+// The signed-in user's OWN rated sessions, for insights that are personal (e.g.
+// board choice — your quiver is yours). Matched by account name across devices,
+// falling back to this device's own records when not signed in or unnamed.
+function _mySessions() {
   const me  = getUserName();
   const cid = clientId();
   return getSessions().filter(s => s.myScore != null && (
@@ -6591,10 +6597,49 @@ function _renderConditions() {
     `<div class="ins-foot">Forecast bars show your average rating per bucket (★ = highest, min 2). Your sweep &amp; size bars show how often you logged each call — checks included — with your average surfed rating alongside when there is one. Small samples are noisy — treat as a hint, not gospel.</div>`;
 }
 
+// Personal board insight — which of YOUR OWN boards goes best, overall and by
+// swell size (your quiver is yours, so this uses _mySessions, not the pool).
+function _renderBoards() {
+  const mine = _mySessions().filter(s => s.board);
+  if (mine.length < 2) {
+    return `<div class="ins-empty">Log a few sessions with the board you rode and SurfSesh will show which of <b>your</b> boards goes best — overall and by swell size.<br><br>Your board sessions: ${mine.length}/2 so far.</div>`;
+  }
+  const overall = _factorBlock('YOUR BOARDS', '🏄', _groupRows(mine, x => x.board));
+
+  // Best board per swell-size bucket (prefer the captured forecast height, else
+  // the size you called), so it answers "what should I take for this size?".
+  const bucketOf = (x) => {
+    const h = x.conditions?.swellHeight;
+    if (h != null) return h < 1 ? 'Small <1m' : h < 1.5 ? 'Mid 1–1.5m' : 'Big 1.5m+';
+    const sz = parseFloat(x.size);
+    if (!isNaN(sz)) return sz < 2 ? 'Small <1m' : sz < 4 ? 'Mid 1–1.5m' : 'Big 1.5m+';
+    return null;
+  };
+  const buckets = { 'Small <1m': [], 'Mid 1–1.5m': [], 'Big 1.5m+': [] };
+  mine.forEach(s => { const b = bucketOf(s); if (b) buckets[b].push(s); });
+  const picks = Object.entries(buckets).filter(([, arr]) => arr.length).map(([label, arr]) => {
+    const byBoard = {};
+    arr.forEach(s => { (byBoard[s.board] = byBoard[s.board] || []).push(s.myScore); });
+    const top = Object.entries(byBoard)
+      .map(([board, a]) => ({ board, avg: a.reduce((x, y) => x + y, 0) / a.length, n: a.length }))
+      .sort((a, b) => b.avg - a.avg)[0];
+    return `<div class="ins-bar-row">
+      <div class="ins-bar-key">${label}</div>
+      <div class="ins-bar-val" style="flex:1;text-align:right;">🏄 <b style="color:var(--accent2);">${String(top.board).replace(/</g,'&lt;')}</b> · ${top.avg.toFixed(1)}/10<span class="ins-bar-n">·${top.n}</span></div>
+    </div>`;
+  }).join('');
+  const bySize = picks
+    ? `<div class="ins-factor"><div class="ins-factor-title">📐 WHAT TO TAKE · BY SIZE</div>${picks}<div class="ins-tip">Your best-rated board in each size range, from your own sessions.</div></div>`
+    : '';
+  return overall + bySize;
+}
+
 function renderInsights() {
   const a  = document.getElementById('insightsAccuracy');
   const cE = document.getElementById('insightsConditions');
+  const bE = document.getElementById('insightsBoards');
   if (a)  a.innerHTML  = _renderAccuracy();
+  if (bE) bE.innerHTML = _renderBoards();
   if (cE) cE.innerHTML = _renderConditions();
 }
 
