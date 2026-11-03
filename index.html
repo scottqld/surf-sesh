@@ -1450,7 +1450,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.3';
+const APP_VERSION = '15.4';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -4496,9 +4496,13 @@ function renderForecast(forecast, tideData, swellData) {
       const tmrwSwellDir = forecast._swellDirByDay?.[1] ?? extractDir(shortDir(tomorrow.swell || ''));
       const tmrwWindDir  = resolveWindDir(tomorrow.winds, 1);
       const tmrwWindSpeed = extractWindSpeed(tomorrow.winds || '');
+      // Score every break for tomorrow and feature the best one (the Plan tab is
+      // all-breaks now, so the panel names which break its score is for).
+      const tmrwScored = BREAKS.map(br => ({ br, s: scoreBreak(br, { forecasts: [tomorrow], ...dayScoreAux(forecast, 1) }) }));
+      const tmrwBest = tmrwScored.reduce((a, b) => b.s > a.s ? b : a);
       const tmrwBlock = buildForecastPanelBlock(tomorrow, {
         sideMargin: '0', // #tomorrowPlannerCard already has 20px side margins
-        scoreId:  'tmrwFcScore',
+        scoreId:  'tmrwPlannerScore',
         surfId:   'fcTmrwSurf',
         tides:    tmrwTides,
         tidesStr: tmrwTidesStr,
@@ -4510,7 +4514,7 @@ function renderForecast(forecast, tideData, swellData) {
         sst,
         topMargin: '0',
         label:    'TOMORROW',
-        sublabel: (tomorrow.day || '').toUpperCase(),
+        sublabel: `${tmrwBest.br.name.toUpperCase()} · ${(tomorrow.day || '').toUpperCase()}`,
       });
       // Sweep outlook for tomorrow, scored for the currently-selected break
       const tmrwSweepCond = {
@@ -4518,9 +4522,20 @@ function renderForecast(forecast, tideData, swellData) {
         swellHeight: forecast._swellHeightByDay?.[1] ?? extractHeight(shortDir(tomorrow.swell || '')),
         period:      forecast._periodTomorrow ?? null,
       };
-      const tmrwSweep = _sweepOutlookHTML(BREAKS[currentBreak]?.name, tmrwSweepCond, 'tomorrow');
+      const tmrwSweep = _sweepOutlookHTML(tmrwBest.br.name, tmrwSweepCond, 'tomorrow');
       const plannerCard = document.getElementById('tomorrowPlannerCard');
-      if (plannerCard) plannerCard.innerHTML = tmrwBlock + tmrwSweep;
+      if (plannerCard) {
+        plannerCard.innerHTML = tmrwBlock + tmrwSweep;
+        // Fill the isolated score badge for tomorrow's best break.
+        const sNum = document.getElementById('tmrwPlannerScoreNum');
+        const sLbl = document.getElementById('tmrwPlannerScoreLbl');
+        const sWrap = document.getElementById('tmrwPlannerScore');
+        if (sNum && sLbl && sWrap) {
+          sNum.innerHTML = `<span style="color:${scoreColor(tmrwBest.s)};">${tmrwBest.s}</span><span style="font-size:13px;color:var(--muted);">/10</span>`;
+          sLbl.textContent = scoreLabel(tmrwBest.s, true); sLbl.style.color = scoreColor(tmrwBest.s);
+          sWrap.style.display = 'flex';
+        }
+      }
     }
   }
 
@@ -4918,9 +4933,11 @@ async function loadNightMode() {
       const tmrwSwellDirNm = tmrwDirNm ?? extractDir(shortDir(tomorrow.swell || ''));
       const tmrwWindDirNm  = resolveWindDir(tomorrow.winds, 1);
       const tmrwWindSpeedNm = extractWindSpeed(tomorrow.winds || '');
+      const nmScored = BREAKS.map(br => ({ br, s: scoreBreak(br, { forecasts: [tomorrow], ...dayScoreAux(data.forecast, 1) }) }));
+      const nmBest = nmScored.reduce((a, b) => b.s > a.s ? b : a);
       const plannerTmrwBlock = buildForecastPanelBlock(tomorrow, {
         sideMargin: '0', // #tomorrowPlannerCard already has 20px side margins
-        scoreId:  'tmrwFcScore',
+        scoreId:  'tmrwPlannerScore',
         surfId:   'fcTmrwSurf',
         tides:    tmrwTidesNm,
         tidesStr: tmrwTidesStrNm,
@@ -4932,10 +4949,20 @@ async function loadNightMode() {
         sst:      nmSst,
         topMargin: '0',
         label:    'TOMORROW',
-        sublabel: (tomorrow.day || '').toUpperCase(),
+        sublabel: `${nmBest.br.name.toUpperCase()} · ${(tomorrow.day || '').toUpperCase()}`,
       });
       const plannerCard = document.getElementById('tomorrowPlannerCard');
-      if (plannerCard) plannerCard.innerHTML = plannerTmrwBlock;
+      if (plannerCard) {
+        plannerCard.innerHTML = plannerTmrwBlock;
+        const sNum = document.getElementById('tmrwPlannerScoreNum');
+        const sLbl = document.getElementById('tmrwPlannerScoreLbl');
+        const sWrap = document.getElementById('tmrwPlannerScore');
+        if (sNum && sLbl && sWrap) {
+          sNum.innerHTML = `<span style="color:${scoreColor(nmBest.s)};">${nmBest.s}</span><span style="font-size:13px;color:var(--muted);">/10</span>`;
+          sLbl.textContent = scoreLabel(nmBest.s, true); sLbl.style.color = scoreColor(nmBest.s);
+          sWrap.style.display = 'flex';
+        }
+      }
     }
 
     document.getElementById('loadingEl').style.display = 'none';
