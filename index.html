@@ -1450,7 +1450,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.4';
+const APP_VERSION = '15.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -6340,7 +6340,17 @@ function renderBoardStats() {
 // All on-device from logged sessions. Forecast accuracy uses the algoScore
 // captured at log time; condition correlation uses the `conditions` snapshot —
 // both only exist on sessions logged on the day they were surfed.
-function _insSessions() { return getSessions().filter(s => s.myScore != null); }
+// Insights are personal: only the signed-in user's own rated sessions (matched
+// by account name across their devices; falls back to this device's own
+// sessions when not signed in or a record predates naming).
+function _insSessions() {
+  const me  = getUserName();
+  const cid = clientId();
+  return getSessions().filter(s => s.myScore != null && (
+    me ? (s.user === me || (!s.user && s.clientId === cid))
+       : s.clientId === cid
+  ));
+}
 
 // Re-score a stored conditions snapshot with the CURRENT scoring model, by
 // rebuilding the minimal forecast scoreBreak reads. This keeps the Insights
