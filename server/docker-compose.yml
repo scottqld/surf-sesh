@@ -1,0 +1,20 @@
+# SurfSesh API on the NAS. Per the storage guidelines, app code+data live under
+# /Volume2/files/apps/surfsesh/ ; the SQLite DB is bind-mounted from ./data.
+# nginx (host) terminates TLS and reverse-proxies:
+#   location /api/  -> http://127.0.0.1:8096/   (strip the /api prefix)
+#   location /      -> the static PWA docroot
+services:
+  surfsesh-api:
+    build: .
+    image: surfsesh-api:latest
+    container_name: surfsesh-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - PORT=8096
+      - DB_PATH=/data/surfsesh.db
+      - TZ=UTC
+    ports:
+      - "127.0.0.1:8096:8096"   # bound to localhost; only nginx reaches it
+    volumes:
+      - ./data:/data

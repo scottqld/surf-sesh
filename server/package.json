@@ -1,0 +1,17 @@
+{
+  "name": "surfsesh-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SurfSesh backend (NAS port of the Cloudflare Worker): forecast proxy, session store, auth, web-push, hourly alerts.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "check": "node --check src/server.mjs && node --check src/surf-core.mjs && node --check src/kv-sqlite.mjs && node --check src/cache.mjs",
+    "gen-keys": "node scripts/gen-keys.mjs",
+    "import-kv": "node scripts/import-kv.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1"
+  }
+}
