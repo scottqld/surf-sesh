@@ -1220,6 +1220,9 @@
         <button onclick="signOut()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;letter-spacing:1px;cursor:pointer;">SIGN OUT</button>
       </div>
 
+      <div class="section-label">ACTIVE NOTIFICATIONS</div>
+      <div id="activeNotifs" style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);line-height:1.6;"></div>
+
       <div class="section-label">MORNING SURF REPORT</div>
       <div style="margin:0 20px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 16px;">
         <div class="toggle-wrap" style="border-bottom:1px solid var(--border);">
@@ -1447,7 +1450,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '15.2';
+const APP_VERSION = '15.3';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -5147,6 +5150,53 @@ function renderProfile() {
   const el = document.getElementById('profileName');
   if (el) el.textContent = name || '—';
 }
+
+// 12-hour label, e.g. 6 -> "6am", 19 -> "7pm".
+function fmtHour12(hr) { const h = ((hr % 12) || 12); return `${h}${hr < 12 ? 'am' : 'pm'}`; }
+
+// At-a-glance list of which notifications are currently switched on, built from
+// the same state the toggles use. Shown at the top of Settings.
+function renderActiveNotifications() {
+  const el = document.getElementById('activeNotifs');
+  if (!el) return;
+  const permOk = ('Notification' in window) && Notification.permission === 'granted';
+  const subbed = permOk && !!_pushSub;
+  const a = (typeof getAlertSettings === 'function') ? getAlertSettings() : {};
+  const items = [];
+
+  if (document.getElementById('notifToggle')?.checked) {
+    const h = parseInt(localStorage.getItem('notifHour') ?? '7');
+    items.push(['🌅', 'Morning report', `daily at ${fmtHour12(h)}`]);
+  }
+  if (document.getElementById('nightlyToggle')?.checked) {
+    const h = parseInt(localStorage.getItem('nightlyHour') ?? '19');
+    items.push(['🌙', 'Nightly forecast', `nightly at ${fmtHour12(h)}`]);
+  }
+  // Swell alerts fire once permission + a subscription + saved alert config exist
+  // and at least one region is enabled.
+  const hasAlertConfig = !!localStorage.getItem(ALERT_STORE_KEY);
+  const regionsOn = !a.regions || Object.values(a.regions).some(v => v !== false);
+  if (subbed && hasAlertConfig && regionsOn) {
+    items.push(['🔔', 'Swell alerts', `score ≥ ${a.threshold ?? 7}/10 · ${fmtHour12(a.fromHour ?? 5)}–${fmtHour12(a.toHour ?? 17)}`]);
+  }
+  if (subbed && a.sweepAlert) {
+    items.push(['🌀', 'Sweep warning', `evenings at ${fmtHour12(a.sweepAlertHour ?? 18)}`]);
+  }
+
+  if (!items.length) {
+    const reason = !('Notification' in window) ? 'Not supported in this browser.'
+      : Notification.permission === 'denied' ? 'Notifications are blocked in your browser settings.'
+      : 'None on yet — turn one on below.';
+    el.innerHTML = `<span style="color:var(--muted);">${reason}</span>`;
+    return;
+  }
+  el.innerHTML = items.map(([icon, name, detail]) =>
+    `<div style="display:flex;align-items:baseline;gap:8px;padding:3px 0;">
+       <span>${icon}</span>
+       <span style="color:var(--accent2);font-weight:600;white-space:nowrap;">${name}</span>
+       <span style="color:var(--muted);">· ${detail}</span>
+     </div>`).join('');
+}
 // Save the signed-in name, backfill it onto this device's own past sessions (so
 // the shared log retroactively shows who logged them), and sync those updates.
 function saveUserName(raw) {
@@ -6014,6 +6064,7 @@ function saveAlertSettings() {
   // pushed to this device, so the settings must live server-side.
   clearTimeout(_alertSyncTimer);
   _alertSyncTimer = setTimeout(syncAlertsToServer, 800);
+  renderActiveNotifications();
 }
 
 async function syncAlertsToServer() {
@@ -6710,6 +6761,7 @@ function switchTab(tab) {
     renderProfile();
     initAlertSettings();
     renderBoardsManager();
+    renderActiveNotifications();
   }
   if (tab === 'insights') renderInsights();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -6939,6 +6991,7 @@ async function initNotifications() {
       syncCalibrationToServer();
     }
   } catch { /* SW not ready yet — handled on tab switch */ }
+  renderActiveNotifications();
 }
 
 async function handleNotifToggle(checkbox) {
@@ -6948,6 +7001,7 @@ async function handleNotifToggle(checkbox) {
     else await disableNotifications();
   } finally {
     checkbox.disabled = false;
+    renderActiveNotifications();
   }
 }
 
@@ -7043,6 +7097,7 @@ async function updateNotifHour() {
   const hour = parseInt(sel.value);
   const label = sel.selectedOptions[0]?.textContent.trim() || `${hour}:00`;
   localStorage.setItem('notifHour', hour);
+  renderActiveNotifications();
   const stat = document.getElementById('notifStatus');
   if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
   if (!_pushSub) return;
@@ -7066,6 +7121,7 @@ async function handleNightlyToggle(checkbox) {
     else await disableNightly();
   } finally {
     checkbox.disabled = false;
+    renderActiveNotifications();
   }
 }
 
@@ -7129,6 +7185,7 @@ async function updateNightlyHour() {
   const hour = parseInt(sel.value);
   const label = sel.selectedOptions[0]?.textContent.trim() || `${hour}:00`;
   localStorage.setItem('nightlyHour', hour);
+  renderActiveNotifications();
   const stat = document.getElementById('nightlyStatus');
   if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
   if (!_pushSub) return;
