@@ -1456,7 +1456,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '16.6';
+const APP_VERSION = '16.7';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -3286,6 +3286,9 @@ async function fetchWindOutlook() {
   // Wind arrived after the panel first rendered — repaint the active tab so its
   // intraday timeline fills in.
   if (_forecastTabState && _forecastTabState.activeIdx != null) selectForecastTab(_forecastTabState.activeIdx);
+  // Also repaint the planner so its recommendations get concrete best-window
+  // timeframes (computeBestWindow needs the hourly wind outlook).
+  if (cachedData?.forecast) { try { renderSessionPlanner(cachedData.forecast, cachedData.swell); } catch {} }
 }
 
 function renderWindOutlook() {
@@ -3635,6 +3638,18 @@ function getBestTimeHint(b, dayForecast) {
   return '🌅 Best early morning';
 }
 
+// Concrete best-window timeframe for a planned session — the highest-scoring
+// daylight window that day (full score: swell, wind, tide), e.g. "Best 7–10am".
+// Falls back to the qualitative hint before the hourly wind outlook has loaded.
+// For today, flags a window that has already passed.
+function getPlanTimeframe(b, dayIdx, dayForecast) {
+  const w = computeBestWindow(dayIdx, b);
+  if (!w) return getBestTimeHint(b, dayForecast);
+  const fmt = h => h === 12 ? '12pm' : h > 12 ? (h - 12) + 'pm' : h + 'am';
+  if (dayIdx === 0 && getBrisbaneHour() >= w.end) return `Best window passed (${fmt(w.start)}–${fmt(w.end)})`;
+  return `Best ${fmt(w.start)}–${fmt(w.end)}`;
+}
+
 // Returns the tide entries for a given day offset (0=today, 1=tomorrow, etc.)
 // from the cached Noosa tide data.
 function getTidesForDay(dayIdx) {
@@ -3898,7 +3913,7 @@ function renderPickOfWeek(forecast, sessions) {
   }
   const sColor = scoreColor(best.score);
   const tags = planWhyTags(best.break, best.dayForecast);
-  const timeHint = getBestTimeHint(best.break, best.dayForecast);
+  const timeHint = getPlanTimeframe(best.break, best.dayIdx, best.dayForecast);
   const smart = planSmartChips(best.break, best.dayForecast);
   el.innerHTML = `<div onclick="setBreak(${best.breakIdx}, true);switchTab('conditions');" style="background:linear-gradient(135deg, rgba(249,115,22,0.10), var(--surface));border:1px solid ${sColor};border-radius:14px;padding:16px;cursor:pointer;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
@@ -4004,7 +4019,7 @@ function renderSessionPlanner(forecast, swell) {
     const sH = estimateSurfHeight(h, s.break.exposure, s.dayForecast._swellDir ?? extractDir(shortDir(day0.swell || '')), s.break, s.dayForecast._period);
     const ftStr = sH !== null ? `~${Math.round(sH * 3.281 * 2) / 2}ft` : '';
     const adv = s.break.advanced ? ' · advanced' : s.break.intermediateAdvanced ? ' · intermediate+' : '';
-    const timeHint = getBestTimeHint(s.break, s.dayForecast);
+    const timeHint = getPlanTimeframe(s.break, s.dayIdx, s.dayForecast);
     const sunriseStr = formatSunrise(day0?.sunrise);
     const tide = s.dayForecast._tide;
 
