@@ -1456,7 +1456,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '16.5';
+const APP_VERSION = '16.6';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -5218,12 +5218,20 @@ async function hydrateUserSettings(force) {
     const res = await fetch(WORKER_URL + '/settings', { headers: { 'x-surfsesh-token': getToken() } });
     if (!res.ok) return;
     const { settings } = await res.json();
-    if (!settings || typeof settings !== 'object') return;
-    let changed = false;
-    for (const k of _userSettingKeys()) {
-      if (settings[k] != null && localStorage.getItem(k) !== settings[k]) { localStorage.setItem(k, settings[k]); changed = true; }
+    const keys = _userSettingKeys();
+    const serverHasAny = settings && typeof settings === 'object' && keys.some(k => settings[k] != null);
+    if (serverHasAny) {
+      // Server is the source of truth → apply its values to this device.
+      let changed = false;
+      for (const k of keys) {
+        if (settings[k] != null && localStorage.getItem(k) !== settings[k]) { localStorage.setItem(k, settings[k]); changed = true; }
+      }
+      if (changed) _applySettingsToUI();
+    } else if (keys.some(k => localStorage.getItem(k) != null)) {
+      // First device for this account (nothing saved yet) → seed the server from
+      // whatever this device already has, so other devices inherit it.
+      pushUserSettings();
     }
-    if (changed) _applySettingsToUI();
   } catch {}
 }
 
