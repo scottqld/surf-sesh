@@ -11,10 +11,10 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - PORT=8096
+      - PORT=8098
       - DB_PATH=/data/surfsesh.db
       - TZ=UTC
     ports:
-      - "127.0.0.1:8096:8096"   # bound to localhost; only nginx reaches it
+      - "127.0.0.1:8098:8098"   # bound to localhost; only nginx/tailscale-serve reaches it (8096 is taken by ebike-scan)
     volumes:
-      - ./data:/data
+      - ../data:/data   # sibling of server/ — /Volume2/files/apps/surfsesh/data on the NAS

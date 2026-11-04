@@ -15,9 +15,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY scripts ./scripts
-EXPOSE 8096
+EXPOSE 8098
 # DB lives on a mounted volume (see docker-compose); created on first run.
 ENV DB_PATH=/data/surfsesh.db
 HEALTHCHECK --interval=60s --timeout=5s --start-period=10s \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8096)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8098)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "src/server.mjs"]
