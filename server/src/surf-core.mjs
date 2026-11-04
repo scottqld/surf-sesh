@@ -558,6 +558,15 @@ async function verifyToken(token, secret) {
 async function getUser(env, name) { return env.PUSH_SUBSCRIPTIONS.get(USER_PREFIX + normName(name), 'json'); }
 async function putUser(env, rec) { await env.PUSH_SUBSCRIPTIONS.put(USER_PREFIX + normName(rec.name), JSON.stringify(rec)); }
 
+// ─── PER-USER SETTINGS (device-independent, server-authoritative) ─────────────
+// Preferences that must stay constant across a user's devices — board quiver,
+// swell-alert config, notification hours, calibration toggle — live here keyed
+// to the account, under `uset:<normalised name>`. The client treats localStorage
+// as a cache and hydrates from / writes back to this on login + on change.
+const USETTINGS_PREFIX = 'uset:';
+async function getSettings(env, name) { return env.PUSH_SUBSCRIPTIONS.get(USETTINGS_PREFIX + normName(name), 'json'); }
+async function putSettings(env, name, obj) { await env.PUSH_SUBSCRIPTIONS.put(USETTINGS_PREFIX + normName(name), JSON.stringify(obj)); }
+
 // ─── SESSION LOG (central, shared across all users + devices) ────────────────
 // Stored in the same KV namespace under a `sess:` prefix, one record per key.
 // Records carry `updatedAt` for last-write-wins; deletes arrive as tombstones
@@ -614,7 +623,7 @@ async function handleCron(env) {
   const list = await env.PUSH_SUBSCRIPTIONS.list();
   const subs = [];
   for (const kv of list.keys) {
-    if (kv.name.startsWith(SESS_PREFIX) || kv.name.startsWith(USER_PREFIX)) continue; // session + user records, not push subs
+    if (kv.name.startsWith(SESS_PREFIX) || kv.name.startsWith(USER_PREFIX) || kv.name.startsWith(USETTINGS_PREFIX)) continue; // session + user + settings records, not push subs
     const rec = await env.PUSH_SUBSCRIPTIONS.get(kv.name, 'json');
     if (rec) subs.push({ key: kv.name, ...rec });
   }
@@ -1192,6 +1201,29 @@ export async function handleFetch(request, env) {
         if (!timingEq(hashHex, u.pinHash)) return new Response(JSON.stringify({ error: 'bad_login' }), { status: 401, headers: corsHeaders });
         const token = env.AUTH_SECRET ? await makeToken(u.name, env.AUTH_SECRET) : '';
         return new Response(JSON.stringify({ ok: true, name: u.name, token }), { headers: corsHeaders });
+
+      } else if (path === '/settings' && request.method === 'GET') {
+        // Return the signed-in user's settings blob (token-gated). Empty object
+        // when none saved yet. Fail-open only if AUTH_SECRET is unset.
+        if (env.AUTH_SECRET) {
+          const who = await verifyToken(request.headers.get('x-surfsesh-token'), env.AUTH_SECRET);
+          if (!who) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+          const settings = (await getSettings(env, who)) || {};
+          return new Response(JSON.stringify({ settings }), { headers: corsHeaders });
+        }
+        return new Response(JSON.stringify({ settings: {} }), { headers: corsHeaders });
+
+      } else if (path === '/settings' && request.method === 'POST') {
+        // Merge-update the signed-in user's settings (partial writes don't clobber
+        // other groups). The user is taken from the token, never the body.
+        if (!env.AUTH_SECRET) return new Response(JSON.stringify({ error: 'Auth not configured' }), { status: 503, headers: corsHeaders });
+        const who = await verifyToken(request.headers.get('x-surfsesh-token'), env.AUTH_SECRET);
+        if (!who) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+        const incoming = await request.json().catch(() => ({}));
+        const patch = incoming && typeof incoming === 'object' ? (incoming.settings ?? incoming) : {};
+        const merged = { ...((await getSettings(env, who)) || {}), ...patch, updatedAt: Date.now() };
+        await putSettings(env, who, merged);
+        return new Response(JSON.stringify({ ok: true, settings: merged }), { headers: corsHeaders });
 
       } else if (path === '/sessions' && request.method === 'GET') {
         if (!env.PUSH_SUBSCRIPTIONS) {

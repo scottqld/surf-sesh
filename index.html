@@ -1456,7 +1456,7 @@
 
 <script>
 const WORKER_URL = 'https://surf-worker.scottsurf.workers.dev';
-const APP_VERSION = '16.4';
+const APP_VERSION = '16.5';
 const SHOW_WEATHER = false; // weather hidden to reduce clutter — flip to true to restore
 document.getElementById('appVersion').textContent = 'v' + APP_VERSION;
 { const _lv = document.getElementById('lockVersion'); if (_lv) _lv.textContent = 'v' + APP_VERSION; }
@@ -5181,6 +5181,64 @@ function onAuthSuccess(token, name) {
   setToken(token || '');
   saveUserName(name || '');
   closeLock();
+  hydrateUserSettings(true);   // pull this account's settings onto this device
+}
+
+// ─── SERVER-BACKED USER SETTINGS ─────────────────────────────────────────────
+// Preferences (board quiver, swell-alert config, notification hours, calibration
+// toggle) are kept on the NAS keyed to the account, so they're identical on every
+// device the user signs into and survive a reinstall or a new origin. localStorage
+// is only a cache. Every call fails soft: against an older backend without the
+// /settings endpoint the app simply runs off localStorage as before.
+function _userSettingKeys() { return [BOARDS_STORE_KEY, ALERT_STORE_KEY, 'notifHour', 'nightlyHour', CALIB_KEY]; }
+
+let _settingsSyncTimer = null;
+function pushUserSettings() {
+  if (!getToken()) return;                 // only a signed-in user has server settings
+  clearTimeout(_settingsSyncTimer);
+  _settingsSyncTimer = setTimeout(async () => {
+    try {
+      const blob = {};
+      for (const k of _userSettingKeys()) { const v = localStorage.getItem(k); if (v != null) blob[k] = v; }
+      await fetch(WORKER_URL + '/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-surfsesh-token': getToken() },
+        body: JSON.stringify(blob),
+      });
+    } catch {}
+  }, 600);
+}
+
+let _settingsHydrated = false;
+async function hydrateUserSettings(force) {
+  if (!getToken()) return;
+  if (_settingsHydrated && !force) return;
+  _settingsHydrated = true;
+  try {
+    const res = await fetch(WORKER_URL + '/settings', { headers: { 'x-surfsesh-token': getToken() } });
+    if (!res.ok) return;
+    const { settings } = await res.json();
+    if (!settings || typeof settings !== 'object') return;
+    let changed = false;
+    for (const k of _userSettingKeys()) {
+      if (settings[k] != null && localStorage.getItem(k) !== settings[k]) { localStorage.setItem(k, settings[k]); changed = true; }
+    }
+    if (changed) _applySettingsToUI();
+  } catch {}
+}
+
+// Re-render everything that reads the cached settings, after a hydrate changed them.
+function _applySettingsToUI() {
+  try { recomputeCalibration(); } catch {}
+  try { renderCalibration(); } catch {}
+  try { renderBoardsManager(); } catch {}
+  try { initAlertSettings(); } catch {}
+  try {
+    const nh = document.getElementById('notifHourSelect'); if (nh) fillHourSelect(nh, localStorage.getItem('notifHour') ?? 7);
+    const gh = document.getElementById('nightlyHourSelect'); if (gh) fillHourSelect(gh, localStorage.getItem('nightlyHour') ?? 19);
+  } catch {}
+  try { if (typeof renderActiveNotifications === 'function') renderActiveNotifications(); } catch {}
+  try { if (typeof cachedData !== 'undefined' && cachedData && typeof setBreak === 'function') setBreak(currentBreak); } catch {}
 }
 
 function closeLock() {
@@ -5404,6 +5462,7 @@ function calibrationEnabled() {
 }
 function setCalibrationEnabled(on) {
   try { localStorage.setItem(CALIB_KEY, JSON.stringify({ enabled: !!on })); } catch {}
+  pushUserSettings();
   recomputeCalibration();
   syncCalibrationToServer();
   if (typeof setBreak === 'function' && cachedData) setBreak(currentBreak); // refresh visible scores
@@ -5541,6 +5600,7 @@ function getBoards() {
 }
 function saveBoards(arr) {
   try { localStorage.setItem(BOARDS_STORE_KEY, JSON.stringify(arr)); } catch {}
+  pushUserSettings();
 }
 // Case-insensitive add to the quiver. Returns true if it was newly added.
 function addBoardToQuiver(name) {
@@ -6130,6 +6190,7 @@ function saveAlertSettings() {
   if (sweepRow) sweepRow.style.display = sweepAlert ? 'flex' : 'none';
   const prev = getAlertSettings();
   localStorage.setItem(ALERT_STORE_KEY, JSON.stringify({ ...prev, threshold, regions, fromHour, toHour, minSurfFt, windDirs, sweepAlert, sweepAlertHour }));
+  pushUserSettings();
   // Immediate confirmation; the debounced sync below replaces it with the
   // synced/needs-permission result.
   const stat = document.getElementById('alertPermStatus');
@@ -6950,6 +7011,10 @@ function scheduleNextLoad() {
 // Gate the app behind the shared passcode + a chosen name (once per device).
 maybeShowLock();
 
+// Pull this account's server-side settings (quiver, alerts, notif hours,
+// calibration) onto this device, so preferences are the same everywhere.
+hydrateUserSettings();
+
 // Render the selector chips immediately (scores fill in once data loads)
 renderBreakChips();
 
@@ -7183,6 +7248,7 @@ async function enableNotifications() {
   _pushSub = sub;
   const hour = parseInt(document.getElementById('notifHourSelect').value);
   localStorage.setItem('notifHour', hour);
+  pushUserSettings();
 
   try {
     const res = await fetch(`${WORKER_URL}/subscribe`, {
@@ -7230,6 +7296,7 @@ async function updateNotifHour() {
   const hour = parseInt(sel.value);
   const label = sel.selectedOptions[0]?.textContent.trim() || `${hour}:00`;
   localStorage.setItem('notifHour', hour);
+  pushUserSettings();
   renderActiveNotifications();
   const stat = document.getElementById('notifStatus');
   if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
@@ -7284,6 +7351,7 @@ async function enableNightly() {
   _pushSub = sub;
   const hour = parseInt(document.getElementById('nightlyHourSelect').value);
   localStorage.setItem('nightlyHour', hour);
+  pushUserSettings();
   try {
     const res = await fetch(`${WORKER_URL}/subscribe`, {
       method: 'POST',
@@ -7300,6 +7368,7 @@ async function enableNightly() {
 
 async function disableNightly() {
   localStorage.removeItem('nightlyHour');
+  pushUserSettings();
   // Keep the push subscription alive (morning report / swell alerts may use it);
   // just clear the nightly slot server-side.
   if (_pushSub) {
@@ -7318,6 +7387,7 @@ async function updateNightlyHour() {
   const hour = parseInt(sel.value);
   const label = sel.selectedOptions[0]?.textContent.trim() || `${hour}:00`;
   localStorage.setItem('nightlyHour', hour);
+  pushUserSettings();
   renderActiveNotifications();
   const stat = document.getElementById('nightlyStatus');
   if (stat) { stat.textContent = '✓ Saved…'; stat.style.color = 'var(--high)'; }
