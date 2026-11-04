@@ -18,3 +18,17 @@ services:
       - "127.0.0.1:8098:8098"   # bound to localhost; only nginx/tailscale-serve reaches it (8096 is taken by ebike-scan)
     volumes:
       - ../data:/data   # sibling of server/ — /Volume2/files/apps/surfsesh/data on the NAS
+
+  # Front nginx: serves the PWA at /surf-sesh/ and proxies /api/ to the API.
+  # tailscale serve terminates TLS and forwards to 127.0.0.1:8099.
+  surfsesh-web:
+    image: nginx:alpine
+    container_name: surfsesh-web
+    restart: unless-stopped
+    depends_on: [surfsesh-api]
+    ports:
+      - "8099:80"   # LAN-accessible (plain-HTTP web page) AND reachable by tailscale-serve at 127.0.0.1:8099 (full PWA)
+    volumes:
+      - ../site:/usr/share/nginx/html/surf-sesh:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx-main.conf:/etc/nginx/nginx.conf:ro   # runs workers as root (NAS file perms)
