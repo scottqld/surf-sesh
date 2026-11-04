@@ -47,14 +47,13 @@ Per the storage guidelines, everything lives under `/Volume2/files/apps/surfsesh
    > every device re-enables notifications once, and everyone re-logs-in once with
    > their existing name + PIN. Session logs and accounts migrate intact (below).
 
-2. **Migrate data from Cloudflare KV** — on the machine where `wrangler` is signed in:
+2. **Migrate data from Cloudflare KV** — on the machine where `wrangler` is signed in.
+   Each run overwrites `kv-dump.json`, so do one full export, then filter at import:
    ```bash
-   node scripts/export-kv.mjs --prefix sess:   # sessions
-   node scripts/export-kv.mjs --prefix usr:    # append accounts (re-run merges)
-   # or: node scripts/export-kv.mjs            # everything (incl. stale push subs)
+   node scripts/export-kv.mjs                 # all keys → kv-dump.json
    ```
-   This writes `kv-dump.json`. Then load it into SQLite (on the NAS, or locally to
-   produce the db file and copy it up):
+   Then load sessions + accounts into SQLite (on the NAS, or locally to produce the
+   db file and copy it up); `--only` leaves the stale push subs behind:
    ```bash
    node scripts/import-kv.mjs --only sess:,usr:
    ```
